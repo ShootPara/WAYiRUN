@@ -1,0 +1,25 @@
+# Local tooling and generated outputs
+**/.gradle/
+**/.kotlin/
+**/build/
+**/local.properties
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Credentials and signing material
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.jks
+*.keystore
+keystore.properties
+credentials*.json
+service-account*.json
+
+# Future web tooling
+node_modules/
+.wrangler/
