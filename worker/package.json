@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "npm run build && npm run build:deploy && node --test test/*.test.mjs",
     "dev": "wrangler dev",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "build:deploy": "wrangler deploy --dry-run --outdir build/deploy",
@@ -20,5 +20,8 @@
     "miniflare": "5.20260911.1-alpha",
     "typescript": "5.9.3",
     "wrangler": "4.131.2"
+  },
+  "dependencies": {
+    "jose": "6.2.12"
   }
 }

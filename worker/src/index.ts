@@ -1,6 +1,9 @@
+import { handleAuth } from "./auth.js";
+
 export interface Env {
   DB: D1Database;
   APP_ENV: string;
+  GOOGLE_WEB_CLIENT_ID?: string;
 }
 
 function json(body: unknown, status = 200, head = false, extra: Record<string, string> = {}): Response {
@@ -21,8 +24,10 @@ export default {
     const head = request.method === "HEAD";
     if (env.APP_ENV !== "development") return json({ error: "environment_not_configured" }, 503, head);
 
-    // This foundation has no authentication bypass or data API. Even supplied tokens
-    // cannot enable run upload before real Google verification is implemented.
+    if (["/api/auth/challenge", "/api/auth/google", "/api/auth/logout", "/api/account"].includes(path)) {
+      return handleAuth(request, env);
+    }
+    // Run synchronization is outside this account-session slice.
     if (path === "/api" || path.startsWith("/api/")) {
       return json({ error: "api_not_available" }, 503, head);
     }

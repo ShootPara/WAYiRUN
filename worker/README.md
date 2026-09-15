@@ -2,9 +2,9 @@
 
 ## 1 Current boundary
 
-This is the cloud environment foundation, not the completed accounts/synchronization feature. It serves `GET /healthz` and `GET /readyz` (also HEAD). All `/api` routes return 503 regardless of supplied credentials. No account, run, photo, or secret can be read or written over HTTP. Android remains local-only and unchanged by this pass.
+This contains the cloud foundation and the first account-session slice, not completed synchronization. It serves `GET /healthz` and `GET /readyz` (also HEAD). Account endpoints are implemented but return 503 until the real Google audience is configured. Run APIs remain unavailable. Android remains local-only and unchanged by this pass. See AUTH_CONTRACT.md for endpoint behavior and activation gates.
 
-The initial D1 migration stores only a singleton identifying WAYiRUN schema version 1. Future account/run schemas must be added through new migrations after their contracts are implemented and tested. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
+Migration 0001 stores the foundation metadata. Additive migration 0002 adds accounts, hashed sessions, and single-use login challenges while preserving compatibility with the earlier Worker. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
 
 ## 2 Local development
 
@@ -49,11 +49,11 @@ Once the Cloudflare GitHub app has been authorized for this repository, configur
 | Build command | `npm ci && npm test` |
 | Deploy command | `npm run deploy:dev` |
 
-Leave other-branch auto-deploy disabled initially. Do not add a second deployment pipeline for the same branch. The local deployment command works independently of that one-time dashboard connection. Direct pushes do not cause cloud builds until the connection is configured.
+The user connected Git on September 15, 2026. Their screenshot confirms the intended settings and also enables non-production branch builds with `npx wrangler versions upload`. These upload preview versions instead of promoting the live deployment; preview URLs remain disabled in Wrangler. Push only the development branch for this deployment to avoid an unnecessary second build. Do not add a second deployment pipeline for the same branch.
 
 ## 5 Next implementation
 
-Add verified Google sign-in and an authenticated account/run API before Android can send data. Resolve the final Android application identity, client audience, existing local-run ownership, and first offline sign-in policy. Retain debug runs without automatically assigning them to whichever account logs in first. The announcement selector and phone music testing remain deferred by the user's latest direction.
+Supply Google configuration using ../GOOGLE_SIGN_IN_SETUP.md, then complete authentication activation and retry-safe run synchronization. Resolve the final Android application identity, client audience, existing local-run ownership, and first offline sign-in policy. Retain debug runs without automatically assigning them to whichever account logs in first. The announcement selector and phone music testing remain deferred by the user's latest direction.
 
 ## 6 References
 

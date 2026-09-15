@@ -9,6 +9,8 @@ for (const [path, method, status, expected] of [
   ["/healthz", "POST", 405, { error: "method_not_allowed" }],
   ["/api/runs", "GET", 503, { error: "api_not_available" }],
   ["/api/runs", "POST", 503, { error: "api_not_available" }],
+  ["/api/auth/challenge", "POST", 503, { error: "authentication_not_configured" }],
+  ["/api/account", "GET", 503, { error: "authentication_not_configured" }],
 ]) {
   const response = await fetch(origin + path, { method, signal: AbortSignal.timeout(15_000), redirect: "error" });
   assert.equal(response.status, status, `${method} ${path}`);

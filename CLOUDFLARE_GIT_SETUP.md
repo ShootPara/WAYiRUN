@@ -82,4 +82,4 @@ No R2 bucket, custom domain, Google OAuth client, or OpenAI key is needed for th
 - I prepare and verify `worker/`, the development resources, and the deployment branch.
 - Connect Workers Builds using Section 5 once its files exist.
 
-The original guide did not create resources. The later user-authorized Section 4 execution created the development resources and prepared the cloud-only Git branches; see worker/STATUS.md. Automatic Workers Builds Git integration remains the separate Section 5 step.
+The original guide did not create resources. Later authorized execution completed Section 4, and the user supplied the connected Workers Builds screenshot for Section 5 on September 15. See worker/STATUS.md for verification. The screenshot enables other-branch builds using version upload; these do not replace the live development deployment. Preview URLs stay disabled in Wrangler. Google sign-in setup now has its own GOOGLE_SIGN_IN_SETUP.md guide.

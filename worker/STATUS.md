@@ -36,6 +36,12 @@ The initial older tool versions had audit findings. Final dependencies were upda
 
 Only `worker/` and the environment setup guide belong to this cloud commit. Earlier Android changes, phone reports, and cumulative planning-document edits remain preserved locally and uncommitted. Main has not been replaced or force-pushed.
 
-Next is guide Section 5: authorize Cloudflare's GitHub integration for this repository and connect the existing Worker to branch `development`, root `worker`, build `npm ci && npm test`, deploy `npm run deploy:dev`. That connection was not part of Section 4 and is not claimed complete. Local Wrangler deployment already works.
+The user completed guide Section 5 on September 15. The screenshot shows the intended repository, development branch, worker root, build command, and deploy command. Non-production builds are also enabled with version upload; preview URLs remain disabled in configuration. A push-triggered deployment still needs observation independently of the previous local Wrangler deployment.
 
 Then implement Google verification, authenticated ownership and sessions, and retry-safe completed-run synchronization. Real OAuth audiences/application identity and the disposition of pre-account local runs need their own explicit contract. The user's announcement-selector and phone music-testing deferrals remain in effect.
+
+## 5 Account-session slice — September 15, 2026
+
+Implemented Google RS256/claim verification using pinned jose 6.2.12, single-use five-minute challenges, one-hour hashed bearer sessions, account profile lookup, and session logout. Migration 0002 is additive and leaves existing metadata compatible. See AUTH_CONTRACT.md for the exact implemented contract and GOOGLE_SIGN_IN_SETUP.md in the repository root for user setup.
+
+All 12 local tests pass in the actual bundled Worker with Miniflare/workerd and D1, including generated-key signature rejection, two-account separation, replay/concurrent exchange, session expiry/revocation, HTTP boundaries, and storage failure. This is backend verification only; no real Google sign-in, phone install, or Android change is claimed. GOOGLE_WEB_CLIENT_ID is deliberately unset. Public login rate controls and Android authorized-party configuration remain activation gates; private run APIs remain closed.
