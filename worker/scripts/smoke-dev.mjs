@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { verifyRollout } from "./verify-rollout.mjs";
 
 const origin = "https://wayirun-dev.unopenedparachute.workers.dev";
+await verifyRollout(async () => {
+const passed = [];
 for (const [path, method, status, expected] of [
   ["/healthz", "GET", 200, { service: "WAYiRUN", status: "ok" }],
   ["/readyz", "GET", 200, { service: "WAYiRUN", status: "ready" }],
@@ -17,5 +20,7 @@ for (const [path, method, status, expected] of [
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   if (expected) assert.deepEqual(await response.json(), expected);
   else assert.equal(await response.text(), "");
-  console.log(`PASS ${method} ${path} (${status})`);
+  passed.push(`PASS ${method} ${path} (${status})`);
 }
+for (const message of passed) console.log(message);
+});

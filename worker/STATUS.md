@@ -45,3 +45,11 @@ Then implement Google verification, authenticated ownership and sessions, and re
 Implemented Google RS256/claim verification using pinned jose 6.2.12, single-use five-minute challenges, one-hour hashed bearer sessions, account profile lookup, and session logout. Migration 0002 is additive and leaves existing metadata compatible. See AUTH_CONTRACT.md for the exact implemented contract and GOOGLE_SIGN_IN_SETUP.md in the repository root for user setup.
 
 All 12 local tests pass in the actual bundled Worker with Miniflare/workerd and D1, including generated-key signature rejection, two-account separation, replay/concurrent exchange, session expiry/revocation, HTTP boundaries, and storage failure. This is backend verification only; no real Google sign-in, phone install, or Android change is claimed. GOOGLE_WEB_CLIENT_ID is deliberately unset. Public login rate controls and Android authorized-party configuration remain activation gates; private run APIs remain closed.
+
+## 6 Deployment verification
+
+Account-session commit `9a57b3e` was pushed to development. Workers Builds picked it up, applied migration 0002, and deployed version `8c43dd57-8109-42ff-b956-4b4824000ed7`, but its GitHub check reported failure. Builds logs returned 403 through the available CLI authentication; the in-app browser requires sign-in. The exact failure is not diagnosed from that status alone.
+
+The same guarded deployment completed locally on September 15 at 11:50 UTC, version `f0b1504d-ad16-41b8-83e2-1321c47cf1dd`. All nine live HTTP checks passed, and the remote migration ledger contains both migrations with no pending work. Local migration applied successfully; repeating it found no pending work. No remote account records were created by these checks.
+
+Post-deployment smoke checks now retry the complete set up to six times with five-second gaps to tolerate rollout propagation. Two additional tests verify recovery from a transient response and failure after exhausted attempts; total 14 tests pass. This is a robustness fix, not a claim that the unavailable build logs proved a rollout delay. A follow-up Git build will verify the pipeline result separately.
