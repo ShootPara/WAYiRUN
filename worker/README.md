@@ -2,7 +2,7 @@
 
 ## 1 Current boundary
 
-This contains the cloud foundation and the first account-session slice, not completed synchronization. It serves `GET /healthz` and `GET /readyz` (also HEAD). Account endpoints are implemented but return 503 until the real Google audience is configured. Run APIs remain unavailable. Android remains local-only and unchanged by this pass. See AUTH_CONTRACT.md for endpoint behavior and activation gates.
+This contains the cloud foundation and account-session slice, not completed synchronization. It serves `GET /healthz` and `GET /readyz` (also HEAD). Google development IDs and login rate limits are configured. Invalid/missing credentials cannot access accounts; run APIs remain unavailable. Android signin1 adds optional account sign-in while preserving local-only runs. See AUTH_CONTRACT.md for endpoint behavior and remaining gates.
 
 Migration 0001 stores the foundation metadata. Additive migration 0002 adds accounts, hashed sessions, and single-use login challenges while preserving compatibility with the earlier Worker. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
 

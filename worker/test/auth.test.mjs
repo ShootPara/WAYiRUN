@@ -4,16 +4,21 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { SignJWT, generateKeyPair, exportJWK } from "jose";
+import { handleAuth } from "../build/auth.js";
 
 const audience = "test-web.apps.googleusercontent.com";
 const pair = await generateKeyPair("RS256", { extractable: true });
 const jwk = { ...await exportJWK(pair.publicKey), kid: "test-key", alg: "RS256", use: "sig" };
-async function runtime(t, configured = true) {
+async function runtime(t, configured = true, rateLimit = 1000) {
   const mf = new Miniflare(convertV4MiniflareOptions({
     name: "auth-test", modules: true,
     scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
     compatibilityDate: "2026-02-17",
-    bindings: { APP_ENV: "development", ...(configured ? { GOOGLE_WEB_CLIENT_ID: audience } : {}) },
+    bindings: { APP_ENV: "development", ...(configured ? { GOOGLE_WEB_CLIENT_ID: audience, GOOGLE_ANDROID_CLIENT_ID: "test-android.apps.googleusercontent.com" } : {}) },
+    ratelimits: {
+      AUTH_RATE_LIMIT: { namespace_id: "1", simple: { limit: rateLimit, period: 60 } },
+      AUTH_TOTAL_LIMIT: { namespace_id: "2", simple: { limit: 2000, period: 60 } },
+    },
     d1Databases: ["DB"],
     // Only the test harness intercepts Google. The shipped Worker has no key/identity override.
     outboundService: async request => {
@@ -48,6 +53,20 @@ async function login(mf, subject, patch = {}) {
 }
 const bearer = value => ({ Authorization: `Bearer ${value}` });
 
+test("missing/failed/global-exhausted limiters fail closed before touching D1", async () => {
+  const allow = { limit: async () => ({ success: true }) };
+  const db = { prepare: () => { throw new Error("D1 must not be touched"); } };
+  for (const [limits, status] of [
+    [{}, 503],
+    [{ AUTH_RATE_LIMIT: { limit: async () => { throw new Error("unavailable"); } }, AUTH_TOTAL_LIMIT: allow }, 503],
+    [{ AUTH_RATE_LIMIT: allow, AUTH_TOTAL_LIMIT: { limit: async () => ({ success: false }) } }, 429],
+  ]) {
+    const response = await handleAuth(new Request("https://test/api/auth/challenge", { method: "POST" }),
+      { DB: db, GOOGLE_WEB_CLIENT_ID: audience, ...limits });
+    assert.equal(response.status, status);
+  }
+});
+
 test("sign-in fails closed until a real audience is configured", async t => {
   const { mf, db } = await runtime(t, false);
   assert.equal((await call(mf, "/api/auth/challenge", "POST")).status, 503);
@@ -76,7 +95,7 @@ test("real signature verification rejects forged, expired, misdirected and incom
 test("two accounts stay isolated; repeated login uses stable subject rather than display name", async t => {
   const { mf, db } = await runtime(t);
   const alice = await login(mf, "alice");
-  const bob = await login(mf, "bob"); // Deliberately identical display names.
+  const bob = await login(mf, "bob", { azp: "test-android.apps.googleusercontent.com" }); // Same display names, approved Android party.
   const get = async value => (await (await call(mf, "/api/account", "GET", undefined,
     { ...bearer(value), "X-User-Id": "another-owner" })).json()).account;
   const a = await get(alice), b = await get(bob);
@@ -90,6 +109,14 @@ test("two accounts stay isolated; repeated login uses stable subject rather than
   assert.ok(sessions.results.every(row => /^[0-9a-f]{64}$/.test(row.token_hash) && ![alice, bob, aliceAgain].includes(row.token_hash)));
   assert.equal((await call(mf, "/api/account", "GET", undefined, { Cookie: `session=${alice}` })).status, 401);
   assert.equal((await call(mf, "/api/account", "GET", undefined, bearer("a".repeat(64)))).status, 401);
+});
+
+test("rate-limited requests stop before database writes and cannot evade limits with forwarded headers", async t => {
+  const { mf, db } = await runtime(t, true, 2);
+  for (let i = 0; i < 2; i++) assert.equal((await call(mf, "/api/auth/challenge", "POST")).status, 200);
+  const response = await call(mf, "/api/auth/challenge", "POST", undefined, { "X-Forwarded-For": "new-client" });
+  assert.equal(response.status, 429); assert.equal(response.headers.get("Retry-After"), "60");
+  assert.equal((await db.prepare("SELECT count(*) AS n FROM login_challenges").first()).n, 2);
 });
 
 test("one-time challenge rejects replay, concurrent exchange, and expiry", async t => {

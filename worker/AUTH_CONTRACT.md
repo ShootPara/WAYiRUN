@@ -31,7 +31,9 @@ The bootstrap schema version remains 1 so the earlier health-only Worker remains
 
 Tests execute the actual bundled Worker in Miniflare/workerd with real local D1 and generated RSA signatures. Only the harness intercepts Google's fixed key URL. Cases cover signature/claim rejection, account separation and profile updates, session hashing, concurrent replay, challenge expiry, session expiry/revocation, input bounds, origin rejection, and storage failure. Tests never write remote account data.
 
-The development deployment intentionally lacks GOOGLE_WEB_CLIENT_ID, so all auth endpoints remain unavailable. Before setting it, finish login request-rate controls, configure actual Google/Android client identities, and test on the phone. Do not claim Google service/phone interoperability from generated-key tests. The setup guide is ../GOOGLE_SIGN_IN_SETUP.md.
+Development Google Web and Android client IDs are now configured from the user's project wayirun-development. Tokens still require the exact Web audience; azp, when supplied, must equal that Web client or the explicitly configured Android client. An unrelated Android client remains rejected. Real Google/phone interoperability is separate from generated-key tests. The setup guide is ../GOOGLE_SIGN_IN_SETUP.md.
+
+Every account/auth request passes two Cloudflare rate-limit bindings before D1 access: 30 requests/minute per hashed CF-Connecting-IP, and 300/minute combined. Missing or failed limiters fail closed; exhaustion returns 429 with Retry-After 60. Forwarded/user-owner headers cannot choose the key. These limits operate per Cloudflare location and are approximate, not a global billing cap. No raw IP is written to D1 or logs. [Cloudflare rate limits](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
 
 ## 5 Next slice
 

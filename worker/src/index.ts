@@ -1,6 +1,6 @@
-import { handleAuth } from "./auth.js";
+import { handleAuth, type AuthEnv } from "./auth.js";
 
-export interface Env {
+export interface Env extends AuthEnv {
   DB: D1Database;
   APP_ENV: string;
   GOOGLE_WEB_CLIENT_ID?: string;

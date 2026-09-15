@@ -2,7 +2,7 @@
 
 ## 1 What to create now
 
-Create a development Google Cloud project and a Web OAuth client. These provide the identity configuration for WAYiRUN; run storage stays in Cloudflare. Google project creation does not connect the installed APK by itself.
+Setup is complete for development: the user supplied project `wayirun-development`, its Web client, and its Android phone-testing client on September 15. The steps below are retained for reference. Run storage stays in Cloudflare; no client secret is required.
 
 ## 2 Google Cloud project
 
@@ -31,12 +31,20 @@ Send me these two values: the **project ID** and the **Web client ID**. There is
 
 I will configure the verified audience, then wire Android Credential Manager to obtain a Google ID token using a fresh server challenge. The Worker exchanges that verified identity for an expiring WAYiRUN session. Private account responses derive ownership from that session.
 
-Android also needs an Android OAuth client in the same Google project with the exact application ID and signing-certificate SHA-1. We have not finalized that identity. Do not create an Android client from the current `com.example.runningapp` prototype. I will supply exact values after checking the app-identity and signing plan; changing identity must preserve access to existing test runs.
+The development-only Android client now uses the existing installed package and verified debug signing certificate, so the app can update in place and preserve local runs. This does not register or finalize the production application identity.
 
-Before enabling real sign-in, the remaining integration checks include approved Android authorized-party IDs, request-rate limits for public login endpoints, the actual phone sign-in flow, and returning-user offline behavior. No settings change here enables run synchronization or assigns old local runs to a Google account.
+| Development configuration | Value |
+| --- | --- |
+| Google project | wayirun-development |
+| Web client | 933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com |
+| Android client | 933230558080-8o82hopmd4ibnt2fllqpr8252lg3q44t.apps.googleusercontent.com |
+| Android package | com.example.runningapp.debug |
+| Debug SHA-1 | E8:29:5C:0F:4A:15:A5:7D:87:38:CE:28:6F:67:87:6C:91:CF:05:94 |
+
+The backend accepts that exact Web audience and allows that Android client as an authorized party. Login request-rate controls are implemented. Actual Google phone sign-in must still be verified; no configuration change enables run synchronization or assigns old local runs to a Google account.
 
 ## 5 Current verification boundary
 
-The account backend has local tests using generated test signatures and an intercepted Google key response. Deployed code always fetches Google's fixed public key endpoint; it has no test-login switch. Until the real audience is supplied, account/authentication endpoints return an unavailable response and create no accounts or login challenges.
+The account backend has local tests using generated test signatures and an intercepted Google key response. Deployed code always fetches Google's fixed public key endpoint; it has no test-login switch. A valid Google token with a fresh server nonce is required to create an account/session.
 
-The installed Android app remains local-only. Continue using its existing run features while this account integration is completed.
+The signin1 test APK adds optional Google sign-in and encrypted session storage. Run tracking/storage remains local-only. Existing runs keep their original local owner. Sign-in failure, cancellation, or expired sessions never gate START RUNNING. Completed-run synchronization remains the next Milestone 5 slice.

@@ -48,8 +48,18 @@ All 12 local tests pass in the actual bundled Worker with Miniflare/workerd and 
 
 ## 6 Deployment verification
 
-Account-session commit `9a57b3e` was pushed to development. Workers Builds picked it up, applied migration 0002, and deployed version `8c43dd57-8109-42ff-b956-4b4824000ed7`, but its GitHub check reported failure. Builds logs returned 403 through the available CLI authentication; the in-app browser requires sign-in. The exact failure is not diagnosed from that status alone.
+Account-session commit `9a57b3e` was pushed to development. Workers Builds picked it up, applied migration 0002, and deployed version `8c43dd57-8109-42ff-b956-4b4824000ed7`, but its GitHub check reported failure. The user supplied logs confirming that the auth smoke check received the previous Worker's api_not_available response less than a second after deployment. Compilation, all tests, migration, and upload succeeded. Builds logs return 403 through the available CLI authentication, but GitHub check status and Wrangler deployment inspection are available.
 
 The same guarded deployment completed locally on September 15 at 11:50 UTC, version `f0b1504d-ad16-41b8-83e2-1321c47cf1dd`. All nine live HTTP checks passed, and the remote migration ledger contains both migrations with no pending work. Local migration applied successfully; repeating it found no pending work. No remote account records were created by these checks.
 
-Post-deployment smoke checks now retry the complete set up to six times with five-second gaps to tolerate rollout propagation. Two additional tests verify recovery from a transient response and failure after exhausted attempts; total 14 tests pass. This is a robustness fix, not a claim that the unavailable build logs proved a rollout delay. A follow-up Git build will verify the pipeline result separately.
+Post-deployment smoke checks now retry the complete set up to six times with five-second gaps to tolerate rollout propagation. Two additional tests verify recovery from a transient response and failure after exhausted attempts; total 14 tests pass. Fix commit `48b805f` was pushed to development; its Git build verifies the pipeline separately.
+
+Follow-up build `b2ba6e80-c1db-429d-96d5-70e4927d2afe` completed successfully for `48b805f`. GitHub reports Workers Builds conclusion success, confirming the configured tests, migration/deploy command, and all nine smoke checks completed in Cloudflare. The Git connection is verified end-to-end. Main remains at `895a2a4`; cumulative Android/root-document edits remain local. These final verification notes are retained locally after the successful deployment to avoid triggering a documentation-only redeployment.
+
+Latest deployed version: `c45414bd-db09-4696-b6b3-1a5da5b3abb1`, September 15 at 11:53:09 UTC, serving 100% of development traffic.
+
+## 7 Google client configuration and phone integration
+
+The user supplied Web and development Android client IDs in project wayirun-development. Wrangler now binds those exact IDs and two auth rate limiters (30 per minute per client, 300 combined per location). Missing/failed limiters fail closed. Exact audience checking remains enforced, with only the configured Android authorized party additionally permitted. All 16 backend tests pass, including rate exhaustion and unavailable limiters. Smoke checks now expect missing account authentication to be rejected with 401 and malformed token exchange with 400; they do not create user accounts.
+
+The Android signin-settings1 work remains local alongside the earlier Android baseline. It adds optional Google Credential Manager sign-in, encrypted no-backup session storage, and preserves original local run ownership. Run synchronization is not implemented. The user's newest launch/settings correction supersedes the old every-foreground setup wizard: retain the original Android splash, check runtime grants only on startup without interrupting restored active runs, and put editable settings behind one persistent top-right gear. Google device sign-in still needs an actual user test.

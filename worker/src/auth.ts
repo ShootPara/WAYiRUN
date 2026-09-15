@@ -1,6 +1,9 @@
 import { verifyGoogleToken } from "./google.js";
 
-export interface AuthEnv { DB: D1Database; GOOGLE_WEB_CLIENT_ID?: string }
+export interface AuthEnv {
+  DB: D1Database; GOOGLE_WEB_CLIENT_ID?: string; GOOGLE_ANDROID_CLIENT_ID?: string;
+  AUTH_RATE_LIMIT?: RateLimit; AUTH_TOTAL_LIMIT?: RateLimit;
+}
 const SESSION_SECONDS = 3600;
 const CHALLENGE_SECONDS = 300;
 const opaquePattern = /^[0-9a-f]{64}$/;
@@ -50,6 +53,12 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
   }
   const now = Math.floor(Date.now() / 1000);
   try {
+    if (!env.AUTH_RATE_LIMIT || !env.AUTH_TOTAL_LIMIT) return reply({ error: "authentication_unavailable" }, 503);
+    // Cloudflare supplies this header at the edge. Never trust X-Forwarded-For or a caller's owner ID.
+    const key = await hash(request.headers.get("CF-Connecting-IP") ?? "unknown-client");
+    if (!(await env.AUTH_RATE_LIMIT.limit({ key })).success || !(await env.AUTH_TOTAL_LIMIT.limit({ key: "auth" })).success) {
+      return reply({ error: "too_many_requests" }, 429, { "Retry-After": "60" });
+    }
     if (path === "/api/auth/challenge") {
       const nonce = opaque();
       await env.DB.batch([
@@ -69,7 +78,7 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
         .bind(nonceHash, now).first();
       if (!challenge) return reply({ error: "invalid_identity" }, 401);
       let identity;
-      try { identity = await verifyGoogleToken(idToken, env.GOOGLE_WEB_CLIENT_ID, nonce); }
+      try { identity = await verifyGoogleToken(idToken, env.GOOGLE_WEB_CLIENT_ID, nonce, undefined, env.GOOGLE_ANDROID_CLIENT_ID); }
       catch { return reply({ error: "invalid_identity" }, 401); }
       const issuedAt = Math.floor(Date.now() / 1000);
       const token = opaque(); const tokenHash = await hash(token);

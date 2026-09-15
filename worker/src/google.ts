@@ -6,6 +6,7 @@ export interface GoogleIdentity { subject: string; name: string | null; picture:
 
 export async function verifyGoogleToken(
   token: string, audience: string, nonce: string, keys: JWTVerifyGetKey = googleKeys,
+  androidClientId?: string,
 ): Promise<GoogleIdentity> {
   const { payload } = await jwtVerify(token, keys, {
     algorithms: ["RS256"], issuer: ["https://accounts.google.com", "accounts.google.com"],
@@ -15,7 +16,7 @@ export async function verifyGoogleToken(
     throw new Error("Invalid identity");
   }
   // This backend accepts one Web audience, not multi-audience tokens or another authorized party.
-  if (payload.aud !== audience || (payload.azp !== undefined && payload.azp !== audience)) {
+  if (payload.aud !== audience || (payload.azp !== undefined && payload.azp !== audience && payload.azp !== androidClientId)) {
     throw new Error("Invalid audience");
   }
   let picture: string | null = null;
