@@ -1,0 +1,24 @@
+{
+  "name": "wayirun-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "dev": "wrangler dev",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "build:deploy": "wrangler deploy --dry-run --outdir build/deploy",
+    "deploy:dev": "npm test && node scripts/deploy-dev.mjs && npm run smoke:dev",
+    "smoke:dev": "node scripts/smoke-dev.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260914.1",
+    "miniflare": "5.20260911.1-alpha",
+    "typescript": "5.9.3",
+    "wrangler": "4.131.2"
+  }
+}

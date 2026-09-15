@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wayirun-dev",
+  "account_id": "6bf560a8b86852196c9898023e3b8d6b",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-17",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "APP_ENV": "development" },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "wayirun-dev-db",
+    "database_id": "04bf8339-386b-4a03-80d7-12b4d1f99ffb",
+    "migrations_dir": "migrations"
+  }]
+}

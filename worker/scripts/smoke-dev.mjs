@@ -1,0 +1,19 @@
+import assert from "node:assert/strict";
+
+const origin = "https://wayirun-dev.unopenedparachute.workers.dev";
+for (const [path, method, status, expected] of [
+  ["/healthz", "GET", 200, { service: "WAYiRUN", status: "ok" }],
+  ["/readyz", "GET", 200, { service: "WAYiRUN", status: "ready" }],
+  ["/readyz", "HEAD", 200, null],
+  ["/missing", "GET", 404, { error: "not_found" }],
+  ["/healthz", "POST", 405, { error: "method_not_allowed" }],
+  ["/api/runs", "GET", 503, { error: "api_not_available" }],
+  ["/api/runs", "POST", 503, { error: "api_not_available" }],
+]) {
+  const response = await fetch(origin + path, { method, signal: AbortSignal.timeout(15_000), redirect: "error" });
+  assert.equal(response.status, status, `${method} ${path}`);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  if (expected) assert.deepEqual(await response.json(), expected);
+  else assert.equal(await response.text(), "");
+  console.log(`PASS ${method} ${path} (${status})`);
+}
