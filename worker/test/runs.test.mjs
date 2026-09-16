@@ -11,6 +11,12 @@ const pair = await generateKeyPair("RS256", { extractable: true });
 const jwk = { ...await exportJWK(pair.publicKey), kid: "run-test", alg: "RS256", use: "sig" };
 const audience = "test-web.apps.googleusercontent.com";
 const sha = value => createHash("sha256").update(value).digest("hex");
+async function applyDeletionMigration(db) {
+  const sql = readFileSync(new URL("../migrations/0004_run_deletions.sql", import.meta.url), "utf8");
+  const split = sql.indexOf("CREATE TRIGGER");
+  await db.prepare(sql.slice(0, split)).run();
+  await db.prepare(sql.slice(split)).run();
+}
 async function runtime(t, migrateRuns = true) {
   const mf = new Miniflare(convertV4MiniflareOptions({
     name: "runs-test", modules: true, scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
@@ -29,6 +35,7 @@ async function runtime(t, migrateRuns = true) {
     const sql = readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     await db.batch(sql.replace(/^--.*$/gm, "").split(";").map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
   }
+  if (migrateRuns) await applyDeletionMigration(db);
   const call = (path, method = "GET", body, token, headers = {}) => mf.dispatchFetch(`https://test${path}`, {
     method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
@@ -227,6 +234,7 @@ test("additive migration preserves existing accounts/sessions and compound owner
   const before = await r.db.prepare("SELECT * FROM accounts").all();
   const sql = readFileSync(new URL("../migrations/0003_run_uploads.sql", import.meta.url), "utf8");
   await r.db.batch(sql.split(";").map(s => s.trim()).filter(Boolean).map(s => r.db.prepare(s)));
+  await applyDeletionMigration(r.db);
   assert.deepEqual((await r.db.prepare("SELECT * FROM accounts").all()).results, before.results);
   assert.equal((await r.call("/api/account", "GET", undefined, r.token)).status, 200);
   const { m, chunks } = fixture(), receipt = await r.begin(m);
@@ -236,5 +244,35 @@ test("additive migration preserves existing accounts/sessions and compound owner
   await r.db.prepare("CREATE TRIGGER refuse_chunk BEFORE INSERT ON run_chunks BEGIN SELECT RAISE(ABORT, 'test write failure'); END").run();
   assert.equal((await r.put(m, receipt, 0, chunks[0])).status, 503);
   assert.equal((await r.complete(m, receipt)).status, 409);
+  assert.equal((await r.db.prepare("SELECT count(*) n FROM run_chunks").first()).n, 0);
+});
+
+test("discard removes every cloud byte and stale uploads cannot resurrect it", async t => {
+  const r = await runtime(t), { m, chunks } = fixture(), receipt = await r.begin(m);
+  for (let i = 0; i < chunks.length; i++) await r.put(m, receipt, i, chunks[i]);
+  await r.complete(m, receipt);
+  for (let i = 0; i < 2; i++) {
+    const deleted = await r.call(`/api/runs/${m.runId}`, "DELETE", undefined, r.token);
+    assert.equal(deleted.status, 200); assert.deepEqual(await deleted.json(), { runId: m.runId, deleted: true });
+  }
+  assert.equal((await r.db.prepare("SELECT count(*) n FROM run_chunks").first()).n, 0);
+  assert.equal((await r.db.prepare("SELECT count(*) n FROM run_uploads").first()).n, 0);
+  assert.equal((await r.db.prepare("SELECT count(*) n FROM run_deletions").first()).n, 1);
+  assert.equal((await r.call("/api/run-uploads", "POST", m, r.token)).status, 410);
+  assert.equal((await r.put(m, receipt, 0, chunks[0])).status, 404);
+  assert.equal((await r.call(`/api/runs/${m.runId}`, "GET", undefined, r.token)).status, 404);
+});
+
+test("deletion racing begin or completion always wins; foreign-account deletion stays isolated", async t => {
+  const r = await runtime(t), { m, chunks } = fixture();
+  await Promise.all([r.call("/api/run-uploads", "POST", m, r.token), r.call(`/api/runs/${m.runId}`, "DELETE", undefined, r.token)]);
+  assert.equal((await r.call("/api/run-uploads", "POST", m, r.token)).status, 410);
+  assert.equal((await r.db.prepare("SELECT count(*) n FROM run_uploads").first()).n, 0);
+  const second = fixture(), receipt = await r.begin(second.m), bob = await r.login("bob");
+  for (let i = 0; i < second.chunks.length; i++) await r.put(second.m, receipt, i, second.chunks[i]);
+  await r.call(`/api/runs/${second.m.runId}`, "DELETE", undefined, bob);
+  assert.equal((await r.complete(second.m, receipt)).status, 200);
+  await Promise.all([r.complete(second.m, receipt), r.call(`/api/runs/${second.m.runId}`, "DELETE", undefined, r.token)]);
+  assert.equal((await r.db.prepare("SELECT count(*) n FROM run_uploads").first()).n, 0);
   assert.equal((await r.db.prepare("SELECT count(*) n FROM run_chunks").first()).n, 0);
 });

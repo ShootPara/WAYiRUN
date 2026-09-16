@@ -90,10 +90,20 @@ export async function handleRuns(request: Request, env: AuthEnv): Promise<Respon
     const staged = path.startsWith("/api/run-uploads");
     const expected = root ? (staged ? "POST" : "GET") : (staged && match![3] ? (match![3] === "complete" ? "POST" : "PUT") : "GET");
     if (!staged && match?.[3] === "complete") return reply({ error: "not_found" }, 404);
-    if (request.method !== expected) return reply({ error: "method_not_allowed" }, 405, { Allow: expected });
+    const deleting = !root && !staged && !match![3] && request.method === "DELETE";
+    if (request.method !== expected && !deleting) return reply({ error: "method_not_allowed" }, 405, { Allow: expected });
     if (url.search && path !== "/api/runs") return reply({ error: "invalid_request" }, 400);
     const now = Math.floor(Date.now() / 1000);
 
+    if (deleting) {
+      try { await bytes(request, 0, false); } catch { return reply({ error: "invalid_request" }, 400); }
+      const id = match![2]!;
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO run_deletions VALUES (?, ?, ?) ON CONFLICT DO NOTHING").bind(owner, id, now),
+        env.DB.prepare("DELETE FROM run_uploads WHERE owner_id = ? AND run_id = ?").bind(owner, id),
+      ]);
+      return reply({ runId: id, deleted: true });
+    }
     if (path === "/api/run-uploads") {
       let m: Manifest;
       try { m = manifest(await smallJson(request)); } catch { return reply({ error: "invalid_manifest" }, 400); }
@@ -106,6 +116,9 @@ export async function handleRuns(request: Request, env: AuthEnv): Promise<Respon
           (SELECT count(*) FROM run_uploads WHERE owner_id = ? AND completed_at IS NULL) < 4
           ON CONFLICT DO NOTHING`).bind(owner, m.runId, m.operationId, text, fingerprint, m.chunks.length, now, now + UPLOAD_SECONDS, owner),
       ]);
+      if (await env.DB.prepare("SELECT run_id FROM run_deletions WHERE owner_id = ? AND run_id = ?").bind(owner, m.runId).first()) {
+        return reply({ error: "run_deleted" }, 410);
+      }
       const row = await upload(env, owner, m.runId);
       if (row && row.manifest_hash === fingerprint) return reply({ ...receipt(row), expiresAt: row.completed_at ? null : row.expires_at });
       const collision = await env.DB.prepare("SELECT run_id FROM run_uploads WHERE owner_id = ? AND operation_id = ?").bind(owner, m.operationId).first();

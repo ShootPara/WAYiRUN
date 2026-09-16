@@ -2,9 +2,9 @@
 
 ## 1 Scope and boundary
 
-This Milestone 5 slice provides authenticated, resumable storage and retrieval of immutable run archives. It does not yet connect Android's local database to the server. It does not implement Android upload scheduling, importing old runs, download reconciliation, remote discard, or desktop history UI. Those must be verified before phone synchronization is enabled. Existing phone tracking and records remain untouched.
+This Milestone 5 slice provides authenticated, resumable storage and retrieval of immutable run archives. Android sync1 now connects completed runs through a durable Room queue and WorkManager. It includes explicit legacy import and discard reconciliation. Download/restore, cross-device deletion-list reconciliation, and desktop history UI remain future work. Existing records migrate without automatic import.
 
-The user approved an explicit **Add existing runs to this account** action in settings. Old local records must remain local until that action is chosen. New runs will retain the account selected at their start, including offline recording. Account changes must never transfer an existing run or its queued operation. A first-time offline user can continue local tracking and later choose import; authentication is not fabricated offline. The import action and queue are the next Android slice, not present in this build.
+The user approved an explicit **Add existing runs to this account** action in settings. Old local records must remain local until that action is chosen. New runs will retain the account selected at their start, including offline recording. Account changes must never transfer an existing run or its queued operation. A first-time offline user can continue local tracking and later choose import; authentication is not fabricated offline. The import action and queue are implemented in Android sync1; account changes/import are disabled during an active run so its owner remains stable.
 
 ## 2 Authentication and privacy
 
@@ -25,7 +25,7 @@ Timestamps/duration are nonnegative safe integers; distance is finite and nonneg
 
 The manifest has a 16 KiB request cap. Each chunk contains 1-131,072 bytes; a run has 1-128 chunks, at most 16 MiB. Oversized data is refused, never silently truncated. The Android exporter must retain the complete local record if these limits are exceeded. Chunk boundaries may split UTF-8 characters; only the reassembled archive is decoded.
 
-The transport stores archive bytes losslessly. It validates summary fields, descriptor sizes, completeness, and cryptographic integrity; it does **not** yet decode/validate the archive's measurement schema or prove its contents match the submitted summary. Before Android integration, define and test the versioned archive encoder/decoder covering checkpoint/settings, time-zone metadata, all intervals, source segments, measurements, route points, and splits. No production statistics or map projections may treat unvalidated archive bytes as verified measurements. Future readers must validate the decoded data and never render raw content as HTML.
+The transport stores archive bytes losslessly. It validates summary fields, descriptor sizes, completeness, and cryptographic integrity; it does **not** yet decode/validate the archive's measurement schema or prove its contents match the submitted summary. Android RunArchive version 1 now encodes/decodes and validates checkpoint/settings, time-zone metadata, intervals, source segments, measurements, route points and splits, with round-trip and malformed-data tests. No production statistics or map projections may treat unvalidated archive bytes as verified measurements. Future readers must validate the decoded data and never render raw content as HTML.
 
 The server canonicalizes manifest property order and returns a `manifestHash` over its UTF-8 JSON. That hash binds summary, run/operation IDs, ordered chunk hashes, and sizes. Begin retries with the same canonical manifest return the existing receipt; conflicting run or operation identities return 409.
 
@@ -44,7 +44,7 @@ Chunks may arrive out of order. Identical retries are successful, including afte
 
 At most four incomplete uploads per account may be reserved, enforced inside the atomic D1 insert; excess returns 429. Drafts expire 24 hours after reservation. Status/mutation on expired drafts returns 410. Starting an upload cleans up that account's expired drafts and their cascading chunks; inactive accounts may retain expired drafts until their next begin request. Rebegin after expiry requires sending the full manifest/chunks again. Completed records and receipts do not expire in this slice.
 
-Clients must keep local runs and durable operation IDs until acknowledgement, use bounded retry/backoff, respect Retry-After, and require fresh same-owner authentication after 401. Upload expiry does not justify deleting the local run. Changing accounts must not change the operation owner. This client behavior remains to be implemented.
+Clients must keep local runs and durable operation IDs until acknowledgement, use bounded retry/backoff, respect Retry-After, and require fresh same-owner authentication after 401. Upload expiry does not justify deleting the local run. Changing accounts must not change the operation owner. Android implements this behavior, with eight consecutive transient failures per operation before requiring Retry sync, and fresh sign-in for expired sessions.
 
 ## 5 Retrieval
 
@@ -60,6 +60,12 @@ Tests use the deployed bundle under local workerd/D1 and actual Google-signature
 
 The 128 KiB chunk bound is below D1's 2 MB row limit. [D1 limits](https://developers.cloudflare.com/d1/platform/limits/). The atomic operations use D1's transaction semantics. [D1 batch API](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
 
-## 7 Next integration gates
+## 7 Discard and stale-upload protection
 
-Implement the Android archive encoder/decoder and migration, immutable ownership, explicit import, durable upload queue and same-account retries. Couple discard with queue cancellation and remote deletion markers before enabling uploads, so a retry cannot resurrect a discarded run. Full deletion reconciliation remains its own later milestone, but the already implemented phone discard must remain correct when sync begins. Do not mark Milestone 5 complete until offline recording/reconnection, account switching, restoration, and phone checks pass.
+Migration 0004 adds `run_deletions`, retaining only authenticated owner, run ID and deletion timestamp. DELETE `/api/runs/{runId}` accepts an empty body and is idempotent even for an absent run. It atomically inserts the marker and deletes the run manifest; chunks cascade. A database trigger rejects future manifest insertion for that owner/run, including writes by an older Worker. Begin returns 410 run_deleted for a tombstoned run. Foreign-account deletes cannot remove the original owner's record or expose whether it exists.
+
+The phone atomically deletes metrics/route/checkpoint data and changes the durable operation to DELETE. Late upload acknowledgements cannot overwrite that state. Cloud removal runs with matching authentication; offline or signed-out removal remains pending and visible in gear settings. The worker prioritizes deletes. A server run_deleted response removes a matching stale local completed copy. Deletion markers are retained indefinitely in this development slice; retention and cross-device deletion-feed reconciliation remain future work. No deleted run metrics are kept in markers.
+
+## 8 Remaining integration gates
+
+Test actual phone upload/reconnection and remote discard. Implement downloaded archive validation against the authenticated owner, atomic restoration and cross-device deletion-feed reconciliation. No desktop history/maps, photos, public pages or production identity are added here. Milestone 5 remains open until its remaining restore/account verification gates pass.

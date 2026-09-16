@@ -72,4 +72,10 @@ Implemented owner-scoped resumable uploads, chunk hashes and bounds, immutable c
 
 This is server transport only: it preserves opaque archive bytes and validates manifest fields/integrity, not the measurement archive schema. Android encoding/decoding, explicit import, ownership/queue migration, and discard reconciliation remain required before enabling phone uploads. The user confirmed Google phone sign-in and chose explicit import in settings. Existing Android run records remain untouched.
 
-Development Git deployment verification pending below. No production resources are used.
+Commit e257bd0 was pushed to development. Workers Builds 5a805e01-d39d-4ba7-85ee-79edeef6af4a completed successfully, including tests, migration, deployment and smoke checks. All nine live smoke checks also passed independently. A read-only remote ledger query confirms migrations 0001, 0002 and 0003. No production resources are used. These final deployment results remain local to avoid a documentation-only redeploy.
+
+## 9 Discard protection for Android synchronization - September 16, 2026
+
+Added migration 0004 and authenticated idempotent DELETE for cloud runs. Atomic deletion removes manifest/chunks while retaining only owner/run ID/time; a database trigger prevents old or racing uploads from resurrecting the run. Tests use the actual migration and cover deletion before begin, after completion, repeated deletion, racing completion, and foreign-owner isolation. All 29 bundled Worker/workerd/D1 tests pass. Android integration and its final test results are recorded in root TASKS.md; Android source remains local under the existing commit boundary.
+
+Development deployment pending verification. Production is untouched.

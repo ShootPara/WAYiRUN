@@ -2,9 +2,9 @@
 
 ## 1 Current boundary
 
-This contains the cloud foundation, Google account sessions, and resumable completed-run storage transport. Google phone sign-in is user-confirmed. Run storage now requires a verified session and provides immutable upload receipts and owner-isolated reads. Android's archive encoder/import/queue and remote discard are not connected yet. See AUTH_CONTRACT.md and RUN_STORAGE_CONTRACT.md for exact behavior and limits.
+This contains the cloud foundation, Google account sessions, and resumable completed-run storage transport. Google phone sign-in is user-confirmed. Run storage now requires a verified session and provides immutable upload receipts and owner-isolated reads. Android sync1 includes archive validation, explicit import, durable uploads and discard reconciliation; download/restore remains next. See AUTH_CONTRACT.md and RUN_STORAGE_CONTRACT.md for exact behavior and limits.
 
-Migration 0001 stores foundation metadata, 0002 adds accounts/sessions/challenges, and 0003 adds run manifests and chunks. Migrations are additive and preserve existing accounts and sessions. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
+Migration 0001 stores foundation metadata, 0002 adds accounts/sessions/challenges, and 0003 adds run manifests/chunks, and 0004 adds deletion markers and a stale-upload guard. Migrations are additive and preserve existing accounts and sessions. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
 
 ## 2 Local development
 
