@@ -84,6 +84,15 @@ export async function handleRuns(request: Request, env: AuthEnv): Promise<Respon
     const owner = verified.account.id;
     const url = new URL(request.url);
     const path = url.pathname;
+    if (path === "/api/run-deletions") {
+      if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405, { Allow: "GET" });
+      const after = url.searchParams.get("after");
+      if ([...url.searchParams.keys()].some(k => k !== "after") || url.searchParams.getAll("after").length > 1 || (after !== null && !uuid.test(after))) return reply({ error: "invalid_request" }, 400);
+      const rows = await env.DB.prepare("SELECT run_id FROM run_deletions WHERE owner_id = ? AND run_id > ? ORDER BY run_id LIMIT 21")
+        .bind(owner, after ?? "").all<{ run_id: string }>();
+      const page = rows.results.slice(0, 20);
+      return reply({ deleted: page.map(r => r.run_id), next: rows.results.length > 20 ? page.at(-1)!.run_id : null });
+    }
     const match = /^\/api\/(run-uploads|runs)\/([0-9a-f-]+)(?:\/(complete|chunks\/(0|[1-9][0-9]*)))?$/.exec(path);
     const root = path === "/api/run-uploads" || path === "/api/runs";
     if (!root && (!match || !uuid.test(match[2]!))) return reply({ error: "not_found" }, 404);
@@ -147,7 +156,7 @@ export async function handleRuns(request: Request, env: AuthEnv): Promise<Respon
     }
     const m = JSON.parse(row.manifest_json) as Manifest;
     if (!match![3]) {
-      if (!staged) return reply({ ...receipt(row), manifest: m });
+      if (!staged) return reply({ ...receipt(row), manifest: m, manifestJson: row.manifest_json });
       const chunks = await env.DB.prepare("SELECT chunk_index FROM run_chunks WHERE owner_id = ? AND run_id = ? ORDER BY chunk_index").bind(owner, id).all<{ chunk_index: number }>();
       return reply({ ...receipt(row), expiresAt: row.completed_at ? null : row.expires_at, received: chunks.results.map(c => c.chunk_index) });
     }

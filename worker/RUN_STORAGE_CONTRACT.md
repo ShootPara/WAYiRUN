@@ -2,7 +2,7 @@
 
 ## 1 Scope and boundary
 
-This Milestone 5 slice provides authenticated, resumable storage and retrieval of immutable run archives. Android sync1 now connects completed runs through a durable Room queue and WorkManager. It includes explicit legacy import and discard reconciliation. Download/restore, cross-device deletion-list reconciliation, and desktop history UI remain future work. Existing records migrate without automatic import.
+This Milestone 5 slice provides authenticated, resumable storage and retrieval of immutable run archives. Android sync1 now connects completed runs through a durable Room queue and WorkManager. It includes explicit legacy import and discard reconciliation. Android sync2 adds download/restore and cross-device deletion-list reconciliation. Desktop history UI remains future work. Existing records migrate without automatic import.
 
 The user approved an explicit **Add existing runs to this account** action in settings. Old local records must remain local until that action is chosen. New runs will retain the account selected at their start, including offline recording. Account changes must never transfer an existing run or its queued operation. A first-time offline user can continue local tracking and later choose import; authentication is not fabricated offline. The import action and queue are implemented in Android sync1; account changes/import are disabled during an active run so its owner remains stable.
 
@@ -50,7 +50,7 @@ Clients must keep local runs and durable operation IDs until acknowledgement, us
 
 GET `/api/runs` returns only completed runs owned by the session: receipt plus summary, 20 per page. `next` is a cursor for `?after=...`, ordered by completion time and run ID. No route data or archive bytes appear in list responses. A cursor cannot change ownership scope.
 
-GET `/api/runs/{runId}` returns the completion receipt and manifest. GET `/api/runs/{runId}/chunks/{index}` returns the exact binary chunk. Drafts never appear through these completed-run endpoints. Clients must verify downloaded chunk hashes, assemble in index order, validate the versioned archive, and commit restored records atomically before claiming successful restoration.
+GET `/api/runs/{runId}` returns the completion receipt, manifest, and manifestJson containing its exact canonical bytes. Readers hash manifestJson and parse that verified text to avoid cross-language JSON number/property-order differences. GET `/api/runs/{runId}/chunks/{index}` returns the exact binary chunk. Drafts never appear through these completed-run endpoints. Clients must verify downloaded chunk hashes, assemble in index order, validate the versioned archive, and commit restored records atomically before claiming successful restoration.
 
 ## 6 Storage and verification
 
@@ -64,8 +64,8 @@ The 128 KiB chunk bound is below D1's 2 MB row limit. [D1 limits](https://develo
 
 Migration 0004 adds `run_deletions`, retaining only authenticated owner, run ID and deletion timestamp. DELETE `/api/runs/{runId}` accepts an empty body and is idempotent even for an absent run. It atomically inserts the marker and deletes the run manifest; chunks cascade. A database trigger rejects future manifest insertion for that owner/run, including writes by an older Worker. Begin returns 410 run_deleted for a tombstoned run. Foreign-account deletes cannot remove the original owner's record or expose whether it exists.
 
-The phone atomically deletes metrics/route/checkpoint data and changes the durable operation to DELETE. Late upload acknowledgements cannot overwrite that state. Cloud removal runs with matching authentication; offline or signed-out removal remains pending and visible in gear settings. The worker prioritizes deletes. A server run_deleted response removes a matching stale local completed copy. Deletion markers are retained indefinitely in this development slice; retention and cross-device deletion-feed reconciliation remain future work. No deleted run metrics are kept in markers.
+The phone atomically deletes metrics/route/checkpoint data and changes the durable operation to DELETE. Late upload acknowledgements cannot overwrite that state. Cloud removal runs with matching authentication; offline or signed-out removal remains pending and visible in gear settings. The worker prioritizes deletes. A server run_deleted response removes a matching stale local completed copy. Deletion markers are retained indefinitely in this development slice; retention remains future work. GET `/api/run-deletions` provides authenticated owner-only IDs, 20 per page, with an optional UUID after cursor and next cursor. Full sweeps restart periodically so a concurrent insertion before the current cursor is eventually seen. No metrics are returned. No deleted run metrics are kept in markers.
 
 ## 8 Remaining integration gates
 
-Test actual phone upload/reconnection and remote discard. Implement downloaded archive validation against the authenticated owner, atomic restoration and cross-device deletion-feed reconciliation. No desktop history/maps, photos, public pages or production identity are added here. Milestone 5 remains open until its remaining restore/account verification gates pass.
+The user confirmed sync1 upload/import/discard phone checks pass; a read-only count confirms two completed cloud runs. Android sync2 implements validated atomic restore and deletion-feed reconciliation; real-device cross-device restore remains to be verified. No desktop history/maps, photos, public pages or production identity are added here. Milestone 5 remains open until its remaining restore/account verification gates pass.

@@ -85,6 +85,8 @@ test("interrupted upload resumes; only complete runs are visible; bytes download
   assert.deepEqual(await (await r.complete(m, receipt)).json(), done); // Lost completion response.
   const detail = await (await r.call(`/api/runs/${m.runId}`, "GET", undefined, r.token)).json();
   assert.deepEqual(detail.manifest, m);
+  assert.deepEqual(JSON.parse(detail.manifestJson), m);
+  assert.equal(sha(detail.manifestJson), detail.manifestHash);
   const downloaded = [];
   for (let i = 0; i < chunks.length; i++) {
     const response = await r.call(`/api/runs/${m.runId}/chunks/${i}`, "GET", undefined, r.token);
@@ -275,4 +277,19 @@ test("deletion racing begin or completion always wins; foreign-account deletion 
   await Promise.all([r.complete(second.m, receipt), r.call(`/api/runs/${second.m.runId}`, "DELETE", undefined, r.token)]);
   assert.equal((await r.db.prepare("SELECT count(*) n FROM run_uploads").first()).n, 0);
   assert.equal((await r.db.prepare("SELECT count(*) n FROM run_chunks").first()).n, 0);
+});
+
+test("deletion feed is private, paginated, repeatable and validates cursors", async t => {
+  const r = await runtime(t), bob = await r.login("bob");
+  const ids = Array.from({length: 23}, () => randomUUID()).sort();
+  for (const id of ids) assert.equal((await r.call(`/api/runs/${id}`, "DELETE", undefined, r.token)).status, 200);
+  const page = await (await r.call("/api/run-deletions", "GET", undefined, r.token)).json();
+  assert.deepEqual(page.deleted, ids.slice(0, 20)); assert.equal(page.next, ids[19]);
+  const last = await (await r.call(`/api/run-deletions?after=${page.next}`, "GET", undefined, r.token)).json();
+  assert.deepEqual(last, {deleted: ids.slice(20), next: null});
+  assert.deepEqual(await (await r.call("/api/run-deletions", "GET", undefined, bob)).json(), {deleted: [], next: null});
+  assert.equal((await r.call("/api/run-deletions")).status, 401);
+  for (const query of ["?after=bad", "?owner=alice", `?after=${ids[0]}&after=${ids[1]}`])
+    assert.equal((await r.call(`/api/run-deletions${query}`, "GET", undefined, r.token)).status, 400);
+  assert.equal((await r.call("/api/run-deletions", "POST", undefined, r.token)).status, 405);
 });
