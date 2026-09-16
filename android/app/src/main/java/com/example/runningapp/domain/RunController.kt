@@ -104,7 +104,9 @@ class RunController(
                 else -> 0.0
             }
             // An unusable numeric sample must not poison either totals or the valid baseline.
-            if (delta.isFinite() && (distanceMeters + delta).isFinite()) {
+            // Bound work from a corrupt sensor counter/stride: a single callback cannot add
+            // more than 100 km. This also prevents an unbounded full-split allocation loop.
+            if (delta.isFinite() && delta <= 100_000.0 && (distanceMeters + delta).isFinite()) {
                 if (previous != null && delta > 0) {
                     val fromActive = segment.startedActiveMs +
                         (previous.monotonicMs - segment.startedMonotonicMs)

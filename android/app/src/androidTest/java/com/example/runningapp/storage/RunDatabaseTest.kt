@@ -77,4 +77,31 @@ class RunDatabaseTest {
         assertEquals(RunState.PAUSED, stored.decode().snapshot.state)
         assertEquals(1_000L, stored.decode().snapshot.activeDurationMs)
     }
+
+    @Test fun discardRemovesEveryOwnedTableAndPreservesOtherRuns() = runBlocking {
+        val first = run(); first.selectSource(DistanceSource.STEPS); first.finish(); save(first)
+        db.runs().putRoute(RoutePoint(runId = "one", segmentId = 1, monotonicMs = 0, latitude = 0.0, longitude = 0.0, accuracyMeters = 1f))
+        db.runs().putMeasurement(StoredMeasurement(runId = "one", segmentId = 1, monotonicMs = 0, source = "STEPS", deltaMeters = 1.0, totalMeters = 1.0, activeMs = 0, reading = "test"))
+        db.runs().putSplits(listOf(StoredSplit("one", 1, 1.0, 1000, true)))
+        val other = run("two"); other.finish(); save(other)
+        val tables = listOf("active_intervals", "source_segments", "route_points", "measurements", "splits")
+        fun rows(table: String): Long = db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table WHERE runId = ?", arrayOf<Any>("one")).use { it.moveToFirst(); it.getLong(0) }
+        tables.forEach { assertTrue("Fixture has $it", rows(it) > 0) }
+        assertFalse(repo.discard("one", "different-owner"))
+        assertTrue(repo.discard("one", "test-owner"))
+        assertTrue(repo.discard("one", "test-owner"))
+        assertNull(db.runs().get("one")); assertNotNull(db.runs().get("two"))
+        tables.forEach { assertEquals("No remaining $it", 0L, rows(it)) }
+    }
+
+    @Test fun discardRefusesActiveRunAndRollsBackStorageFailure() = runBlocking {
+        val first = run(); save(first)
+        assertFalse(repo.discard("one", "test-owner"))
+        first.finish(); save(first)
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_discard BEFORE DELETE ON runs BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+        try { repo.discard("one", "test-owner"); fail("Expected deletion failure") }
+        catch (_: android.database.sqlite.SQLiteException) { }
+        assertNotNull(db.runs().get("one"))
+        assertEquals(RunState.FINISHED.name, db.runs().get("one")!!.state)
+    }
 }

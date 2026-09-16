@@ -48,3 +48,8 @@ The backend accepts that exact Web audience and allows that Android client as an
 The account backend has local tests using generated test signatures and an intercepted Google key response. Deployed code always fetches Google's fixed public key endpoint; it has no test-login switch. A valid Google token with a fresh server nonce is required to create an account/session.
 
 The signin1 test APK adds optional Google sign-in and encrypted session storage. Run tracking/storage remains local-only. Existing runs keep their original local owner. Sign-in failure, cancellation, or expired sessions never gate START RUNNING. Completed-run synchronization remains the next Milestone 5 slice.
+
+
+## 6 Phone verification - September 15, 2026
+
+The user confirmed that Google sign-in succeeded on the installed phone build. Google setup is no longer awaiting that check. Run synchronization remains separate, unfinished work.

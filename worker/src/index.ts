@@ -28,7 +28,7 @@ export default {
     if (["/api/auth/challenge", "/api/auth/google", "/api/auth/logout", "/api/account"].includes(path)) {
       return handleAuth(request, env);
     }
-    if (path === "/api/runs" || path.startsWith("/api/runs/") || path === "/api/run-uploads" || path.startsWith("/api/run-uploads/")) {
+    if (path === "/api/run-deletions" || path === "/api/runs" || path.startsWith("/api/runs/") || path === "/api/run-uploads" || path.startsWith("/api/run-uploads/")) {
       return handleRuns(request, env);
     }
     if (path === "/api" || path.startsWith("/api/")) {

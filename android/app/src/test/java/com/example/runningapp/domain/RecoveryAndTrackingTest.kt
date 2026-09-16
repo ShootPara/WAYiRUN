@@ -119,4 +119,17 @@ class RecoveryAndTrackingTest {
         assertEquals(10.0, run.snapshot().distanceMeters, 0.0)
         assertEquals(2_000L, run.snapshot().activeDurationMs)
     }
+
+    @Test fun gpsGapWithoutAnInterveningTickStillBreaksRouteSegment() {
+        val clock = Clock()
+        val run = run(clock)
+        run.start()
+        val input = TrackingInput(run, clock)
+        input.gps(GpsFix(0, 0.0, 0.0, 1f))
+        val oldSegment = run.snapshot().currentSegmentId
+        clock.time = 20_000
+        input.gps(GpsFix(20_000, 1.0, 1.0, 1f))
+        assertNotEquals(oldSegment, run.snapshot().currentSegmentId)
+        assertEquals(0.0, run.snapshot().distanceMeters, 0.0)
+    }
 }

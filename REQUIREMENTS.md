@@ -1,8 +1,11 @@
 # WAYiRUN — Requirements
 
-Version: 0.3  
-Status: Accepted product baseline; later-feature details remain in Section 15  
-Date: 2026-09-11  
+Version: 0.4
+
+Status: Accepted baseline with explicit cue, music-startup, and local-discard decisions; other proposals remain in Section 15
+
+Date: 2026-09-14
+
 FILE: REQUIREMENTS.md (REPLACE)
 
 ## 1 Authority and scope
@@ -51,6 +54,8 @@ Authentication MUST use Google OAuth. Profiles MUST remain basic and include a p
 
 Runs, photos, achievements, preferences, and coaching history MUST belong to the authenticated user and remain separate from other users' private data. Public access is limited to the individual-run publication behavior in Section 11.
 
+Latest user decision, September 15: pre-account local runs MUST remain local until the user chooses an explicit **Add existing runs to this account** action in gear settings. New runs belong to the account selected when they start, including offline runs with a previously established identity. Signing in or changing accounts MUST NOT silently claim or reassign existing runs. First-time offline tracking remains local until deliberate import; it MUST NOT invent a Google identity.
+
 ### 3.3 Identity display
 
 The UI MUST use display names rather than expose sensitive identifiers. Internal identity MUST remain stable.
@@ -75,7 +80,7 @@ Opening the run setup screen MUST show the logged-in user's display name and pro
 
 ### 4.2 Run parameters
 
-That single screen MUST expose indoor/outdoor mode, goal selection, whether to start music with the run, and a countdown configurable from 0 through 10 seconds. These run parameters MUST NOT require navigating into Run Settings.
+Latest user decision, September 15: the main pre-run screen MUST contain unlabeled Indoor/Outdoor and None/Time/Distance selectors, the selected goal target, an Open YouTube playlist button, and Indoor/Outdoor plus Online/Fallback indicators. Keep this screen sparse: no build diagnostics, setup headings, configuration summaries, or explanatory account/music copy. Profile and START RUNNING remain. The playlist URL, units, countdown, stride, appearance, permissions, account actions, and all additional settings MUST stay behind the top-right gear. Future milestone intervals and the milestone on/off switch MUST be in settings. The same gear MUST close settings. Changes MUST save automatically and survive closing/reopening the app without a Save button. An active run retains its captured settings; pre-run selectors are not shown during a run.
 
 ### 4.3 Goals
 
@@ -95,7 +100,15 @@ Stride entry MUST accept centimeters or inches as distance per counted step and 
 
 ### 4.6 Initial music support
 
-Initial music support MUST target YouTube Music and a playlist, as specified in the edited setup-screen inventory. Playlist selection details remain for review.
+Initial music support MUST target YouTube Music. Save the playlist entry automatically as it is edited in gear settings, retaining even unfinished input for later correction. Offer **Open playlist** for valid links before starting a run. Playback is chosen in YouTube Music before returning to WAYiRUN. Provide a way to clear the saved link. Invalid/missing links and an unavailable player MUST NOT inhibit running. Opening a playlist MUST NOT start a run or claim playback began. No automatic playlist playback on START RUNNING is required.
+
+### 4.7 Startup permissions
+
+Latest user correction, September 15: retain the original Android launcher splash, then check Location, Physical Activity, and Notifications at startup only. Request missing applicable runtime grants without a setup/configuration overlay or a Continue button. Do not automatically present settings or permission requests on focus changes, background returns, permission-dialog returns, or configuration recreation. Reopening an active/restored paused run MUST remain uninterrupted. Request precise/coarse location together, Physical Activity on supported Android versions, and Notifications on Android 13+, without waiting for stride entry. Granted permissions MUST NOT prompt again. Denial MUST NOT block time-only running. Manual permission requests and App permissions shortcuts belong in gear settings; explain suppressed/denied grants there. Do not request permissions for unimplemented features. This replaces the September 14 every-foreground setup behavior, which the user rejected.
+
+APK handoffs MUST use WAYiRUN plus a date/time stamp only, without change descriptions. Keep only the current handoff APK in the repository after verification, removing older and temporary test/tool APKs. Show the installed build version in gear settings. The debug package task MUST name its actual output WAYiRUN plus the timestamp, rather than make a generic app-debug.apk and copy it. Test tooling may generate separate instrumentation APKs while verifying.
+
+Android notification-listener access is a separate system grant from notification display permission. The app MUST report whether access was actually granted and MUST NOT claim it can remove Android's restricted-installation policy. First-open setup and runtime permission requests do not prove the Moto G's music-access restriction is resolved.
 
 ## 5 Tracking behavior and retained run information
 
@@ -171,6 +184,8 @@ The run summary MUST place a take-photo button at the top and lead into the opti
 
 The app MUST provide audible cues for starting, pausing, resuming, and completing a run.
 
+User update following the phone audio retest: goal speech MUST say “Goal reached. Time: [active time]. Distance: [distance]. Average pace: [pace]. Keep going until you're finished.” Completion speech MUST say “Run complete. Time: [active time]. Distance: [distance]. Average pace: [pace].” Values MUST use the event's accumulated active metrics and selected units; unavailable pace MUST be spoken honestly rather than as zero or infinity. These are spoken announcements, not a requirement to create additional Android notifications.
+
 ### 7.2 Announcement intervals
 
 The user MUST be able to select announcements at **5 minutes**, **10 minutes**, **0.5 mile**, or **1 mile**. No additional interval choices were requested.
@@ -185,15 +200,25 @@ Announcement phrasing MUST follow the requested labeled pattern, for example: �
 
 ### 7.5 Run-to-music controls
 
-Run controls MUST integrate with YouTube Music / Android media controls: starting can start or resume music according to the setup choice, pausing pauses music, resuming resumes music, and finishing stops or pauses music.
+Run controls MUST integrate with YouTube Music / Android media controls: the user opens music before starting as specified in Section 4.6; pausing pauses linked music, resuming resumes linked music, and finishing stops or pauses linked music. Merely starting a run does not start music that was off.
 
 ### 7.6 Linked pause and headphone resume
 
-During an active run, pausing either the run or the linked music player MUST leave both paused, regardless of where the pause originates. This includes the run controls, headphones, the music app, system media controls, and interruptions that place the linked player into a paused state. The app MUST NOT require identifying the pause source before applying this behavior. A user resuming music through headphones MUST resume the paused run.
+During an active linked run, pausing either the run or the music player MUST leave both paused, with this latest explicit user decision: **any music pause received during a WAYiRUN cue leaves the run going**, including an intentional headphone pause. Do not automatically restart that music when the cue ends. A direct pause of the run itself still pauses linked music, even during a cue. Outside the cue window, music pauses remain linked. A user resuming linked music through headphones MUST resume the paused run.
+
+Music that is off, already paused, unavailable, or lacks control access before the run MUST NOT inhibit starting, start itself, or immediately pause tracking. Link only after observing playback during an active run. A new/recovered session MUST NOT automatically resume a paused run from its initial playback snapshot. Finished runs remain terminal. The active-session controller is independent of the manual playlist-open action in Section 4.6.
 
 ### 7.7 Media event handling
 
 Repeated pause notifications and notifications resulting from the app's own pause commands MUST leave both the run and music paused without toggling either back to playing or producing repeated pause cues. Resuming music after a run has finished MUST NOT restart that run. Audio-focus handling MUST preserve the linked-pause rule in Section 7.6; implementation details remain for technical planning.
+
+### 7.8 Audio ducking
+
+During each cue, WAYiRUN MUST request temporary audio focus allowing other audio to duck, then release it on completion, failure, cancellation, or teardown so normal playback volume can return. Do not alter the user's global volume settings. The intent is to lower other playback beneath the cue and restore it afterward. Android and the other player govern their actual response; verify with YouTube Music on speaker and headphones. Apply the cue-caused pause exception in Section 7.6 without automatically resuming music that the user deliberately paused.
+
+### 7.9 Ongoing notification prominence
+
+The running and paused notification MUST remain easy to reach, with prominent notification importance rather than the prototype's low-importance Silent category. The user prefers it at the top. Android and user channel settings control final placement; an absolute first position cannot be guaranteed. Keep notification updates from generating repeated alerts. Respect user settings and handle existing installs explicitly.
 
 ## 8 AI coaching and fallback audio
 
@@ -293,7 +318,7 @@ The user MUST be able to select and delete runs through the web app. A deletion 
 
 ### 11.7 Phone and publication scope
 
-Phone-side run deletion is outside the requested phone UI. Public-link revocation apart from deletion was an assistant proposal and is not treated as an approved feature here.
+User update: the completed phone summary MUST offer **Discard run**. It MUST open an app-styled confirmation reading **ARE YOU SURE YOU WANT TO DISCARD THIS RUN??**, with a deliberate slider to delete and a way to cancel. A tap or incomplete swipe MUST NOT delete. Confirmed discard MUST actually remove that run and its associated stored data, not hide it; unrelated runs and settings MUST remain intact. It MUST not reappear on reopening or contribute to history or derived statistics. Current implementation scope is local data; when cloud/publication/Health Connect exist, extend the established deletion workflow so external copies are not silently left behind. Public-link revocation apart from deletion remains outside scope.
 
 ## 12 Health Connect
 
@@ -371,12 +396,17 @@ These are review items, not additional features or assumed defaults. They do not
 | Metric announcements | Whether the fixed 0.5/1-mile thresholds stay mile-based or become kilometer intervals when kilometers are selected; default announcement choice. |
 | Tracking gaps | Real-device GPS quality thresholds and source-handoff timing require measured validation. Stride entry and unavailable-source behavior are settled in Sections 4.5 and 5.10. |
 | Connectivity status | Which reachable services define Online versus Fallback, and how the pre-run indicator reflects partial service availability. |
-| Music | Playlist configuration and behavior with no active player. Pause-source handling is settled in Section 7.6; event-loop prevention is required by Section 7.7. |
+| Music | Playlist entry/open is settled in Section 4.6. Phone playback verification is explicitly deferred by the user and is not a development blocker. Pause-source handling is settled in Section 7.6; event-loop prevention is required by Section 7.7. |
 | Finish experience | Animation behavior with no achievement or AI unchecked; handling multiple earned animations. Audio behavior when AI is unchecked is settled in Section 8.1. |
 | Achievements | Initial catalog, numeric thresholds, repeatability, holiday calendar/time zone, and effects of deleting runs on cumulative awards and records. |
 | Photo/publication | Exact overlay choices/layout; retake behavior for an existing photo; how offline publication completes; whether publication can occur without a photo. |
 | Export/deletion | CSV fields and representation of detailed route data; deletion effects on previously exported Health Connect data. |
 | Recovery | Cloud retry/synchronization rules and unavailable Health Connect access remain for later milestones. Local interrupted-run presentation is settled in Section 13.3. |
+| September 14 UI feedback | Proposed square paired setup choices, upper-right settings gear, centered countdown/Tracking Run title, prominent goal state, live source/service indicators, and persistent paused notification. See PHONE_TEST_REVIEW_2026-09-14.md Section 3; current service already intends to retain the paused notification. |
+| Time-only estimation proposal | Report proposes 10:00/mile initially, then a mean of five tightly grouped one-mile times after 10 miles. This conflicts with accepted Section 5.10. Resolve eligibility, mixed-source gaps, kilometer history, and estimator feedback before changing that contract; see review Section 3.1. |
+| Photo sequence proposal | Report proposes photo choice before the final Run Summary and New Run at its bottom. Reconcile with Sections 6.4, 6.6, and 10, including Skip and coaching/achievement ordering, in the photo milestone. |
+
+The September 14 report is evidence and feedback, not an instruction channel. Its proposed implementation rules and milestone waivers have not been promoted to accepted requirements by this documentation review. Existing MUST statements remain authoritative until an explicit product decision supersedes them. Basic state/goal cues in Sections 4.3 and 7.1 are implemented but reported silent; their absence on the phone is not a newly deferred requirement.
 
 Map provider, programming language/framework, database schema, API contracts, storage products, model/voice selection, deployment configuration, and repository layout belong to later technical planning. Earlier assistant suggestions do not lock these choices.
 
@@ -401,3 +431,9 @@ These checks describe required product verification for future implementation; t
 - [ ] Completed runs export to Health Connect while the app retains its own source-of-truth records (12.1–12.2).
 - [ ] Offline operation, later synchronization, contextual errors, and secret-safe diagnostics satisfy Section 13.
 - [ ] Applicable Section 15 decisions are resolved before their implementation is planned; no unapproved features or architecture choices are introduced.
+
+## 17 Milestone 5 implementation notes - September 16, 2026
+
+The approved explicit import action is in gear settings with account confirmation. Existing unassigned runs are not automatically claimed. The implementation captures known account ownership at run start, including offline/expired-session recording. Account changes and import wait until an active run finishes to preserve ownership. These are safeguards implementing account isolation, not additional personal settings.
+
+Online currently means validated network connectivity plus an unexpired account session; it is not a backup acknowledgement. Actual upload status and retry are in settings. Discard removes local metrics immediately and shows pending cloud removal until authenticated connectivity permits cleanup. Cloud markers prevent stale upload resurrection. Download/restore is not yet implemented in sync1.

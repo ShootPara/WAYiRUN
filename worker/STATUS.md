@@ -78,4 +78,4 @@ Commit e257bd0 was pushed to development. Workers Builds 5a805e01-d39d-4ba7-85ee
 
 Added migration 0004 and authenticated idempotent DELETE for cloud runs. Atomic deletion removes manifest/chunks while retaining only owner/run ID/time; a database trigger prevents old or racing uploads from resurrecting the run. Tests use the actual migration and cover deletion before begin, after completion, repeated deletion, racing completion, and foreign-owner isolation. All 29 bundled Worker/workerd/D1 tests pass. Android integration and its final test results are recorded in root TASKS.md; Android source remains local under the existing commit boundary.
 
-Development deployment pending verification. Production is untouched.
+Cloud-only commit `5b5e7ed` passed Workers Builds on development. All nine live smoke checks passed independently, and a read-only remote ledger query confirms migrations 0001 through 0004. Production is untouched. Final Android gates passed: 58 JVM tests, 34 emulator tests, debug build and lint (zero errors, 11 version advisories). Physical-phone sync remains unverified. These final results remain local to avoid a documentation-only redeployment.

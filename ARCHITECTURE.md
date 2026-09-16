@@ -1,7 +1,7 @@
 # Running App — Architecture
 
-Version: 0.1  
-Status: Technical baseline; Android bootstrap implemented, verification tracked in TASKS.md  
+Version: 0.2
+Status: Local debug tracking prototype implemented; actual-device verification tracked in TASKS.md
 FILE: <repository-root>\ARCHITECTURE.md (NEW)
 
 ## 1 Authority and scope
@@ -49,31 +49,57 @@ Measure duration with a monotonic clock rather than subtracting wall-clock times
 
 Use one ordered stream of accepted measurements. Each time interval has one distance source: GPS or steps, never both. A source change closes the previous interval and initializes the next baseline. The first accepted GPS point after a gap starts a new route segment; do not draw a line across an unrecorded gap or calculate a distance jump across it.
 
-Indoor mode never registers a location listener. Outdoor tracking monitors GPS independently of network reachability. Record internal source metadata for correctness and testing; do not display estimated labels. Sensor quality thresholds and exact transition timing require measured tests before the tracking milestone is accepted.
+Indoor mode never registers a location listener. Outdoor tracking monitors GPS independently of network reachability and prefers usable GPS even when stride is configured. Record internal source metadata for correctness and testing; do not display estimated labels. Sensor quality thresholds and exact transition timing require measured tests before tracking accuracy is claimed.
 
 ### 3.3 Android service and permission behavior
 
 Run tracking must outlive screen navigation. Use a foreground tracking service started from the visible app and request only the permissions required by the active capability. A location foreground service requires enabled location and granted location permission; fitness tracking can use the health service type with activity-recognition permission. Do not unconditionally start a location service when its prerequisites are missing. [Foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types).
 
-Step counters are not guaranteed on every device. Missing sensors and denied permissions must be detected explicitly. The product decision for a run with neither usable location nor steps remains open; software cannot supply measured distance in that condition. Lack of GPS or internet alone must still not prevent starting. [Step counting](https://developer.android.com/health-and-fitness/fitness/basic-app/read-step-count-data).
+Step counters are not guaranteed on every device. Missing sensors and denied permissions must be detected explicitly. REQUIREMENTS Section 5.10 specifies time-only operation with Distance unavailable and no invented distance when neither source is usable. The September 14 time-estimation proposal has not replaced that contract. Lack of GPS or internet alone must still not prevent starting. [Step counting](https://developer.android.com/health-and-fitness/fitness/basic-app/read-step-count-data).
 
 ### 3.4 Persistence and restart
 
-Commit state transitions and measurement checkpoints locally. On activity recreation, reconnect to the existing controller rather than start a second run. On process restart, load the persisted session; do not invent measurements for the missing interval. Recovery presentation and reboot behavior must be settled before claiming interrupted-run recovery is complete. A deliberate Android force-stop cannot be treated as uninterrupted tracking.
+The signin-settings1 activity preserves the original Android launcher splash and requests missing runtime permissions once at startup after loading local tracking state. Active/restored paused runs bypass that startup prompt. Activity state prevents repeated requests on recreation; onResume only refreshes tracking capabilities and never presents setup/settings. No setup overlay or Continue button is used. A fixed top-right gear toggles settings; editable values save immediately to local preferences, and active runs retain their captured settings. Pre-run mode and goal selectors/target remain on the main screen alongside the playlist-launch button and mode/Fallback indicator. Playlist entry and all additional settings stay behind the gear. Fallback reflects the current local-only run service; Google sign-in does not imply run synchronization is available. Music access opens the component-specific notification-listener settings on API 30+, with a general-page fallback. Android owns special-access approval and installation restrictions. Manual permission requests and system settings shortcuts live behind the gear.
+
+Commit state transitions and measurement checkpoints locally. On activity recreation, reconnect to the existing controller rather than start a second run. On process restart, load the persisted session; do not invent measurements for the missing interval. Follow the paused recovery behavior below. A deliberate Android force-stop cannot be treated as uninterrupted tracking.
+
+Milestone 3 implements the accepted recovery decision: restore an unfinished run as paused from its last durable checkpoint, close open intervals at that checkpoint, and reset measurement baselines. New intervals use a new clock epoch, so monotonic values from a previous boot are never subtracted from current values. The screen explains an interrupted active run and offers Resume or Finish. Completed runs remain terminal.
+
+### 3.5 Local prototype implementation
+
+The platform implementation is confined to `android/app/src/debug/`: Compose screens, a started foreground `TrackingService`, GPS and step-counter adapters, offline TTS/tone cues, and Room storage. `src/release/` retains the name-only shell. One channel serializes commands, sensor callbacks, and clock ticks; completed database transactions precede state publication and cues. UI recreation observes the existing service instead of creating another controller. Reopening the app refreshes sensor registrations only when capabilities changed.
+
+GPS samples must have valid coordinates, reported accuracy at most 30 meters, age at most 10 seconds, ordered timestamps, and no implied speed above 12 meters/second. These are initial engineering filters, not device-validated accuracy claims. A GPS gap closes the source/route segment. Each new source needs a fresh baseline. A corrupt single-measurement distance above 100 km is ignored to bound split processing. Real-device step batching, drift, and GPS handoff checks remain required.
+
+Location tracking is requested only outdoors. On API 34+, service types match available permissions: location for usable location access, health for activity-recognition access, and a declared special-use timer fallback when neither applies. The special-use declaration exists only in the debug manifest; production suitability must be reviewed in release preparation. No background-location permission or network permission is added. See [Android foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types).
+
+The service holds a bounded, renewed partial wake lock during countdown/running and releases it on pause, finish, save failure, and destruction. Checkpoints are committed on each processed running tick (nominally once per second), accepted measurement, and state transition. Recovery can lose work after the last successful commit; it never fills the gap. Event sequence/goal state is committed before audio: a crash may omit a cue, but recovery does not replay it. If no installed offline TTS voice is available, a short tone supplies the state/goal cue; spoken output and mixing still require phone verification.
+
+### 3.6 Phone feedback review — 2026-09-14
+
+The tester reports functional phone passes, but quantitative accuracy and actual source handoff remain unverified. Basic state/goal speech and tone fallback exist in source; reported silence needs investigation. The current service keeps its ongoing notification on ordinary pause and releases sensors/wake lock; investigate the installed build before changing that lifecycle. See PHONE_TEST_REVIEW_2026-09-14.md for the proposed reliability plan. UI status indicators, estimation, and the revised photo sequence are proposals, not implemented architecture. Cloud remains absent; future status UI must not equate Internet access with server availability.
 
 ## 4 Media and spoken feedback
 
+### 4.0 Implemented reliability follow-up — 2026-09-14
+
+Debug `RunCueQueue` serializes each state/goal cue through speech or a timed tone; Android progress callbacks run on the main handler and handle asynchronous errors, stops, and a 15-second missing-completion timeout. Speech uses media audio attributes, matching tones and the activity's volume-button stream. No music focus/linkage policy is introduced. Offline voice selection excludes advertised uninstalled voices. Audio failure does not escape into the service's persistence-error path. Completed events remain persisted before playback; process destruction can still interrupt audio, and recovery does not replay events.
+
+The foreground service requests immediate notification display and restores a notification when a recovered paused run is opened. Paused sensors and wake-lock release remain unchanged. These paths passed emulator regression tests; audible Moto G output remains unverified. See TASKS.md Section 6.8.
+
 ### 4.1 Shared pause state
 
-The run controller receives both UI commands and linked-player playback changes. Any pause produces the same Paused state; do not attempt to identify its origin. Send pause to the linked player only when needed and emit a pause cue only on a real state transition. Ignore notifications that merely confirm the controller's own command. Detach run-resume handling after finishing.
+The run controller receives UI commands and linked-player playback changes through the same service channel. The latest explicit user decision exempts all music pauses during cues, even intentional headphone pauses, and never auto-resumes that music. Direct run pauses still pause linked playback. `MusicLinkPolicy` arms only after playback while Running, ignores initial paused/unavailable playback, suppresses command echoes, and detaches on session replacement, permission loss, recovery, or finish. Media actions carry session generation and run ID so stale commands cannot affect a later run. A 2-second acknowledgement deadline detaches an unresponsive link instead of reversing the user's run command. The cue exemption includes a 600 ms callback-settling period after queued audio drains.
 
 Android offers access to active media sessions through an enabled notification listener. Playback callbacks report the new state. The selected YouTube Music session and its available transport controls must be tested on an actual phone. [Media sessions](https://developer.android.com/reference/android/media/session/MediaSessionManager), [playback callbacks](https://developer.android.com/reference/android/media/session/MediaController.Callback).
 
 ### 4.2 Music launch and speech
 
-Control supported Android media transport actions. Do not use undocumented YouTube Music APIs. Opening a playlist and resuming an already active playlist are separate capabilities; verify both rather than assuming one implies the other. Playlist setup and absent-player behavior remain product decisions.
+Playlist setup uses a saved shared link in the existing local settings, with an explicit pre-run Open playlist action. Validate HTTPS playlist URLs on YouTube Music/YouTube hosts, retain only the playlist identifier, and dispatch ACTION_VIEW specifically to YouTube Music. No network fetch, undocumented API, browser fallback, or new permission is needed. Catch missing/blocked activity launches and keep run startup independent. Opening a playlist does not establish playback or arm linkage; the existing adapter still waits for observed playback during a run. The user's manual-open choice supersedes automatic playlist launch at run start.
 
-Generate milestone and state speech locally so it works offline. Package the requested fallback encouragement recordings. Prefer audio mixing/ducking for short cues, subject to device testing. If a cue or interruption actually pauses the music, the user's linked-pause rule still applies; do not introduce a hidden exception. Avoid repeated speech/media callbacks causing an event loop.
+Control supported Android media transport actions. The debug `MusicSessionAdapter` observes only YouTube Music sessions through user-granted notification-listener access; it does not read or retain notification contents. No player/access means standalone tracking, not a failed start. No undocumented YouTube API is used. Opening the saved playlist is distinct from controlling an active session and does not require notification-listener access.
+
+State/goal speech uses the offline voice or tone fallback. The current debug build requests transient ducking focus, releases it across success/failure/cancellation/teardown, and does not change system volume. Focus denial skips the cue; focus loss cancels queued audio. The longer goal/completion speech has a bounded 60-second completion timeout. The foreground service remains eligible while terminal audio drains, with a completed-summary notification that is then removed. Notification prominence uses a DEFAULT channel without a competing sound; only an untouched prototype LOW channel is migrated, preserving explicit user settings. Onboard coaching recordings remain later work. Actual player ducking and notification ordering require phone verification.
 
 ## 5 Accounts and cloud synchronization
 
@@ -83,9 +109,11 @@ Use Sign in with Google through Android Credential Manager. Verify Google identi
 
 Use authenticated server sessions; protect web mutations against cross-site requests. Every private query, export, asset request, and mutation checks the authenticated owner. Public endpoints use an explicit field allowlist and never return account settings or credentials.
 
+The September 15 backend implements `worker/AUTH_CONTRACT.md`: Google RS256 verification, single-use challenges, hashed one-hour sessions, account profile/logout, and request-rate controls. Android Credential Manager sign-in uses configured development Web/Android clients; the user confirmed phone sign-in succeeded. Production identity remains unregistered. The completed-run transport is described in `worker/RUN_STORAGE_CONTRACT.md`; Android run synchronization is not connected yet.
+
 ### 5.2 Offline ownership and synchronization
 
-After an account is established, retain its local identity so an expired network session does not interrupt tracking. Queue completed runs under their original owner; require matching authentication when uploading. Account changes must not silently reassign unsynced runs. First-ever sign-in while offline is distinct from returning-user offline tracking and must be addressed before the account milestone ships.
+After an account is established, retain its local identity so an expired network session does not interrupt tracking. Queue completed runs under their original owner; require matching authentication when uploading. Account changes must not silently reassign unsynced runs. The user approved deliberate import of existing local records from gear settings. First-time offline runs remain local and eligible for later explicit import; previously established identity supports offline ownership. These Android ownership/import changes are the next implementation slice.
 
 Assign run IDs on the phone. Upload immutable completed run data with a retry-safe operation ID and payload hash. Repeating the same operation returns the existing result; conflicting data for an existing finalized run is rejected rather than silently overwritten. Schedule pending network work through WorkManager with bounded retries and backoff. WorkManager is for synchronization, not the live tracking clock.
 
@@ -128,3 +156,9 @@ Use deterministic controller tests for pause exclusion, unit conversion, source 
 ### 7.4 Deliberately deferred choices
 
 Choose a map provider before map implementation, with both Android and desktop support and explicit account/cost requirements. Likewise defer the web UI library, exact dependency versions, full SQL migrations, API payload schemas, and deployment values to their bounded milestones. These choices do not block the independent run-controller work.
+
+## 8 Implemented Android synchronization - sync1
+
+Room v2 is the durable source of upload/deletion intent. WorkManager runs connected batches of at most four operations with per-operation retry deadlines, bounded consecutive failures and periodic recovery. A global mutex serializes engines; new changes replace scheduled immediate work while database intent survives cancellation. Every network request checks current account, session validity and current queue action. No bearer token is stored in WorkManager input or the queue.
+
+Completed runs use deterministic versioned archives and resumable hashed chunks against the fixed development HTTPS endpoint. Tracking never waits for cloud availability. Explicit import is transactional and account-specific. Account changes/import are blocked during active runs; expired sessions preserve known ownership but cannot upload. Discard removes local metrics immediately, retains minimal deletion intent, and reconciles through server tombstones. Download/restore remains the next bounded slice.

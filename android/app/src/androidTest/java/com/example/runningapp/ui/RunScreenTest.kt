@@ -18,6 +18,30 @@ class RunScreenTest {
     private fun run(): RunController = RunController("ui-test",
         RunSettings(RunMode.INDOOR, RunUnits.KILOMETERS, 0, RunGoal.None, null), RunClock { RunTime(0, 0) })
 
+    @Test fun discardRequiresFullSwipeAndCancelPreservesSummary() {
+        val run = run(); run.start(); run.finish()
+        val view = mutableStateOf(TrackingView(run.snapshot(), ready = true))
+        var deletes = 0
+        compose.setContent { WayirunApp(view.value, { action, _ ->
+            if (action == TrackingService.DISCARD) { deletes++; view.value = TrackingView(ready = true) }
+        }) {} }
+        compose.onNodeWithTag("discard-run").performScrollTo().performClick()
+        compose.onNodeWithText("ARE YOU SURE YOU WANT TO DISCARD THIS RUN??").assertExists()
+        compose.onNodeWithTag("discard-slider").performTouchInput { click() }
+        compose.onNodeWithTag("discard-slider").performTouchInput {
+            swipe(Offset(width * 0.1f, height / 2f), Offset(width * 0.35f, height / 2f), 300)
+        }
+        compose.runOnIdle { assertEquals(0, deletes) }
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Run saved").assertExists()
+        compose.onNodeWithTag("discard-run").performScrollTo().performClick()
+        compose.onNodeWithTag("discard-slider").performTouchInput {
+            swipe(Offset(width * 0.05f, height / 2f), Offset(width * 0.98f, height / 2f), 600)
+        }
+        compose.runOnIdle { assertEquals(1, deletes) }
+        compose.onNodeWithTag("start").assertExists()
+    }
+
     @Test fun tappingFinishDoesNotFinishButFullSwipeDoes() {
         val run = run(); run.start(); run.pause()
         val view = mutableStateOf(TrackingView(run.snapshot(), ready = true))
