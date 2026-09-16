@@ -55,7 +55,7 @@ test("private API stays closed for all methods, even with purported credentials"
     });
     assert.equal(response.status, 503);
     assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
-    if (method !== "HEAD") assert.deepEqual(await response.json(), { error: "api_not_available" });
+    if (method !== "HEAD") assert.deepEqual(await response.json(), { error: "authentication_not_configured" });
   }
 });
 

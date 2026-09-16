@@ -2,7 +2,7 @@
 
 ## 1 Bounded Milestone 5 slice
 
-Implemented backend Google identity verification and D1 account/session storage. Android account UI, run upload, account switching, and browser authentication remain subsequent work. The Worker accepts only the configured Web audience. There is no runtime verification bypass or configurable key endpoint.
+Implemented backend Google identity verification and D1 account/session storage. Android account UI and Google phone sign-in are implemented and user-verified. The server run transport is in RUN_STORAGE_CONTRACT.md; Android run synchronization and browser authentication remain subsequent work. The Worker accepts only the configured Web audience. There is no runtime verification bypass or configurable key endpoint.
 
 ## 2 Native HTTP contract
 
@@ -15,7 +15,7 @@ All responses are JSON and no-store. Requests with an Origin header are refused;
 | GET /api/account | Authorization: Bearer session token | account with id, displayName, pictureUrl |
 | POST /api/auth/logout | Authorization: Bearer session token | signedOut true |
 
-Use the nonce verbatim in Google Credential Manager's nonce option and in the exchange request. A token must be RS256-signed by Google's published keys, have an accepted Google issuer, the exact Web audience, a stable nonempty subject, matching nonce, expiry, and issue time no more than five minutes ago. Tokens with another authorized party or multiple audiences are currently rejected. Android client-party allowlisting must be added with real IDs during integration; do not relax signature/audience verification to make a test pass.
+Use the nonce verbatim in Google Credential Manager's nonce option and in the exchange request. A token must be RS256-signed by Google's published keys, have an accepted Google issuer, the exact Web audience, a stable nonempty subject, matching nonce, expiry, and issue time no more than five minutes ago. Tokens with an unauthorized party or multiple audiences are rejected. The configured development Android client is explicitly allowed; do not relax signature/audience verification to make a test pass.
 
 Only a valid, unexpired challenge can create a session. Session insertion and challenge consumption use an atomic D1 batch; a duplicate/concurrent exchange cannot mint another session. Lost successful exchange responses require a fresh Google sign-in challenge rather than replaying one. Exchange bodies are capped at 16 KiB; token strings at 12,000 characters. Unsupported methods return 405, malformed bodies 400, invalid identity/session 401, prohibited browser origins 403, and missing configuration or storage failure 503. Provider verification failures currently return generic invalid_identity, including key-service failure; automatic retry/UI messaging remains Android integration work.
 
@@ -33,8 +33,8 @@ Tests execute the actual bundled Worker in Miniflare/workerd with real local D1 
 
 Development Google Web and Android client IDs are now configured from the user's project wayirun-development. Tokens still require the exact Web audience; azp, when supplied, must equal that Web client or the explicitly configured Android client. An unrelated Android client remains rejected. Real Google/phone interoperability is separate from generated-key tests. The setup guide is ../GOOGLE_SIGN_IN_SETUP.md.
 
-Every account/auth request passes two Cloudflare rate-limit bindings before D1 access: 30 requests/minute per hashed CF-Connecting-IP, and 300/minute combined. Missing or failed limiters fail closed; exhaustion returns 429 with Retry-After 60. Forwarded/user-owner headers cannot choose the key. These limits operate per Cloudflare location and are approximate, not a global billing cap. No raw IP is written to D1 or logs. [Cloudflare rate limits](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
+Every account/auth/run-storage request passes two Cloudflare rate-limit bindings before D1 access: 30 requests/minute per hashed CF-Connecting-IP, and 300/minute combined. Missing or failed limiters fail closed; exhaustion returns 429 with Retry-After 60. Forwarded/user-owner headers cannot choose the key. These limits operate per Cloudflare location and are approximate, not a global billing cap. No raw IP is written to D1 or logs. [Cloudflare rate limits](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
 
 ## 5 Next slice
 
-Add retry-safe completed-run synchronization and owner-filtered queries under verified sessions, retaining original offline owners and preserving pre-account local runs. Resolve first-ever offline sign-in and deliberate migration of existing debug runs before connecting Android. Announcement-selector and phone music testing remain deferred.
+Server storage transport is implemented in RUN_STORAGE_CONTRACT.md. Next connect Android's validated archive, start-time ownership and durable queue, preserving pre-account records until the user explicitly imports them from settings. First-time offline runs remain local and eligible for deliberate later import. Integrate discard reconciliation before enabling uploads. Announcement selection and phone music testing remain deferred.

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && npm run build:deploy && node --test test/*.test.mjs",
+    "test": "npm run build && npm run build:deploy && node --test --test-timeout=60000 test/*.test.mjs",
     "dev": "wrangler dev",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "build:deploy": "wrangler deploy --dry-run --outdir build/deploy",

@@ -1,3 +1,4 @@
+import { handleRuns } from "./runs.js";
 import { handleAuth, type AuthEnv } from "./auth.js";
 
 export interface Env extends AuthEnv {
@@ -27,7 +28,9 @@ export default {
     if (["/api/auth/challenge", "/api/auth/google", "/api/auth/logout", "/api/account"].includes(path)) {
       return handleAuth(request, env);
     }
-    // Run synchronization is outside this account-session slice.
+    if (path === "/api/runs" || path.startsWith("/api/runs/") || path === "/api/run-uploads" || path.startsWith("/api/run-uploads/")) {
+      return handleRuns(request, env);
+    }
     if (path === "/api" || path.startsWith("/api/")) {
       return json({ error: "api_not_available" }, 503, head);
     }

@@ -10,8 +10,8 @@ for (const [path, method, status, expected] of [
   ["/readyz", "HEAD", 200, null],
   ["/missing", "GET", 404, { error: "not_found" }],
   ["/healthz", "POST", 405, { error: "method_not_allowed" }],
-  ["/api/runs", "GET", 503, { error: "api_not_available" }],
-  ["/api/runs", "POST", 503, { error: "api_not_available" }],
+  ["/api/runs", "GET", 401, { error: "unauthorized" }],
+  ["/api/run-uploads", "POST", 401, { error: "unauthorized" }],
   ["/api/auth/google", "POST", 400, { error: "invalid_request" }],
   ["/api/account", "GET", 401, { error: "unauthorized" }],
 ]) {

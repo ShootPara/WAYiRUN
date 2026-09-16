@@ -2,9 +2,9 @@
 
 ## 1 Current boundary
 
-This contains the cloud foundation and account-session slice, not completed synchronization. It serves `GET /healthz` and `GET /readyz` (also HEAD). Google development IDs and login rate limits are configured. Invalid/missing credentials cannot access accounts; run APIs remain unavailable. Android signin1 adds optional account sign-in while preserving local-only runs. See AUTH_CONTRACT.md for endpoint behavior and remaining gates.
+This contains the cloud foundation, Google account sessions, and resumable completed-run storage transport. Google phone sign-in is user-confirmed. Run storage now requires a verified session and provides immutable upload receipts and owner-isolated reads. Android's archive encoder/import/queue and remote discard are not connected yet. See AUTH_CONTRACT.md and RUN_STORAGE_CONTRACT.md for exact behavior and limits.
 
-Migration 0001 stores the foundation metadata. Additive migration 0002 adds accounts, hashed sessions, and single-use login challenges while preserving compatibility with the earlier Worker. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
+Migration 0001 stores foundation metadata, 0002 adds accounts/sessions/challenges, and 0003 adds run manifests and chunks. Migrations are additive and preserve existing accounts and sessions. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
 
 ## 2 Local development
 
@@ -33,7 +33,7 @@ This runs tests, checks the specific account/Worker/database target, dry-runs th
 
 The target guard is protection against an accidental configuration change, not a substitute for restricted Cloudflare credentials. Local Wrangler OAuth supplies access. For account changes, review both configuration and guard explicitly. `deploy:dev` accepts no extra arguments and supports only this development target.
 
-After deployment, verify `/healthz` and `/readyz` return 200, unknown paths return 404, and `/api/runs` returns 503. No remote test writes any user data. Runtime logs are disabled in configuration and responses expose no database IDs, credentials, request headers, or stack traces.
+After deployment, verify `/healthz` and `/readyz` return 200, unknown paths return 404, and unauthenticated `/api/runs` and `/api/run-uploads` requests return 401. No remote test writes any user data. Runtime logs are disabled in configuration and responses expose no database IDs, credentials, request headers, or stack traces.
 
 ## 4 Git integration
 
@@ -53,7 +53,7 @@ The user connected Git on September 15, 2026. Their screenshot confirms the inte
 
 ## 5 Next implementation
 
-Supply Google configuration using ../GOOGLE_SIGN_IN_SETUP.md, then complete authentication activation and retry-safe run synchronization. Resolve the final Android application identity, client audience, existing local-run ownership, and first offline sign-in policy. Retain debug runs without automatically assigning them to whichever account logs in first. The announcement selector and phone music testing remain deferred by the user's latest direction.
+Connect Android using a validated archive encoder/decoder, immutable start-time account ownership, durable retries, and the user-approved explicit import action in settings. Keep new settings behind the gear. Existing local runs are never assigned automatically. Preserve offline local recording and implement discard/queue reconciliation before enabling uploads. Production OAuth and full deletion reconciliation remain separate milestones. Announcement selection and phone music verification remain deferred.
 
 ## 6 References
 

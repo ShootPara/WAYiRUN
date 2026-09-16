@@ -10,17 +10,17 @@ const opaquePattern = /^[0-9a-f]{64}$/;
 function opaque(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
 }
-async function hash(value: string): Promise<string> {
+export async function hash(value: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, "0")).join("");
 }
-function reply(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+export function reply(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: {
     "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff", ...headers,
   } });
 }
-async function smallJson(request: Request): Promise<Record<string, unknown>> {
+export async function smallJson(request: Request): Promise<Record<string, unknown>> {
   if (request.headers.get("Content-Type")?.split(";")[0]?.trim() !== "application/json") throw new Error("body");
   const reader = request.body?.getReader();
   if (!reader) throw new Error("body");
@@ -48,17 +48,10 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
     "/api/auth/challenge": "POST", "/api/auth/google": "POST", "/api/account": "GET", "/api/auth/logout": "POST",
   };
   if (request.method !== methods[path]) return reply({ error: "method_not_allowed" }, 405, { Allow: methods[path]! });
-  if (!env.GOOGLE_WEB_CLIENT_ID || !/^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/.test(env.GOOGLE_WEB_CLIENT_ID)) {
-    return reply({ error: "authentication_not_configured" }, 503);
-  }
   const now = Math.floor(Date.now() / 1000);
   try {
-    if (!env.AUTH_RATE_LIMIT || !env.AUTH_TOTAL_LIMIT) return reply({ error: "authentication_unavailable" }, 503);
-    // Cloudflare supplies this header at the edge. Never trust X-Forwarded-For or a caller's owner ID.
-    const key = await hash(request.headers.get("CF-Connecting-IP") ?? "unknown-client");
-    if (!(await env.AUTH_RATE_LIMIT.limit({ key })).success || !(await env.AUTH_TOTAL_LIMIT.limit({ key: "auth" })).success) {
-      return reply({ error: "too_many_requests" }, 429, { "Retry-After": "60" });
-    }
+    const denied = await accessGuard(request, env);
+    if (denied) return denied;
     if (path === "/api/auth/challenge") {
       const nonce = opaque();
       await env.DB.batch([
@@ -78,7 +71,7 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
         .bind(nonceHash, now).first();
       if (!challenge) return reply({ error: "invalid_identity" }, 401);
       let identity;
-      try { identity = await verifyGoogleToken(idToken, env.GOOGLE_WEB_CLIENT_ID, nonce, undefined, env.GOOGLE_ANDROID_CLIENT_ID); }
+      try { identity = await verifyGoogleToken(idToken, env.GOOGLE_WEB_CLIENT_ID!, nonce, undefined, env.GOOGLE_ANDROID_CLIENT_ID); }
       catch { return reply({ error: "invalid_identity" }, 401); }
       const issuedAt = Math.floor(Date.now() / 1000);
       const token = opaque(); const tokenHash = await hash(token);
@@ -99,13 +92,9 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
       if (results[1]?.meta.changes !== 1) return reply({ error: "invalid_identity" }, 401);
       return reply({ accessToken: token, tokenType: "Bearer", expiresIn: SESSION_SECONDS });
     }
-    const match = /^Bearer ([0-9a-f]{64})$/i.exec(request.headers.get("Authorization") ?? "");
-    if (!match) return reply({ error: "unauthorized" }, 401);
-    const tokenHash = await hash(match[1]!);
-    const account = await env.DB.prepare(`SELECT a.id, a.display_name AS displayName, a.picture_url AS pictureUrl
-      FROM accounts a JOIN auth_sessions s ON s.owner_id = a.id
-      WHERE s.token_hash = ? AND s.expires_at > ? AND s.revoked_at IS NULL`).bind(tokenHash, now).first();
-    if (!account) return reply({ error: "unauthorized" }, 401);
+    const verified = await sessionAccount(request, env);
+    if (!verified) return reply({ error: "unauthorized" }, 401);
+    const { account, tokenHash } = verified;
     if (path === "/api/auth/logout") {
       await env.DB.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE token_hash = ?").bind(now, tokenHash).run();
       return reply({ signedOut: true });
@@ -115,4 +104,28 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
     // Fail closed without leaking a token, identity, SQL error, or provider response to logs.
     return reply({ error: "authentication_unavailable" }, 503);
   }
+}
+
+// Shared by native account and run-storage endpoints; all authorization comes from the session.
+export async function accessGuard(request: Request, env: AuthEnv): Promise<Response | null> {
+  if (request.headers.has("Origin")) return reply({ error: "origin_not_allowed" }, 403);
+  if (!env.GOOGLE_WEB_CLIENT_ID || !/^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/.test(env.GOOGLE_WEB_CLIENT_ID)) {
+    return reply({ error: "authentication_not_configured" }, 503);
+  }
+  if (!env.AUTH_RATE_LIMIT || !env.AUTH_TOTAL_LIMIT) return reply({ error: "authentication_unavailable" }, 503);
+  const key = await hash(request.headers.get("CF-Connecting-IP") ?? "unknown-client");
+  if (!(await env.AUTH_RATE_LIMIT.limit({ key })).success || !(await env.AUTH_TOTAL_LIMIT.limit({ key: "auth" })).success) {
+    return reply({ error: "too_many_requests" }, 429, { "Retry-After": "60" });
+  }
+  return null;
+}
+export async function sessionAccount(request: Request, env: AuthEnv) {
+  const match = /^Bearer ([0-9a-f]{64})$/i.exec(request.headers.get("Authorization") ?? "");
+  if (!match) return null;
+  const tokenHash = await hash(match[1]!);
+  const account = await env.DB.prepare(`SELECT a.id, a.display_name AS displayName, a.picture_url AS pictureUrl
+    FROM accounts a JOIN auth_sessions s ON s.owner_id = a.id
+    WHERE s.token_hash = ? AND s.expires_at > ? AND s.revoked_at IS NULL`)
+    .bind(tokenHash, Math.floor(Date.now() / 1000)).first<{ id: string; displayName: string | null; pictureUrl: string | null }>();
+  return account ? { account, tokenHash } : null;
 }
