@@ -1,3 +1,4 @@
+import { workerModules } from "./worker-modules.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -19,7 +20,7 @@ async function applyDeletionMigration(db) {
 }
 async function runtime(t, migrateRuns = true) {
   const mf = new Miniflare(convertV4MiniflareOptions({
-    name: "runs-test", modules: true, scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
+    name: "runs-test", modules: workerModules(), scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
     compatibilityDate: "2026-02-17", bindings: { APP_ENV: "development", GOOGLE_WEB_CLIENT_ID: audience },
     ratelimits: { AUTH_RATE_LIMIT: { namespace_id: "1", simple: { limit: 1000, period: 60 } },
       AUTH_TOTAL_LIMIT: { namespace_id: "2", simple: { limit: 2000, period: 60 } } },

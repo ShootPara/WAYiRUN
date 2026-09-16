@@ -6,6 +6,7 @@
   "compatibility_date": "2026-02-17",
   "workers_dev": true,
   "preview_urls": false,
+  "rules": [{ "type": "Text", "globs": ["**/*.html", "**/*.browserjs", "**/*.css"], "fallthrough": true }],
   "observability": { "enabled": false },
   "vars": {
     "APP_ENV": "development",

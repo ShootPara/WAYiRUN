@@ -2,7 +2,7 @@
 
 ## 1 Bounded Milestone 5 slice
 
-Implemented backend Google identity verification and D1 account/session storage. Android account UI and Google phone sign-in are implemented and user-verified. The server run transport is in RUN_STORAGE_CONTRACT.md; Android run synchronization and browser authentication remain subsequent work. The Worker accepts only the configured Web audience. There is no runtime verification bypass or configurable key endpoint.
+Implemented backend Google identity verification and D1 account/session storage. Android sign-in and synchronization are implemented. The server run transport is in RUN_STORAGE_CONTRACT.md. The separate browser cookie/CSRF boundary is in DESKTOP_CONTRACT.md; this native contract remains unchanged. The Worker accepts only the configured Web audience. There is no runtime verification bypass or configurable key endpoint.
 
 ## 2 Native HTTP contract
 
@@ -37,4 +37,4 @@ Every account/auth/run-storage request passes two Cloudflare rate-limit bindings
 
 ## 5 Next slice
 
-Server storage transport is implemented in RUN_STORAGE_CONTRACT.md. Next connect Android's validated archive, start-time ownership and durable queue, preserving pre-account records until the user explicitly imports them from settings. First-time offline runs remain local and eligible for deliberate later import. Integrate discard reconciliation before enabling uploads. Announcement selection and phone music testing remain deferred.
+Android storage synchronization and the first private desktop-history slice are implemented. Next select/configure the map provider and add desktop maps. Announcement selection and phone music testing remain deferred.
