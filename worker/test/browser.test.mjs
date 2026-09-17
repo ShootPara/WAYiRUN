@@ -16,7 +16,7 @@ async function runtime(t, configured = true, rateLimit = 1000) {
     scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
     compatibilityDate: "2026-02-17",
     bindings: { APP_ENV: "development", ...(configured ? { GOOGLE_WEB_CLIENT_ID: audience, GOOGLE_ANDROID_CLIENT_ID: "test-android.apps.googleusercontent.com" } : {}) },
-    ratelimits: {
+    ratelimits: { RUN_RATE_LIMIT: { namespace_id: "3", simple: { limit: 300, period: 60 } }, RUN_TOTAL_LIMIT: { namespace_id: "4", simple: { limit: 3000, period: 60 } },
       AUTH_RATE_LIMIT: { namespace_id: "1", simple: { limit: rateLimit, period: 60 } },
       AUTH_TOTAL_LIMIT: { namespace_id: "2", simple: { limit: 2000, period: 60 } },
     },
@@ -97,6 +97,7 @@ async function webLogin(mf, subject = "alice") {
  assert.equal(response.status,200); assert.deepEqual(await response.json(),{signedIn:true});
  const cookies=response.headers.getSetCookie();
  const session=cookies.find(c=>c.startsWith("__Host-wayirun="));
+ assert.match(session,/Max-Age=7776000/);
  assert.ok(session.includes("Secure")&&session.includes("HttpOnly")&&session.includes("SameSite=Strict")&&session.includes("Path=/"));
  return {Cookie:session.split(";")[0],"Sec-Fetch-Site":"same-origin"};
 }
@@ -116,6 +117,35 @@ test("browser login hides tokens, protects cookies, isolates accounts, and revok
  const logout=await call(mf,"/web-api/logout","POST",undefined,{...alice,...browserHeaders});assert.equal(logout.status,200);assert.match(logout.headers.get("Set-Cookie"),/Max-Age=0/);
  assert.equal((await call(mf,"/web-api/account","GET",undefined,alice)).status,401);
  assert.equal((await call(mf,"/web-api/account","GET",undefined,bob)).status,200);
+});
+
+test("real chunk downloads exceed thirty requests without consuming the sign-in budget",async t=>{
+ const {mf,db}=await runtime(t,true,3);
+ const session=await webLogin(mf);
+ const account=await (await call(mf,"/web-api/account","GET",undefined,session)).json();
+ const runId=crypto.randomUUID(),operationId=crypto.randomUUID();
+ const manifest={schemaVersion:1,runId,operationId,summary:{state:"FINISHED",startedUtcMs:1,endedUtcMs:2,activeDurationMs:1,distanceMeters:3,mode:"OUTDOOR",units:"MILES"},chunks:Array.from({length:40},()=>({sha256:"a".repeat(64),bytes:1}))};
+ await db.prepare("INSERT INTO run_uploads VALUES (?, ?, ?, ?, ?, 40, 1, 100, 2)").bind(account.account.id,runId,operationId,JSON.stringify(manifest),"b".repeat(64)).run();
+ await db.batch(Array.from({length:40},(_,i)=>db.prepare("INSERT INTO run_chunks (owner_id,run_id,chunk_index,sha256,data) VALUES (?, ?, ?, ?, ?)").bind(account.account.id,runId,i,"a".repeat(64),new Uint8Array([i]))));
+ for(let i=0;i<40;i++){
+   const response=await call(mf,`/web-api/runs/${runId}/chunks/${i}`,"GET",undefined,session);
+   assert.equal(response.status,200);assert.deepEqual([...new Uint8Array(await response.arrayBuffer())],[i]);
+ }
+ assert.equal((await call(mf,"/web-api/runs","GET",undefined,session)).status,200);
+ assert.equal((await call(mf,"/web-api/challenge","POST",undefined,browserHeaders)).status,429);
+});
+
+test("browser renews a valid short session to ninety days but never revives expired or revoked sessions",async t=>{
+ const {mf,db}=await runtime(t);const session=await webLogin(mf);
+ const now=Math.floor(Date.now()/1000);
+ await db.prepare("UPDATE auth_sessions SET expires_at = ?").bind(now+60).run();
+ const response=await call(mf,"/web-api/account","GET",undefined,session);
+ assert.equal(response.status,200);assert.match(response.headers.get("Set-Cookie"),/Max-Age=7776000/);
+ const stored=await db.prepare("SELECT expires_at FROM auth_sessions").first();assert.ok(stored.expires_at>=now+7776000);
+ await db.prepare("UPDATE auth_sessions SET revoked_at = ?").bind(now).run();
+ assert.equal((await call(mf,"/web-api/account","GET",undefined,session)).status,401);
+ await db.prepare("UPDATE auth_sessions SET revoked_at = NULL, created_at = 0, expires_at = 1").run();
+ assert.equal((await call(mf,"/web-api/account","GET",undefined,session)).status,401);
 });
 test("browser boundary rejects foreign origins, missing CSRF header, bearer injection and unbound login",async t=>{
  const {mf}=await runtime(t);const session=await webLogin(mf);

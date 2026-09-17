@@ -2,7 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const source=readFileSync(new URL("../web/export.browserjs",import.meta.url),"utf8");
-const {createCsvExport,collectExportRuns}=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+const {createCsvExport,collectExportRuns,fetchWithBackoff,abortableDelay}=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+test("throttled download retries the same chunk after Retry-After, with bounded attempts",async()=>{
+ const controller=new AbortController(),waits=[];let calls=0;
+ const result=await fetchWithBackoff(async()=>++calls<3?new Response("busy",{status:429,headers:{"Retry-After":"60"}}):new Response("chunk"),controller.signal,()=>{},async ms=>waits.push(ms));
+ assert.equal(await result.text(),"chunk");assert.equal(calls,3);assert.deepEqual(waits,[60000,60000]);
+ calls=0;const failed=await fetchWithBackoff(async()=>{calls++;return new Response(null,{status:429});},controller.signal,()=>{},async()=>{});assert.equal(failed.status,429);assert.equal(calls,4);
+});
+test("cancel or sign-out aborts a throttled wait without retrying",async()=>{
+ const controller=new AbortController();let calls=0;
+ await assert.rejects(fetchWithBackoff(async()=>{calls++;return new Response(null,{status:429});},controller.signal,()=>controller.abort()),{name:"AbortError"});assert.equal(calls,1);
+ const active=new AbortController();const waiting=abortableDelay(60000,active.signal);active.abort();await assert.rejects(waiting,{name:"AbortError"});
+});
 // Independent character-level reader: accepts embedded quotes, commas and CRLF.
 function parse(text){
   const rows=[];let row=[],field="",quoted=false;

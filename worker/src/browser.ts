@@ -1,4 +1,4 @@
-import { handleAuth, reply, smallJson, type AuthEnv } from "./auth.js";
+import { handleAuth, reply, smallJson, hash, SESSION_SECONDS, type AuthEnv } from "./auth.js";
 import { handleRuns } from "./runs.js";
 import page from "../web/index.html";
 import script from "../web/app.browserjs";
@@ -82,6 +82,15 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
   }
   const forwarded = new Request(`${WEB_ORIGIN}${auth ?? path.replace("/web-api/", "/api/")}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) });
   const response = auth ? await handleAuth(forwarded, env) : await handleRuns(forwarded, env);
+  if (path === "/web-api/account" && response.ok) {
+    const token = cookie(request, sessionName)!;
+    const now = Math.floor(Date.now() / 1000);
+    // Renew only an already valid session. A concurrent logout must never be undone.
+    const result = await env.DB.prepare("UPDATE auth_sessions SET expires_at = MAX(expires_at, ?) WHERE token_hash = ? AND expires_at > ? AND revoked_at IS NULL")
+      .bind(now + SESSION_SECONDS, await hash(token), now).run();
+    if (result.meta.changes !== 1) return reply({ error: "unauthorized" }, 401);
+    response.headers.set("Set-Cookie", setCookie(sessionName, token, SESSION_SECONDS));
+  }
   if (path === "/web-api/challenge" && response.ok) {
     const data = await response.json() as { nonce: string; expiresIn: number };
     return reply(data, 200, { "Set-Cookie": setCookie(nonceName, data.nonce, 300) });

@@ -11,7 +11,7 @@ All responses are JSON and no-store. Requests with an Origin header are refused;
 | Endpoint | Input | Success |
 | --- | --- | --- |
 | POST /api/auth/challenge | No body needed | 256-bit random nonce, expiresIn 300 |
-| POST /api/auth/google | JSON containing only idToken and nonce | accessToken, tokenType Bearer, expiresIn 3600 |
+| POST /api/auth/google | JSON containing only idToken and nonce | accessToken, tokenType Bearer, expiresIn 7776000 |
 | GET /api/account | Authorization: Bearer session token | account with id, displayName, pictureUrl |
 | POST /api/auth/logout | Authorization: Bearer session token | signedOut true |
 
@@ -23,7 +23,7 @@ Only a valid, unexpired challenge can create a session. Session insertion and ch
 
 Migration 0002 adds accounts, login_challenges, and auth_sessions. Google subject is unique and immutable; display name, picture, and email never determine ownership. Accounts expose an internal UUID and basic profile only. No email, raw Google token, or raw session token is stored. Optional picture URLs must be HTTPS; they are references, not fetched by this Worker.
 
-Sessions contain only SHA-256 token hashes, owner, creation/expiry times, and optional revocation time. Random session tokens contain 256 bits of entropy and expire after one hour without sliding renewal. Logout revokes only the presented session. Expired rows are removed at successful login; expired challenge rows are removed when requesting a challenge. With no traffic, expired rows may remain but cannot authorize anything. No refresh token or account-wide logout is implemented yet.
+Sessions contain only SHA-256 token hashes, owner, creation/expiry times, and optional revocation time. Random session tokens contain 256 bits of entropy and expire after 90 days; successful browser account access renews the valid session and cookie for another 90 days. Logout revokes only the presented session. Expired rows are removed at successful login; expired challenge rows are removed when requesting a challenge. With no traffic, expired rows may remain but cannot authorize anything. Native clients receive the 90-day expiry on their next sign-in; existing native expiries are unchanged. No refresh token or account-wide logout is implemented yet.
 
 The bootstrap schema version remains 1 so the earlier health-only Worker remains compatible with this additive migration. Health readiness checks the foundation; authentication failures independently fail closed if account tables/configuration are missing.
 

@@ -8,7 +8,7 @@ The first Section 9.1 slice implements private Google sign-in, paginated history
 
 The development Worker serves the public shell and assets. Browser APIs use /web-api; native /api endpoints retain their bearer-only, Origin-rejecting behavior. Browser origin is pinned to the development URL. Foreign origins, cross-site requests and incoming Authorization headers are refused; no CORS headers are emitted. Browser mutations require exact Origin and X-WAYIRUN-Request: 1.
 
-Challenge creation binds the one-use Google nonce to a five-minute __Host-wayirun-login cookie. Exchange requires that cookie and the matching body nonce, then invokes existing real Google verification. The one-hour session is set in __Host-wayirun with Secure, HttpOnly, SameSite=Strict and Path=/; no bearer token is returned to JavaScript. Duplicate cookies are rejected. Logout revokes the current session and expires its cookie. Browser run access is read-only and uses existing owner-filtered services internally.
+Challenge creation binds the one-use Google nonce to a five-minute __Host-wayirun-login cookie. Exchange requires that cookie and the matching body nonce, then invokes existing real Google verification. The 90-day session is set in __Host-wayirun with Secure, HttpOnly, SameSite=Strict and Path=/; no bearer token is returned to JavaScript. Successful account access renews both database expiry and browser cookie, including still-valid older short sessions. Expired/revoked sessions cannot be renewed. Duplicate cookies are rejected. Logout revokes the current session and expires its cookie. Browser run access is read-only and uses existing owner-filtered services internally.
 
 ## 3 Presentation and privacy
 
@@ -31,3 +31,7 @@ Backend tests use bundled workerd/D1 and real test-generated signatures. Browser
 ## 8 Complete CSV export
 
 Export all runs reads every history page and verifies each complete owner-scoped archive before downloading one UTF-8 CSV. Six record types and record_json preserve summaries and every retained detail. Cancel and sign-out prevent late downloads; any failed archive aborts the whole export. No new mutation endpoint or persistent browser cache is added. See EXPORT_DELETION_PLAN.md for format, size limits and separate deletion scope.
+
+## 9 Export throttling repair
+
+Run traffic has independent 300/client/minute and 3000/global/minute budgets; sign-in keeps its 30/client and 300/global limits. Exports honor Retry-After and retry the same GET up to three times, retaining verified chunks. The wait is cancellable, and sign-out aborts it. The earlier single-chunk fixtures failed to expose the shared sign-in limiter; regression coverage now downloads forty chunks with a deliberately exhausted sign-in budget and exercises browser 429 recovery.

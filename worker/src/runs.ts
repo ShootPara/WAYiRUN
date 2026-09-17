@@ -78,7 +78,7 @@ async function binaryHash(value: Uint8Array): Promise<string> {
 
 export async function handleRuns(request: Request, env: AuthEnv): Promise<Response> {
   try {
-    const denied = await accessGuard(request, env); if (denied) return denied;
+    const denied = await accessGuard(request, env, true); if (denied) return denied;
     const verified = await sessionAccount(request, env);
     if (!verified) return reply({ error: "unauthorized" }, 401);
     const owner = verified.account.id;

@@ -1,6 +1,6 @@
 import { prepareRoute } from "/route.js";
 import { showRouteMap } from "/map.js";
-import { collectExportRuns, createCsvExport } from "/export.js";
+import { collectExportRuns, createCsvExport, fetchWithBackoff } from "/export.js";
 const $ = id => document.getElementById(id);
 let destroyMap = null, mapGeneration = 0;
 function clearMap() { mapGeneration++; destroyMap?.(); destroyMap = null; $("route-map").replaceChildren(); $("route-panel").hidden = true; $("fit-route").disabled = true; $("route-status").textContent = ""; }
@@ -50,8 +50,12 @@ function check(value) { if (!value) throw new Error("This run could not be verif
 function message(text = "") { $("message").textContent = text; }
 function reset() { exportControls(false); clearMap(); generation++; controller.abort(); controller = new AbortController(); runs.clear(); next = null; selected = null; staged = {key:null,chunks:new Map()}; $("runs").replaceChildren(); $("splits").replaceChildren(); $("settings").replaceChildren(); $("totals").replaceChildren(); $("detail-totals").replaceChildren(); $("detail").hidden = true; }
 async function api(path, method = "GET", body) {
-  const response = await fetch(`/web-api/${path}`, {method, credentials:"same-origin", cache:"no-store", signal:controller.signal,
+  const signal=controller.signal;
+  const send=()=>fetch(`/web-api/${path}`, {method, credentials:"same-origin", cache:"no-store", signal,
     headers: {"X-WAYIRUN-Request":"1", ...(body ? {"Content-Type":"application/json"} : {})}, ...(body ? {body:JSON.stringify(body)} : {})});
+  const response = method==="GET"&&exporting
+    ? await fetchWithBackoff(send,signal,seconds=>message(`Export paused briefly by the server. Resuming automatically in ${seconds} seconds…`))
+    : await send();
   if (!response.ok) {
     if (response.status === 401) throw new Error(account ? "Your session has expired. Sign out and sign in again to continue." : "Sign-in could not be verified. Try sign-in again.");
     if (response.status === 429) throw new Error("Please try again in a minute. Your runs are safe.");

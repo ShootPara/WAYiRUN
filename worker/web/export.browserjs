@@ -1,4 +1,23 @@
 export const EXPORT_LIMIT = 128 * 1024 * 1024;
+export function abortableDelay(ms, signal) {
+  return new Promise((resolve,reject)=>{
+    if(signal.aborted){reject(new DOMException("Cancelled","AbortError"));return;}
+    const abort=()=>{clearTimeout(timer);reject(new DOMException("Cancelled","AbortError"));};
+    const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},ms);
+    signal.addEventListener("abort",abort,{once:true});
+  });
+}
+export async function fetchWithBackoff(send, signal, onWait, wait=abortableDelay) {
+  for(let attempt=0;;attempt++) {
+    if(signal.aborted)throw new DOMException("Cancelled","AbortError");
+    const response=await send();
+    if(response.status!==429||attempt>=3)return response;
+    const header=response.headers.get("Retry-After");
+    const seconds=header&&/^\d+$/.test(header)?Number(header):60;
+    const ms=Math.max(1000,Math.min(seconds*1000,120000));
+    await response.body?.cancel();onWait(Math.ceil(ms/1000));await wait(ms,signal);
+  }
+}
 const fields = ["export_version","archive_version","record_type","run_id","record_index","start_utc","end_utc","time_zone","mode","recorded_units","distance_meters","active_duration_ms","pace_ms_per_km","pace_ms_per_mile","segment_id","monotonic_ms","latitude","longitude","accuracy_meters","measurement_source","delta_meters","total_meters","active_ms","split_number","partial","interval_number","clock_epoch","start_monotonic_ms","end_monotonic_ms","start_active_ms","end_active_ms","countdown_seconds","stride_length_meters","goal_type","goal_distance_meters","goal_duration_ms","record_json"];
 const groups = [["route","GPS_POINT"],["measurements","MEASUREMENT"],["splits","SPLIT"],["intervals","ACTIVE_INTERVAL"],["segments","SOURCE_SEGMENT"]];
 const encoder = new TextEncoder();

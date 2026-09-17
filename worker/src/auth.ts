@@ -3,8 +3,9 @@ import { verifyGoogleToken } from "./google.js";
 export interface AuthEnv {
   DB: D1Database; GOOGLE_WEB_CLIENT_ID?: string; GOOGLE_ANDROID_CLIENT_ID?: string;
   AUTH_RATE_LIMIT?: RateLimit; AUTH_TOTAL_LIMIT?: RateLimit;
+  RUN_RATE_LIMIT?: RateLimit; RUN_TOTAL_LIMIT?: RateLimit;
 }
-const SESSION_SECONDS = 3600;
+export const SESSION_SECONDS = 90 * 24 * 60 * 60;
 const CHALLENGE_SECONDS = 300;
 const opaquePattern = /^[0-9a-f]{64}$/;
 function opaque(): string {
@@ -107,14 +108,16 @@ export async function handleAuth(request: Request, env: AuthEnv): Promise<Respon
 }
 
 // Shared by native account and run-storage endpoints; all authorization comes from the session.
-export async function accessGuard(request: Request, env: AuthEnv): Promise<Response | null> {
+export async function accessGuard(request: Request, env: AuthEnv, runData = false): Promise<Response | null> {
   if (request.headers.has("Origin")) return reply({ error: "origin_not_allowed" }, 403);
   if (!env.GOOGLE_WEB_CLIENT_ID || !/^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/.test(env.GOOGLE_WEB_CLIENT_ID)) {
     return reply({ error: "authentication_not_configured" }, 503);
   }
-  if (!env.AUTH_RATE_LIMIT || !env.AUTH_TOTAL_LIMIT) return reply({ error: "authentication_unavailable" }, 503);
+  const perClient = runData ? env.RUN_RATE_LIMIT : env.AUTH_RATE_LIMIT;
+  const total = runData ? env.RUN_TOTAL_LIMIT : env.AUTH_TOTAL_LIMIT;
+  if (!perClient || !total) return reply({ error: "authentication_unavailable" }, 503);
   const key = await hash(request.headers.get("CF-Connecting-IP") ?? "unknown-client");
-  if (!(await env.AUTH_RATE_LIMIT.limit({ key })).success || !(await env.AUTH_TOTAL_LIMIT.limit({ key: "auth" })).success) {
+  if (!(await perClient.limit({ key })).success || !(await total.limit({ key: runData ? "runs" : "auth" })).success) {
     return reply({ error: "too_many_requests" }, 429, { "Retry-After": "60" });
   }
   return null;

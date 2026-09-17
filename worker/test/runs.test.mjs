@@ -22,7 +22,7 @@ async function runtime(t, migrateRuns = true) {
   const mf = new Miniflare(convertV4MiniflareOptions({
     name: "runs-test", modules: workerModules(), scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
     compatibilityDate: "2026-02-17", bindings: { APP_ENV: "development", GOOGLE_WEB_CLIENT_ID: audience },
-    ratelimits: { AUTH_RATE_LIMIT: { namespace_id: "1", simple: { limit: 1000, period: 60 } },
+    ratelimits: { RUN_RATE_LIMIT: { namespace_id: "3", simple: { limit: 300, period: 60 } }, RUN_TOTAL_LIMIT: { namespace_id: "4", simple: { limit: 3000, period: 60 } }, AUTH_RATE_LIMIT: { namespace_id: "1", simple: { limit: 1000, period: 60 } },
       AUTH_TOTAL_LIMIT: { namespace_id: "2", simple: { limit: 2000, period: 60 } } },
     d1Databases: ["DB"], outboundService: async request => {
       assert.equal(request.url, "https://www.googleapis.com/oauth2/v3/certs");
