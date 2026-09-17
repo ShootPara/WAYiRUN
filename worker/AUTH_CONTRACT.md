@@ -2,7 +2,7 @@
 
 ## 1 Bounded Milestone 5 slice
 
-Implemented backend Google identity verification and D1 account/session storage. Android account UI and Google phone sign-in are implemented and user-verified. The server run transport is in RUN_STORAGE_CONTRACT.md; Android run synchronization and browser authentication remain subsequent work. The Worker accepts only the configured Web audience. There is no runtime verification bypass or configurable key endpoint.
+Implemented backend Google identity verification and D1 account/session storage. Android sign-in and synchronization are implemented. The server run transport is in RUN_STORAGE_CONTRACT.md. The separate browser cookie/CSRF boundary is in DESKTOP_CONTRACT.md; this native contract remains unchanged. The Worker accepts only the configured Web audience. There is no runtime verification bypass or configurable key endpoint.
 
 ## 2 Native HTTP contract
 
@@ -11,7 +11,7 @@ All responses are JSON and no-store. Requests with an Origin header are refused;
 | Endpoint | Input | Success |
 | --- | --- | --- |
 | POST /api/auth/challenge | No body needed | 256-bit random nonce, expiresIn 300 |
-| POST /api/auth/google | JSON containing only idToken and nonce | accessToken, tokenType Bearer, expiresIn 3600 |
+| POST /api/auth/google | JSON containing only idToken and nonce | accessToken, tokenType Bearer, expiresIn 7776000 |
 | GET /api/account | Authorization: Bearer session token | account with id, displayName, pictureUrl |
 | POST /api/auth/logout | Authorization: Bearer session token | signedOut true |
 
@@ -23,7 +23,7 @@ Only a valid, unexpired challenge can create a session. Session insertion and ch
 
 Migration 0002 adds accounts, login_challenges, and auth_sessions. Google subject is unique and immutable; display name, picture, and email never determine ownership. Accounts expose an internal UUID and basic profile only. No email, raw Google token, or raw session token is stored. Optional picture URLs must be HTTPS; they are references, not fetched by this Worker.
 
-Sessions contain only SHA-256 token hashes, owner, creation/expiry times, and optional revocation time. Random session tokens contain 256 bits of entropy and expire after one hour without sliding renewal. Logout revokes only the presented session. Expired rows are removed at successful login; expired challenge rows are removed when requesting a challenge. With no traffic, expired rows may remain but cannot authorize anything. No refresh token or account-wide logout is implemented yet.
+Sessions contain only SHA-256 token hashes, owner, creation/expiry times, and optional revocation time. Random session tokens contain 256 bits of entropy and expire after 90 days; successful browser account access renews the valid session and cookie for another 90 days. Logout revokes only the presented session. Expired rows are removed at successful login; expired challenge rows are removed when requesting a challenge. With no traffic, expired rows may remain but cannot authorize anything. Native clients receive the 90-day expiry on their next sign-in; existing native expiries are unchanged. No refresh token or account-wide logout is implemented yet.
 
 The bootstrap schema version remains 1 so the earlier health-only Worker remains compatible with this additive migration. Health readiness checks the foundation; authentication failures independently fail closed if account tables/configuration are missing.
 
@@ -37,4 +37,4 @@ Every account/auth/run-storage request passes two Cloudflare rate-limit bindings
 
 ## 5 Next slice
 
-Server storage transport is implemented in RUN_STORAGE_CONTRACT.md. Next connect Android's validated archive, start-time ownership and durable queue, preserving pre-account records until the user explicitly imports them from settings. First-time offline runs remain local and eligible for deliberate later import. Integrate discard reconciliation before enabling uploads. Announcement selection and phone music testing remain deferred.
+Android storage synchronization and the first private desktop-history slice are implemented. Next select/configure the map provider and add desktop maps. Announcement selection and phone music testing remain deferred.

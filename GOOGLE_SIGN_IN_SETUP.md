@@ -52,4 +52,10 @@ The signin1 test APK adds optional Google sign-in and encrypted session storage.
 
 ## 6 Phone verification - September 15, 2026
 
-The user confirmed that Google sign-in succeeded on the installed phone build. Google setup is no longer awaiting that check. Run synchronization remains separate, unfinished work.
+The user confirmed Google phone sign-in, and subsequently confirmed sync1 upload/import/discard checks. Sync2 adds restore and deletion reconciliation. These are distinct from the browser-origin setup below.
+
+## 7 Desktop sign-in setup
+
+Open [Google Auth Platform → Clients](https://console.cloud.google.com/auth/clients?project=wayirun-development). Select the **Web application** client listed in Section 4, not the Android client. Under **Authorized JavaScript origins**, choose **Add URI**, enter `https://wayirun-dev.unopenedparachute.workers.dev`, and save. This Google button/callback flow does not require a client secret or a redirect URI.
+
+Then open the WAYiRUN development site and use Sign in with Google. The user confirmed origin setup on September 16, 2026. After the widget/header repair, the user confirmed real browser sign-in and supplied a screenshot of their two-run history on September 17, 2026. Never paste a client secret or access token into this task. See worker/DESKTOP_CONTRACT.md for the separate browser-cookie boundary.

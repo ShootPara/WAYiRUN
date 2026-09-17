@@ -1,3 +1,4 @@
+import { workerModules } from "./worker-modules.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,7 +12,7 @@ const pair = await generateKeyPair("RS256", { extractable: true });
 const jwk = { ...await exportJWK(pair.publicKey), kid: "test-key", alg: "RS256", use: "sig" };
 async function runtime(t, configured = true, rateLimit = 1000) {
   const mf = new Miniflare(convertV4MiniflareOptions({
-    name: "auth-test", modules: true,
+    name: "auth-test", modules: workerModules(),
     scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
     compatibilityDate: "2026-02-17",
     bindings: { APP_ENV: "development", ...(configured ? { GOOGLE_WEB_CLIENT_ID: audience, GOOGLE_ANDROID_CLIENT_ID: "test-android.apps.googleusercontent.com" } : {}) },

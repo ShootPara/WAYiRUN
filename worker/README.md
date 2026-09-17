@@ -53,7 +53,7 @@ The user connected Git on September 15, 2026. Their screenshot confirms the inte
 
 ## 5 Next implementation
 
-Connect Android using a validated archive encoder/decoder, immutable start-time account ownership, durable retries, and the user-approved explicit import action in settings. Keep new settings behind the gear. Existing local runs are never assigned automatically. Preserve offline local recording and implement discard/queue reconciliation before enabling uploads. Production OAuth and full deletion reconciliation remain separate milestones. Announcement selection and phone music verification remain deferred.
+Android upload/import/discard is integrated and user-confirmed on the phone. The sync2 slice adds authenticated restore and deletion reconciliation using the existing run transport plus owner-scoped deletion pages. Verify the new restore path before closing Milestone 5. Desktop history/maps is the next sequential feature; production identity/release and marker-retention policy remain separate. New phone settings stay behind the gear.
 
 ## 6 References
 

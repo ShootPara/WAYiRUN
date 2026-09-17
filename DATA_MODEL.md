@@ -113,7 +113,7 @@ Local record: operation ID, owner ID, entity ID/type, operation type, payload ve
 
 Store operation ID, authenticated owner, target ID, payload hash, and result/version. Enforce unique operation identity per owner. The same ID and payload returns the same result; reuse with different content fails. Do not trust an owner field supplied by the client.
 
-Migration 0003 implements the transport receipt in `run_uploads` and exact ordered binary data in `run_chunks`. The manifest hash binds the immutable summary and chunk descriptors to run/operation IDs. A compound foreign key keeps every chunk under the same owner/run; only fully acknowledged archives have a completion timestamp and appear in history. Drafts expire after 24 hours and are cleaned on that owner's next upload reservation; completed receipts do not expire. The archive's Android encoder/decoder and measurement validation remain the next integration gate. See `worker/RUN_STORAGE_CONTRACT.md` for limits and API details.
+Migration 0003 implements the transport receipt in `run_uploads` and exact ordered binary data in `run_chunks`. The manifest hash binds the immutable summary and chunk descriptors to run/operation IDs. A compound foreign key keeps every chunk under the same owner/run; only fully acknowledged archives have a completion timestamp and appear in history. Drafts expire after 24 hours and are cleaned on that owner's next upload reservation; completed receipts do not expire. Android archive encoding/decoding and measurement validation are implemented; sync2 adds authenticated restore validation. See `worker/RUN_STORAGE_CONTRACT.md` for limits and API details.
 
 ### 5.3 Deletion marker and cleanup
 
@@ -141,7 +141,7 @@ Schema version 1 is exported under `android/app/schemas/com.example.runningapp.s
 
 The run checkpoint uses Kotlin serialization and holds the unit/stride/goal snapshot, active totals, full splits, measurement baseline, active intervals and clock epochs, source segments, and event sequence. The run row separately preserves zone/offset and interruption state. Pace is derived. Final partial splits store actual distance and duration. Measurements retain accepted cumulative readings and deltas; route points exist only for accepted GPS samples. No GPS points are fabricated for step-only or missing intervals.
 
-The locally generated owner identifier has no cloud account meaning and is confined to debug preferences/database records. No production identity, authentication bypass, network calls, or future cloud tables are implemented. Tests use isolated in-memory Room databases. Schema migrations will be required before changing persisted tables in a subsequent milestone; no destructive migration fallback is enabled.
+The locally generated owner identifier has no cloud account meaning and is confined to debug preferences/database records. This original v1 subset did not implement production identity, authentication bypasses, network calls or cloud tables; Sections 7.2 onward describe subsequent additions. Tests use isolated in-memory Room databases. Schema migrations will be required before changing persisted tables in a subsequent milestone; no destructive migration fallback is enabled.
 
 ### 7.2 Implemented synchronization subset - Room v2
 
@@ -149,4 +149,8 @@ Migration 1 to 2 preserves every existing row and adds nullable cloudOwnerId to 
 
 run_sync stores runId, ownerId, stable operationId, UPLOAD/DELETE action, PENDING/AUTH/BLOCKED/SYNCED/DELETED status, attempts, nextAttemptMs and a sanitized error. It deliberately has no run foreign key so deletion intent survives removal of measurements. Conditional acknowledgements cannot replace a newer DELETE action. Archives preserve all six run tables with version, size and structural validation; chunks have SHA-256 descriptors and stable ordering.
 
-Cloud migration 0004 retains only owner/run ID/deletion time after removing manifest and chunk data. A database trigger prevents resurrection by stale uploads. Marker retention and download-side reconciliation remain future work; no metrics are retained in deletion markers.
+Cloud migration 0004 retains only owner/run ID/deletion time after removing manifest and chunk data. A database trigger prevents resurrection by stale uploads. Marker retention policy remains future work; sync2 implements download-side reconciliation; no metrics are retained in deletion markers.
+
+### 7.3 Restore progress - Room v3
+
+Additive migration 2 to 3 creates sync_pull keyed by ownerId: phase (DELETIONS/RUNS), cursor, status, attempts, nextAttemptMs and sanitized error. Existing runs and upload/delete operations are unchanged. No token appears in this table. Restored records retain original acquisition/cloud ownership and every archived metric while regenerating local autoincrement child IDs. Restore never upserts a conflicting existing run. Minimal local tombstones are created even when a deleted remote run was never downloaded, preventing stale-list restoration. Partial archives remain outside Room and cannot appear as finished runs.

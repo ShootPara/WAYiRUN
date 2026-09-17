@@ -166,4 +166,48 @@ class RestoreEngineTest {
         engine(api).runOnce(); assertEquals(calls, api.owners.size)
         dao.retryPull("bob"); assertEquals("BLOCKED", dao.pull("alice")!!.status)
     }
+    @Test fun boundedPagesResumeFromDurableCursorAndRepeatSweepFindsEarlierInsertions() = runBlocking {
+        val ids = (0 until 23).map { run() }.sorted()
+        val cursors = mutableListOf<String?>()
+        val api = object : SyncApi {
+            override suspend fun request(session: AccountSession, path: String, method: String, body: ByteArray?, contentType: String, match: String?): JSONObject {
+                if (path.startsWith("/api/run-deletions")) return JSONObject().put("deleted", JSONArray()).put("next", JSONObject.NULL)
+                val after = path.substringAfter("?after=", "").takeIf { it.isNotEmpty() }?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                cursors.add(after)
+                val remaining = ids.filter { after == null || it > after.substringAfter(':') }
+                val rows = JSONArray(); remaining.take(20).forEach { rows.put(JSONObject().put("runId", it).put("completedAt", 10L)) }
+                return JSONObject().put("runs", rows).put("next", if (remaining.size > 20) "10:${remaining[19]}" else JSONObject.NULL)
+            }
+        }
+        engine(api).runOnce(); engine(api).runOnce()
+        assertEquals("10:${ids[3]}", dao.pull("alice")!!.cursor)
+        repeat(6) { engine(api).runOnce() }
+        assertEquals("DELETIONS", dao.pull("alice")!!.phase)
+        assertEquals(7, cursors.size); assertNull(cursors.first())
+        now += 1000000; engine(api).runOnce(); engine(api).runOnce()
+        assertNull(cursors.last())
+    }
+    @Test fun alteredManifestAndSummaryMismatchFailWithoutAnyLocalWrites() = runBlocking {
+        val archive = fixture(); val fake = FakeApi(archive)
+        var tamperHash = true
+        val api = object : SyncApi {
+            override suspend fun download(session: AccountSession, path: String) = fake.download(session, path)
+            override suspend fun request(session: AccountSession, path: String, method: String, body: ByteArray?, contentType: String, match: String?): JSONObject {
+                val value = fake.request(session, path, method, body, contentType, match)
+                if (value.has("manifestJson") && tamperHash) value.put("manifestJson", value.getString("manifestJson") + " ")
+                return value
+            }
+        }
+        engine(api).runOnce(); engine(api).runOnce()
+        assertNull(dao.get(archive.run.id)); assertEquals(0, fake.binaryCalls)
+        assertEquals("BLOCKED", dao.pull("alice")!!.status)
+        tamperHash = false; dao.retryPull("alice")
+        // The archive bytes can be valid on their own while contradicting the transport summary.
+        val checkpoint = archive.run.decode()
+        val changed = checkpoint.copy(snapshot = checkpoint.snapshot.copy(startedUtcMs = checkpoint.snapshot.startedUtcMs!! + 1))
+        val other = archive.copy(run = archive.run.copy(checkpoint = Json.encodeToString(changed)))
+        fake.chunks = other.encode().toList().chunked(600).map { it.toByteArray() }
+        engine(api).runOnce(); assertNull(dao.get(archive.run.id)); assertEquals("BLOCKED", dao.pull("alice")!!.status)
+    }
+
 }

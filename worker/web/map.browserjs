@@ -1,0 +1,45 @@
+// Leaflet is served locally; only base-map images are requested from OpenStreetMap.
+let library;
+function loadLibrary() {
+  if (window.L) return Promise.resolve(window.L);
+  if (!library) library = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/leaflet.js";
+    script.onload = () => window.L ? resolve(window.L) : reject(new Error("Map library unavailable"));
+    script.onerror = () => { script.remove(); library = null; reject(new Error("Map library unavailable")); };
+    document.head.append(script);
+  });
+  return library;
+}
+export async function showRouteMap(element, status, fitButton, geometry, isCurrent) {
+  const L = await loadLibrary();
+  if (!isCurrent()) return null;
+  const map = L.map(element, { scrollWheelZoom: false, preferCanvas: true, zoomControl: true });
+  let alive = true;
+  try {
+  const bounds = L.latLngBounds(geometry.parts.flat());
+  const fit = () => map.fitBounds(bounds, { padding: [28, 28], maxZoom: 16, animate: false });
+  fitButton.onclick = fit;
+  // No prefetch/offline cache, analytics, geocoding, or route upload to a map provider.
+  const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, updateWhenIdle: true, keepBuffer: 0,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+  });
+  tiles.on("tileerror", () => { if (alive) status.textContent = "Some map tiles could not load. Your recorded route is still shown. Reopen the run to try again."; });
+  tiles.on("loading", () => { if (alive) status.textContent = "Loading map…"; });
+  tiles.on("load", () => { if (alive && status.textContent === "Loading map…") status.textContent = geometry.note; });
+  tiles.addTo(map);
+  const routeStyle = { color: "#205e50", weight: 4, opacity: 1, smoothFactor: 0 };
+  for (const part of geometry.parts) {
+    if (part.length > 1) L.polyline(part, routeStyle).addTo(map);
+    else L.circleMarker(part[0], { radius: 4, ...routeStyle, fillOpacity: 1 }).addTo(map);
+  }
+  const first = geometry.parts[0][0], last = geometry.parts.at(-1).at(-1);
+  L.circleMarker(first, { radius: 7, color: "#172c29", weight: 2, fillColor: "#c5f06b", fillOpacity: 1 }).addTo(map).bindTooltip("First recorded GPS point");
+  if (geometry.pointCount > 1) L.circleMarker(last, { radius: 6, color: "#fff", weight: 2, fillColor: "#205e50", fillOpacity: 1 }).addTo(map).bindTooltip("Last recorded GPS point");
+  fit();
+  const resize = new ResizeObserver(() => { if (alive) map.invalidateSize({ pan: false }); });
+  resize.observe(element);
+  return () => { alive = false; resize.disconnect(); fitButton.onclick = null; map.remove(); };
+  } catch (error) { alive = false; fitButton.onclick = null; map.remove(); throw error; }
+}

@@ -23,3 +23,7 @@ Use only disposable test runs. Discard a completed run with the existing confirm
 ## 6 Report
 
 Record pass/fail for each section, build version, whether connectivity/session expired, and the visible sync message. Do not send tokens or private route data. Automated checks passed; these physical-phone scenarios remain unverified until you try them.
+
+## 7 Device result - September 16, 2026
+
+The user reports these device checks pass and the app functions as expected. A read-only development D1 query confirms two completed cloud runs. This acceptance applies to sync1; subsequent sync2 restore behavior has separate automated verification.

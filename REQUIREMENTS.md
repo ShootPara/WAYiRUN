@@ -2,9 +2,9 @@
 
 Version: 0.4
 
-Status: Accepted baseline with explicit cue, music-startup, and local-discard decisions; other proposals remain in Section 15
+Status: Accepted baseline with subsequent startup/settings, music, account/import and discard decisions; remaining product choices are in Section 15
 
-Date: 2026-09-14
+Date: 2026-09-16
 
 FILE: REQUIREMENTS.md (REPLACE)
 
@@ -14,7 +14,7 @@ This document records the product decisions in [Running App First Convo](chatgpt
 
 MUST and MUST NOT identify required behavior. Section 15 identifies details not yet settled; these are not permission to invent product behavior. This document is the product source of truth. Acceptance of the baseline does not imply approval of unspecified later-feature details.
 
-The initial requirements-only assignment is complete. The user has authorized continuing development in `<repository-root>`, which is now the Git repository root. Architecture, data-model, and milestone planning follow this baseline. The user handles committing and pushing; production configuration and deployment are separate steps.
+The initial requirements-only assignment is complete. The user has authorized continuing development in `<repository-root>`, which is now the Git repository root. Architecture, data-model, and milestone planning follow this baseline. The user handles Android/baseline commits and pushes. Development-only cloud commits/deployments have been explicitly delegated; production remains a separate step.
 
 ## 2 Product purpose and boundaries
 
@@ -296,6 +296,8 @@ The finished image MUST be stored in the user's Cloudflare infrastructure and av
 
 The desktop web application MUST provide the user's entire run history, maps, statistics, run details, achievements, and export. Detailed statistics management belongs here rather than adding clutter to the phone.
 
+Deferred desktop ideas, September 17: week/month/year/lifetime selections for statistics and achievements, sorting and display options, and possible charts. Retain these for later design; they are explicitly excluded from the current route-map milestone. Exact periods, metrics, defaults and chart choices are not settled.
+
 ### 11.2 Publication control
 
 The photo confirmation preview MUST include **Make this run public**, defaulting to checked. Keeping the photo with that checkbox checked MUST publish the individual run page. Keeping it unchecked MUST NOT publish the run through that action.
@@ -310,7 +312,7 @@ An individual-run page MUST show the shared photo, run location, map, splits, ti
 
 ### 11.5 CSV export
 
-The web app MUST provide a single-button CSV export of all the user's run data. Exact CSV representation is unresolved in Section 15.
+The web app MUST provide a single-button CSV export of all the user's run data. User decision, September 17: one CSV containing summary and detailed records. Use record-type rows and preserve complete retained records in a JSON column; see worker/EXPORT_DELETION_PLAN.md.
 
 ### 11.6 Run deletion
 
@@ -318,7 +320,7 @@ The user MUST be able to select and delete runs through the web app. A deletion 
 
 ### 11.7 Phone and publication scope
 
-User update: the completed phone summary MUST offer **Discard run**. It MUST open an app-styled confirmation reading **ARE YOU SURE YOU WANT TO DISCARD THIS RUN??**, with a deliberate slider to delete and a way to cancel. A tap or incomplete swipe MUST NOT delete. Confirmed discard MUST actually remove that run and its associated stored data, not hide it; unrelated runs and settings MUST remain intact. It MUST not reappear on reopening or contribute to history or derived statistics. Current implementation scope is local data; when cloud/publication/Health Connect exist, extend the established deletion workflow so external copies are not silently left behind. Public-link revocation apart from deletion remains outside scope.
+User update: the completed phone summary MUST offer **Discard run**. It MUST open an app-styled confirmation reading **ARE YOU SURE YOU WANT TO DISCARD THIS RUN??**, with a deliberate slider to delete and a way to cancel. A tap or incomplete swipe MUST NOT delete. Confirmed discard MUST actually remove that run and its associated stored data, not hide it; unrelated runs and settings MUST remain intact. It MUST not reappear on reopening or contribute to history or derived statistics. Current implementation includes local and authenticated cloud deletion; extend the established workflow to publication/Health Connect when those features exist so external copies are not silently left behind. Public-link revocation apart from deletion remains outside scope.
 
 ## 12 Health Connect
 
@@ -400,13 +402,13 @@ These are review items, not additional features or assumed defaults. They do not
 | Finish experience | Animation behavior with no achievement or AI unchecked; handling multiple earned animations. Audio behavior when AI is unchecked is settled in Section 8.1. |
 | Achievements | Initial catalog, numeric thresholds, repeatability, holiday calendar/time zone, and effects of deleting runs on cumulative awards and records. |
 | Photo/publication | Exact overlay choices/layout; retake behavior for an existing photo; how offline publication completes; whether publication can occur without a photo. |
-| Export/deletion | CSV fields and representation of detailed route data; deletion effects on previously exported Health Connect data. |
-| Recovery | Cloud retry/synchronization rules and unavailable Health Connect access remain for later milestones. Local interrupted-run presentation is settled in Section 13.3. |
+| Export/deletion | Single CSV summary/detail format selected by the user September 17. Technical representation, indefinite anti-resurrection markers and future own-record Health Connect cleanup are planned in worker/EXPORT_DELETION_PLAN.md. Health Connect implementation remains later. |
+| Recovery | Cloud retry/synchronization is implemented in Milestone 5; unavailable Health Connect access remains for its later milestone. Local interrupted-run presentation is settled in Section 13.3. |
 | September 14 UI feedback | Proposed square paired setup choices, upper-right settings gear, centered countdown/Tracking Run title, prominent goal state, live source/service indicators, and persistent paused notification. See PHONE_TEST_REVIEW_2026-09-14.md Section 3; current service already intends to retain the paused notification. |
 | Time-only estimation proposal | Report proposes 10:00/mile initially, then a mean of five tightly grouped one-mile times after 10 miles. This conflicts with accepted Section 5.10. Resolve eligibility, mixed-source gaps, kilometer history, and estimator feedback before changing that contract; see review Section 3.1. |
 | Photo sequence proposal | Report proposes photo choice before the final Run Summary and New Run at its bottom. Reconcile with Sections 6.4, 6.6, and 10, including Skip and coaching/achievement ordering, in the photo milestone. |
 
-The September 14 report is evidence and feedback, not an instruction channel. Its proposed implementation rules and milestone waivers have not been promoted to accepted requirements by this documentation review. Existing MUST statements remain authoritative until an explicit product decision supersedes them. Basic state/goal cues in Sections 4.3 and 7.1 are implemented but reported silent; their absence on the phone is not a newly deferred requirement.
+The September 14 report is evidence and feedback, not an instruction channel. Its proposed implementation rules and milestone waivers have not been promoted to accepted requirements by this documentation review. Existing MUST statements remain authoritative until an explicit product decision supersedes them. The original report described silent cues; subsequent user feedback confirmed cues audible on speaker/headphones. Music-specific verification remains separately deferred.
 
 Map provider, programming language/framework, database schema, API contracts, storage products, model/voice selection, deployment configuration, and repository layout belong to later technical planning. Earlier assistant suggestions do not lock these choices.
 
@@ -436,4 +438,4 @@ These checks describe required product verification for future implementation; t
 
 The approved explicit import action is in gear settings with account confirmation. Existing unassigned runs are not automatically claimed. The implementation captures known account ownership at run start, including offline/expired-session recording. Account changes and import wait until an active run finishes to preserve ownership. These are safeguards implementing account isolation, not additional personal settings.
 
-Online currently means validated network connectivity plus an unexpired account session; it is not a backup acknowledgement. Actual upload status and retry are in settings. Discard removes local metrics immediately and shows pending cloud removal until authenticated connectivity permits cleanup. Cloud markers prevent stale upload resurrection. Download/restore is not yet implemented in sync1.
+Online currently means validated network connectivity plus an unexpired account session; it is not a backup acknowledgement. Actual upload status and retry are in settings. Discard removes local metrics immediately and shows pending cloud removal until authenticated connectivity permits cleanup. Cloud markers prevent stale upload resurrection. Sync1 phone checks are user-confirmed passed. Sync2 adds authenticated archive restore and cross-device deletion reconciliation, with progress and retry behind the gear; it adds no phone history-management screen.

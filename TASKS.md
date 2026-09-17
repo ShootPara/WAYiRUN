@@ -1,12 +1,12 @@
 # WAYiRUN — Implementation Plan
 
 Version: 0.4
-Status: Local tracking, audio, music linkage, discard, and permission setup implemented; music phone verification deferred by user and not a development blocker
+Status: Milestone 5 upload/import/discard phone checks passed; sync2 restore/deletion reconciliation implemented, final gates tracked in Section 8.0.6; later product features remain planned
 FILE: <repository-root>\TASKS.md (NEW)
 
 ## 1 Current state
 
-WAYiRUN now has a debug-only local tracking prototype: setup, active/paused controls, swipe finish, saved summary, foreground GPS/step adapters, Room storage, and paused recovery. The release build retains the name-only shell. The last automated run passed 34 JVM tests, six emulator tests, debug/release builds, and lint. The September 14 phone report supplies functional passes, without quantitative accuracy figures, and describes silence despite implemented audio cues. Sections 6.6–6.7 record remaining evidence and the proposed reliability follow-up. The report recommends acceptance with deferred checks; that disposition is not proof that the full original exit gate passed. Cloud services and later features are not implemented. The Git repository remains rooted at `<repository-root>`.
+WAYiRUN has debug-build tracking, recovery, audio cues, linked music controls, saved settings, Google sign-in, account-owned cloud uploads, explicit legacy import and protected discard. The user confirmed sync1 device checks pass on September 16 and reports two tracked runs; a read-only D1 query independently confirms two completed cloud runs. Music-specific verification remains separately deferred. Milestone 5 download/restore and cross-device deletion reconciliation are the current bounded slice. Desktop history/maps is next; AI, achievements, photos, Health Connect and production release remain later milestones. The release build remains a name-only shell. Historical verification below is dated; it must not be mistaken for current feature status. Repository root and cumulative local changes are preserved.
 
 Read [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), and [the then-current working guide](User%20Preferences%20LLM%20Guide.md) before work. Product requirements take precedence over proposed technical details.
 
@@ -366,6 +366,20 @@ Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-16_07-57-16_EDT.a
 
 Cloud-only commit `5b5e7ed` was pushed to development; final deployment results are recorded in worker/STATUS.md. Android and root-document changes remain uncommitted. Milestone 5 remains open: next implement authenticated download/restore with validation and deletion reconciliation. History/maps, production identity, music verification, and announcement-selector work remain deferred.
 
+### 8.0.6 Download/restore and planning review - September 16, 2026
+
+Plan: finish account-scoped download/restore and deletion reconciliation. Guardrails: preserve existing local and cloud records; validate complete archives before atomic insertion; never overwrite local identities or active runs; retain offline tracking and the accepted sparse UI. No production, desktop UI or unrelated feature work. Existing development-only cloud commit/deployment delegation remains in force.
+
+Planning review found stale current-state claims saying cloud services and Android synchronization were absent. Current summaries are corrected; dated historical results remain intact. User-confirmed sync1 phone checks pass, and a read-only remote count confirms exactly two completed cloud runs. The initial D1 request returned an authorization error; the subsequent query succeeded without data changes or new permissions.
+
+Restore uses Room v3 account cursors, private resumable chunks, exact manifest/chunk hashes, archive/owner/summary validation and transactional child-row insertion. Deletion sweeps precede run retrieval and repeat to catch insertions before earlier cursors. Existing runs are never replaced. UI changes stay within gear sync status. Cloud-only commit `944338a` passed Workers Builds; all 30 backend tests and nine independent live smoke checks pass. Two completed cloud runs remain present after deployment. The user's baseline commit `4306728` is preserved; a separate `codex/restore-transport` worktree kept this deployment scoped to Worker files. Do not push the main checkout directly over development: its history now differs from the scoped deployment branch. Subsequent cloud changes should be based on the current remote development head.
+
+Final verification: **58 JVM tests and 45 API 35 emulator tests passed**, zero failures/skips. Debug build and lint passed with zero errors and 11 version advisories. Added coverage includes v2-to-v3 preservation, all-table/idempotent restore, resumed verified chunks, altered manifest/wrong owner/summary mismatch, account switch mid-download, local/remote deletion races, transaction rollback, child-ID collision prevention, bounded retries and durable pagination across full sweeps. Initial emulator execution was blocked by read-only generated build output; clearing attributes only under app/build resolved it. One test fixture initially invalidated its own archive while attempting to alter only the summary; the fixture was corrected and the full suite passed. No phone installation or user-data mutation occurred. The generated test APK is archived outside the repository, leaving only the dated handoff.
+
+APK: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-16_15-46-55_EDT.apk`, version `0.1.0-dev-sync2`, 33,820,584 bytes, SHA-256 `FFB6BA6C64BB143C9699A228C438AFF84D46504EA13B738B11BCE305D968893B`. Existing debug signature verified. Install over the previous build; do not clear local data. PHONE_TEST_SYNC2.md describes optional separate-device restoration without risking the working phone.
+
+Limits: restored cloud data never overwrites an existing local run; an invalid/conflicting archive blocks that account's pull until retry/correction while uploads and recording remain independent. Repeated deletion sweeps provide eventual reconciliation, not instant deletion on disconnected phones. Real Google cross-device restore has not been phone-verified. Production identity and release app remain separate, and music/announcement deferrals still apply.
+
 ### 8.1 Outcome
 
 Google-authenticated users can synchronize completed runs without mixing accounts or losing offline runs.
@@ -386,9 +400,45 @@ These preserve the complete product scope without pretending their unresolved de
 
 Choose a map provider for Android and web, then add authenticated history, run details, maps, and statistics. Verify owner filtering and indoor/gap rendering. Do not turn the phone into a statistics-management application.
 
+### 9.1.1 Private desktop history - first slice
+
+Plan: implement Google browser access, history pagination, loaded-set distance/time/weighted pace, unit conversion and validated run details/splits/settings on the existing development Worker. Guardrails: separate cookie/CSRF handling preserves native API behavior; browser access is private and read-only; no data mutation, Android changes, paid-service signup or unrelated product features. Maps/provider setup is the next bounded slice.
+
+Implemented: public app shell plus private browser APIs, protected one-hour cookies, nonce binding, exact-origin mutation checks, history and details. See worker/DESKTOP_CONTRACT.md. All 33 backend tests and fixture browser checks passed, including account isolation, cookie protection, expiry/replay, origin rejection, totals/units, corrupt chunks, literal user text, narrow layout and logout clearing. Cloud-only commit `83fbf98` passed Workers Builds. All 14 live smoke checks passed; a read-only count still confirms two completed cloud runs. The live sign-in page loaded its Google frame without JavaScript errors. The user confirmed authorized-origin setup; actual Google browser sign-in remains unverified. Existing sync2 APK remains the phone handoff. A separate external-review audit passed release assembly and the up-to-date JVM test gate; no Android implementation changed. See CODE_REVIEW_TRIAGE_2026-09-16.md for rejected claims and retained queue/performance/recovery follow-ups.
+
+### 9.1.2 Desktop Google sign-in repair - September 17, 2026
+
+User screenshot and live inspection reproduced an oversized unstyled Google logo and a Google origin error. The earlier fixture button and iframe-presence checks were insufficient. Added a fresh per-response style CSP nonce on the Google client script, Google's recommended strict-origin-when-cross-origin referrer policy, and a bounded 260px sign-in container with a 20px icon. Script restrictions, private cookies, nonce-bound authentication and account isolation remain intact.
+
+All 34 bundled Worker/D1 tests passed, including fresh nonce/header regression coverage. Cloud-only commit bd9bd8a passed Workers Builds on development; all 14 independent live smoke checks passed. The actual deployed Google widget renders a compact personalized button at desktop and 390px widths, with no fresh browser warnings/errors or narrow-screen horizontal overflow. Automated pointer activation was blocked by the browser tool's fractional-iframe-coordinate limitation; full real-account sign-in/history verification remains the user's check. No Google Console change, Android build/install, production deployment or run mutation was performed. Maps remain the next feature slice after sign-in acceptance.
+
+### 9.1.3 Desktop route maps - September 17, 2026
+
+User confirmed real browser sign-in/history with a screenshot showing two runs, then authorized continuing the plan. Week/month/year/lifetime selections, sorting/display options, achievement statistics and possible charts are explicitly deferred (REQUIREMENTS.md Section 11.1).
+
+Plan and guardrails: add a map to verified desktop run details, select/configure a provider suitable for small development usage, preserve GPS gaps and indoor/no-GPS behavior, and avoid Android changes, data mutations, paid signup, statistics expansion or production deployment. Implemented locally served Leaflet 1.9.4 with OpenStreetMap Standard tiles, zoom/Fit route, recorded-GPS endpoint markers, date-line handling, tile failure messaging and map teardown on navigation/logout. See worker/MAP_CONTRACT.md for provider/privacy limits. Production capacity and any future Android map surface remain separate.
+
+Verification: all 45 automated Worker/D1/geometry/lifecycle tests pass. Local browser fixtures passed outdoor two-segment rendering, zoom/Fit route, indoor/no-GPS, single point, corrupt archive rejection, tile failure with details intact, logout clearing, and a 390px layout without horizontal overflow. Fixtures use synthetic tiles and no private runs or OSM bulk requests. The user subsequently accepted the maps and authorized continuing. Cloud-only commit 08f6fa7 passed Workers Builds on development; all 18 independent live smoke checks passed, including the four new map assets. The sole sync2 phone APK remains unchanged.
+
 ### 9.2 Export and deletion
 
 Define the complete CSV representation, deletion reconciliation, marker retention, and Health Connect deletion policy. Implement one-button export and actual data/object deletion. Verify public access is removed, cleanup retries complete, and a stale phone cannot resurrect a deleted run.
+
+### 9.2.1 Complete CSV export - September 17, 2026
+
+The user selected one CSV containing summary and detailed records. The plan is recorded in worker/EXPORT_DELETION_PLAN.md; deletion UI is a separate next slice. Implemented Export all runs with full pagination, sequential verified archives, six record types, complete record_json preservation, spreadsheet formula protection, explicit output limits and cancel/sign-out guards. All 53 automated tests pass. Browser verification downloaded and independently parsed a four-run CSV from a history showing only two runs; cancellation, sign-out and corrupt archives produced no additional file. Narrow-layout controls remain usable. Development commit 6cee9e0 passed Workers Builds; all 19 independent live smoke checks passed. No Android update or real-run mutation.
+
+### 9.2.2 Export rate-limit and session repair - September 17, 2026
+
+User reported HTTP 429 during export of four real runs. Root cause: each archive chunk consumed the shared 30/client/minute authentication budget; earlier one-chunk browser fixtures missed it. Run transfer now has separate 300/client and 3000/global per-minute budgets. Export retries the same GET after Retry-After, up to three retries, with cancellable waits and retained verified chunks. App sessions now last 90 days; website account access renews valid sessions/cookies, including old still-valid short sessions. Expired/revoked sessions remain invalid. Native sessions get the longer expiry at next sign-in; no Android code change.
+
+All 57 automated tests passed, including forty real Worker chunk reads with an exhausted sign-in budget, renewal/revocation/expiry, and abortable throttling. Browser-injected 429 visibly waited then downloaded a complete four-run CSV. Development repair commit e5e45a5 passed Workers Builds and all 19 live smoke checks. Real export subsequently verified from the user-provided CSV: four runs, 6720 GPS points, 6722 measurements, 11 splits, four intervals and eight source segments. Per-run summary, split totals, interval/segment payloads and record indexes match.
+
+### 9.2.3 Desktop selected-run deletion - September 17, 2026
+
+After verifying the real CSV, continued the authorized separate deletion slice. Explicit loaded-row checkboxes open an app-styled confirmation listing dates/distances; Cancel receives initial focus and Escape cancels. Sequential owner-scoped deletion removes only acknowledged successes and recomputes totals; failure stops the batch and preserves unresolved selections for idempotent retry. Refresh clears selection; sign-out clears pending UI state. Existing server cascade/deletion markers and phone reconciliation are reused; no new Android code or real user run deletion.
+
+All 58 automated tests pass, including browser CSRF/body/method boundaries, account isolation, exact data/chunk removal and repeat deletion; existing stale-upload/race tests remain green. Local browser tests passed cancel/Escape, partial failure, retry, totals, selection scope, untouched unloaded runs, sign-out and 390px modal layout. Cloud commit 2dcd76a passed Workers Builds; 19 live smoke checks passed and the deployed deletion interface was verified. Next user check: select a run, inspect confirmation, Cancel. Only confirm deletion for a disposable run; cross-device disappearance requires its next authenticated sync. Section 9.3 AI coaching planning is next after acceptance.
 
 ### 9.3 AI coaching
 
@@ -412,4 +462,6 @@ Complete requirements Section 16 on actual target devices, including units, dark
 
 ## 10 Next execution brief
 
-Continue Milestone 5 with authenticated Android download/restore and deletion reconciliation. Upload, explicit import and discard protection are implemented in sync1; verify phone behavior using PHONE_TEST_SYNC1.md without claiming it passed. Preserve owner isolation, offline runs, accepted main-screen layout and all existing changes. Additional controls belong behind the gear. Cloud-only development commits/deployments remain delegated; Android commits and production are not. Do not restart completed slices or expand into desktop history/maps yet.
+Milestone 5 synchronization is implemented with sync1 phone acceptance and separate sync2 restore evidence. Section 9.1 implements private Google sign-in, history, loaded-run totals, validated details and desktop route maps. Real browser sign-in/history is user-confirmed. Maps are user-accepted. Section 9.2 now has a complete single-file CSV export. Section 9.2 now also implements desktop selection/deletion. Next is user acceptance of deletion, then Section 9.3 AI coaching planning. Expanded statistics, charts and achievement displays remain deferred. AI, photos, Health Connect and production stay later.
+
+The user baseline remains 4306728 on codex/account-sessions. Remote development receives scoped Worker work; the latest slice is commit 2dcd76a through codex/desktop-run-deletion, based on e5e45a5. Preserve both histories and prepare subsequent cloud changes from the current remote development head. Android/root-document commits remain user-owned. The existing sync2 APK is unchanged by web work.

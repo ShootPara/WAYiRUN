@@ -1,0 +1,107 @@
+export const EXPORT_LIMIT = 128 * 1024 * 1024;
+export function abortableDelay(ms, signal) {
+  return new Promise((resolve,reject)=>{
+    if(signal.aborted){reject(new DOMException("Cancelled","AbortError"));return;}
+    const abort=()=>{clearTimeout(timer);reject(new DOMException("Cancelled","AbortError"));};
+    const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},ms);
+    signal.addEventListener("abort",abort,{once:true});
+  });
+}
+export async function fetchWithBackoff(send, signal, onWait, wait=abortableDelay) {
+  for(let attempt=0;;attempt++) {
+    if(signal.aborted)throw new DOMException("Cancelled","AbortError");
+    const response=await send();
+    if(response.status!==429||attempt>=3)return response;
+    const header=response.headers.get("Retry-After");
+    const seconds=header&&/^\d+$/.test(header)?Number(header):60;
+    const ms=Math.max(1000,Math.min(seconds*1000,120000));
+    await response.body?.cancel();onWait(Math.ceil(ms/1000));await wait(ms,signal);
+  }
+}
+const fields = ["export_version","archive_version","record_type","run_id","record_index","start_utc","end_utc","time_zone","mode","recorded_units","distance_meters","active_duration_ms","pace_ms_per_km","pace_ms_per_mile","segment_id","monotonic_ms","latitude","longitude","accuracy_meters","measurement_source","delta_meters","total_meters","active_ms","split_number","partial","interval_number","clock_epoch","start_monotonic_ms","end_monotonic_ms","start_active_ms","end_active_ms","countdown_seconds","stride_length_meters","goal_type","goal_distance_meters","goal_duration_ms","record_json"];
+const groups = [["route","GPS_POINT"],["measurements","MEASUREMENT"],["splits","SPLIT"],["intervals","ACTIVE_INTERVAL"],["segments","SOURCE_SEGMENT"]];
+const encoder = new TextEncoder();
+const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+function requireValid(value) { if (!value) throw new Error("Export data could not be verified. No file was downloaded. Refresh and try again."); }
+function currentOrAbort(current) { if (!current()) throw new DOMException("Export cancelled", "AbortError"); }
+function cell(value) {
+  if (value === null || value === undefined) return '""';
+  if (typeof value === "number") { requireValid(Number.isFinite(value)); return `"${value}"`; }
+  let text = String(value);
+  if (/^[\s\u0000-\u001f]*[=+\-@]/u.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
+  return '"' + text.replaceAll('"','""') + '"';
+}
+const iso = value => value === null || value === undefined ? null : new Date(value).toISOString();
+export async function collectExportRuns(fetchPage, current = () => true, limit = EXPORT_LIMIT) {
+  const records = new Map(), cursors = new Set();
+  let after = null, bytes = 0;
+  do {
+    currentOrAbort(current);
+    const page = await fetchPage(after);
+    currentOrAbort(current);
+    requireValid(Array.isArray(page.runs) && page.runs.length <= 20 && (page.next === null || typeof page.next === "string"));
+    bytes += encoder.encode(JSON.stringify(page)).byteLength;
+    if (bytes > limit) throw new Error("This export exceeds the browser's 128 MiB limit. No partial file was downloaded.");
+    for (const run of page.runs) {
+      requireValid(uuid.test(run.runId) && uuid.test(run.operationId) && /^[0-9a-f]{64}$/.test(run.manifestHash) && Number.isSafeInteger(run.completedAt) && run.completedAt >= 0 && !records.has(run.runId));
+      records.set(run.runId, run);
+    }
+    after = page.next;
+    requireValid(after === null || (after.length > 0 && !cursors.has(after)));
+    if (after !== null) cursors.add(after);
+  } while (after !== null);
+  return [...records.values()];
+}
+export function createCsvExport(limit = EXPORT_LIMIT) {
+  let parts = [], bytes = 0, finished = false;
+  const seen = new Set();
+  function write(text) {
+    requireValid(!finished);
+    bytes += encoder.encode(text).byteLength;
+    if (bytes > limit) { parts = []; finished = true; throw new Error("This export exceeds the browser's 128 MiB limit. No partial file was downloaded."); }
+    parts.push(text);
+  }
+  write("\uFEFF" + fields.map(cell).join(",") + "\r\n");
+  return {
+    async add({ value, s }, current = () => true) {
+      currentOrAbort(current);
+      requireValid(value.version === 1 && !seen.has(value.run.id) &&
+        Object.keys(value).every(key => ["version","run",...groups.map(g=>g[0])].includes(key)));
+      seen.add(value.run.id);
+      const row = (type, index, record, projection) => {
+        const values = {
+        export_version: 1, archive_version: value.version, record_type: type, run_id: value.run.id,
+        record_index: index, ...projection, record_json: JSON.stringify(record),
+        };
+        write(fields.map(key => cell(values[key])).join(",") + "\r\n");
+      };
+      const settings=s.settings;
+      row("RUN",0,value.run,{start_utc:iso(s.startedUtcMs),end_utc:iso(s.endedUtcMs),time_zone:value.run.zoneId,
+        mode:settings.mode,recorded_units:settings.units,distance_meters:s.distanceMeters,active_duration_ms:s.activeDurationMs,
+        pace_ms_per_km:s.distanceMeters>0?s.activeDurationMs/s.distanceMeters*1000:null,
+        pace_ms_per_mile:s.distanceMeters>0?s.activeDurationMs/s.distanceMeters*1609.344:null,
+        countdown_seconds:settings.countdownSeconds,stride_length_meters:settings.strideLengthMeters,
+        goal_type:settings.goal?.type,goal_distance_meters:settings.goal?.meters,goal_duration_ms:settings.goal?.durationMs});
+      let count=0;
+      for (const [name,type] of groups) {
+        requireValid(Array.isArray(value[name]));
+        for (const [index,r] of value[name].entries()) {
+          requireValid(r.runId === value.run.id);
+          const nested = name === "intervals" || name === "segments" ? JSON.parse(r.value) : {};
+          row(type,index,r,{segment_id:r.segmentId??(name==="segments"?nested.id:null),monotonic_ms:r.monotonicMs,
+            latitude:r.latitude,longitude:r.longitude,accuracy_meters:r.accuracyMeters,
+            measurement_source:r.source??nested.source,delta_meters:r.deltaMeters,total_meters:r.totalMeters,active_ms:r.activeMs,
+            split_number:name==="splits"?r.number:null,partial:r.partial,distance_meters:r.meters??nested.distanceMeters,
+            active_duration_ms:r.durationMs,interval_number:name==="intervals"?r.number:null,clock_epoch:nested.epoch,
+            start_utc:iso(nested.startUtcMs),end_utc:iso(nested.endUtcMs),
+            start_monotonic_ms:nested.startMonotonicMs??nested.startedMonotonicMs,end_monotonic_ms:nested.endMonotonicMs??nested.endedMonotonicMs,
+            start_active_ms:nested.startActiveMs??nested.startedActiveMs,end_active_ms:nested.endActiveMs});
+          if (++count % 500 === 0) { await new Promise(resolve=>setTimeout(resolve,0)); currentOrAbort(current); }
+        }
+      }
+      currentOrAbort(current);
+    },
+    finish() { requireValid(!finished); finished=true; const blob=new Blob(parts,{type:"text/csv;charset=utf-8"});parts=[];return blob; },
+    discard() { finished=true;parts=[];seen.clear(); },
+  };
+}

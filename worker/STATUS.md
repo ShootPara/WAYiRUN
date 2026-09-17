@@ -79,3 +79,42 @@ Commit e257bd0 was pushed to development. Workers Builds 5a805e01-d39d-4ba7-85ee
 Added migration 0004 and authenticated idempotent DELETE for cloud runs. Atomic deletion removes manifest/chunks while retaining only owner/run ID/time; a database trigger prevents old or racing uploads from resurrecting the run. Tests use the actual migration and cover deletion before begin, after completion, repeated deletion, racing completion, and foreign-owner isolation. All 29 bundled Worker/workerd/D1 tests pass. Android integration and its final test results are recorded in root TASKS.md; Android source remains local under the existing commit boundary.
 
 Cloud-only commit `5b5e7ed` passed Workers Builds on development. All nine live smoke checks passed independently, and a read-only remote ledger query confirms migrations 0001 through 0004. Production is untouched. Final Android gates passed: 58 JVM tests, 34 emulator tests, debug build and lint (zero errors, 11 version advisories). Physical-phone sync remains unverified. These final results remain local to avoid a documentation-only redeployment.
+
+## 10 Restore transport support - September 16, 2026
+
+Added owner-scoped, validated, paginated deletion-ID retrieval and exact canonical manifest text for Android hash verification. No database migration or data rewrite is required. All 30 bundled Worker/D1 tests pass, including feed pagination, foreign-owner isolation, invalid cursors and exact manifest hash verification. User confirms sync1 phone checks pass; a read-only D1 query confirms two completed cloud runs. Cloud-only commit `944338a` passed Workers Builds on development. All nine live smoke checks passed independently; a repeat read-only count still shows two completed runs. No server migration or user-data mutation was needed. Production remains untouched. The user committed the working baseline as `4306728`; that commit was preserved and not pushed by this pass. Deployment used a separate scoped worktree/branch so only Worker files reached development.
+
+Final sync2 Android verification: 58 JVM and 45 emulator tests passed, debug build/lint passed (zero errors, 11 version advisories), and APK signature verified. Real Google cross-device restoration remains a device check; no user run data was changed by verification.
+
+## 11 Desktop history foundation - September 16, 2026
+
+Implemented private Google browser sessions, history pagination, loaded-set totals, units and validated detail/splits/settings. Native bearer behavior is preserved behind a separate browser cookie/CSRF boundary. All 33 bundled Worker/D1 tests pass. Browser fixture checks passed for sign-in flow, totals/units, literal account text, corrupt archive rejection, detail, narrow layout and logout clearing; rendered desktop and narrow screenshots were inspected. No migration or Android change. Cloud-only commit `83fbf98` passed Workers Builds; all 14 live smoke checks passed independently. A read-only remote count still confirms two completed runs. The live page loaded the Google sign-in frame without JavaScript errors. The user confirmed authorized-origin setup; actual Google browser login remains unverified. Final verification notes remain local to avoid a documentation-only redeployment. Production and the existing phone APK are unchanged.
+
+## 12 Desktop Google sign-in repair - September 17, 2026
+
+Cloud-only commit bd9bd8a passed Workers Builds on development. Corrected the widget's style nonce and origin referrer policy; capped its container at 260px and icon at 20px. All 34 Worker/D1 tests and 14 independent live checks passed. Actual Google rendering was verified at desktop and 390px widths with no fresh browser errors or horizontal overflow. The browser tool refused pointer activation inside the fractional-position iframe, so real-account sign-in completion remains a user check. No user run data, Android APK, Google Console configuration or production resources were changed. See TASKS.md Section 9.1.2.
+
+## 13 Desktop route maps - September 17, 2026
+
+User confirmed real browser sign-in and the two-run history. Cloud-only commit 08f6fa7 passed Workers Builds on development. All 45 Worker/D1/geometry/lifecycle tests and 18 independent live smoke checks passed. Local browser fixtures verified separate GPS sections, zoom/Fit route, indoor/no-GPS/single-point behavior, corrupt archive rejection, failed tile handling, logout clearing and 390px layout. Leaflet 1.9.4 is self-hosted; OpenStreetMap Standard supplies only base-map tiles. Real route alignment is the user visual check. See MAP_CONTRACT.md for provider limits and privacy. No Android build/install, database migration, user-data mutation or production deployment occurred. Stats periods/sorting/display/charts remain explicitly deferred.
+
+## 11 Complete CSV export - September 17, 2026
+
+User accepted maps and chose one CSV containing summary and detailed records. Development-only commit 6cee9e0 passed Workers Builds; all 53 automated tests and 19 live smoke checks pass. Browser fixture export downloaded a 9,710-byte CSV containing four RUN, seven GPS_POINT, four SOURCE_SEGMENT and four SPLIT rows despite only two history rows being loaded. Independent CSV parsing confirmed records; automated reconstruction also covers measurements/active intervals, exact values and multiline Unicode. Cancel, sign-out and corrupt archive checks produced no further downloads. Browser download-event notification timed out, but the actual file appeared in Downloads and was parsed successfully. Controls were visually checked at 390px. Fixture server/tab/worktree were cleaned up.
+
+Next: desktop selection/deletion as a separate bounded slice. User check: refresh development, Export all runs, confirm both saved runs are in the CSV. No Android changes or new APK, production deployment, or real run deletion. Root documents/Android commits remain user-owned.
+
+
+## 12 Export throttling and persistent sessions - September 17, 2026
+
+Repair e5e45a5 is live on development; Workers Builds, 57 automated tests and 19 live smoke checks passed. Four real runs exposed shared 30/min authentication throttling that one-chunk fixtures missed. Transfers now use independent 300/client and 3000/global limits per minute, and CSV export honors Retry-After with up to three cancellable retries. Browser fixture confirmed automatic recovery and complete downloaded CSV. Forty-chunk Worker regression passed with an exhausted sign-in budget.
+
+Session duration is now 90 days, with valid browser sessions renewed on account access. Expired/revoked credentials remain invalid; already-expired users need one sign-in. Native apps receive longer sessions at their next sign-in without a new APK. Retest the user's four-run export before continuing deletion. Temporary server/tab/worktree cleaned up; no real-run changes or production deployment.
+
+
+## 13 Real CSV acceptance and desktop deletion - September 17, 2026
+
+Verified the user-provided export: four RUN records, 6720 GPS_POINT, 6722 MEASUREMENT, 11 SPLIT, four ACTIVE_INTERVAL and eight SOURCE_SEGMENT records. Record indexes/IDs, checkpoint summaries, split distance/time sums and nested intervals/segments match. No raw private route data was copied into the repository.
+
+Desktop deletion is live as 2dcd76a. All 58 tests pass, Workers Builds succeeded, 19 live smoke checks passed and the deployed HTML contains the deletion interface. Browser disposable fixtures verified selected-only scope, confirmation cancel/Escape, sequential partial failure/retry, totals, unselected runs, sign-out cleanup and narrow modal layout. No real user runs were deleted; no Android changes/install or production deployment. Test infrastructure was cleaned up. User can inspect confirmation then Cancel, or use a disposable run for actual deletion and subsequent phone-sync reconciliation. Next milestone is AI coaching planning after acceptance; charts/statistics expansion remain deferred.
+

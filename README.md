@@ -1,6 +1,6 @@
 # WAYiRUN
 
-An Android running tracker with a planned Cloudflare-backed desktop history application. The current debug build supports local GPS/step tracking, recovery, spoken metrics with ducking, optional active-session YouTube Music controls, and confirmed completed-run discard. Earlier cues are user-confirmed audible on speaker/headphones; the new music behavior and quantitative tracking accuracy still need phone verification. The release build remains a name-only shell.
+An Android running tracker with a Cloudflare-backed private desktop history application. The current debug build supports local GPS/step tracking, recovery, spoken metrics with ducking, optional active-session YouTube Music controls, and confirmed completed-run discard. Earlier cues are user-confirmed audible on speaker/headphones; the new music behavior and quantitative tracking accuracy still need phone verification. The release build remains a name-only shell.
 
 ## 1 Workspace layout
 
@@ -22,13 +22,7 @@ Keep the project documents at this root. Add future application directories only
 
 ## 2 Current verification
 
-Previous work was **0.1.0-dev-controls1**: original Android splash, startup-only missing-permission checks, no foreground setup overlay, and a top-right gear that opens/closes autosaving settings. Phone-tested Google sign-in stores sessions encrypted and leaves existing local runs unchanged; synchronization remains later work. `assembleDebug` names its actual package `WAYiRUN-<date/time>.apk`; no generic duplicate is copied. See TASKS.md for verified handoff results; earlier build records below are historical.
-
-Historical APK: **0.1.0-dev-playlist1** adds the saved playlist link, Open playlist, and Clear playlist on the pre-run screen. Unit tests (58), debug build, and lint pass with zero errors and eight version advisories. See TASKS.md Section 7.6 for this build's verification. Phone music checks are deferred by user decision; earlier build records below remain historical.
-
-Previous build **0.1.0-dev-permissions1** added first-open runtime permission prompts, actual grant status, persistent setup completion, and a direct music-access entry. It passed 55 JVM tests, 17 emulator tests, debug/release builds, and lint (zero errors, eight version advisories). See TASKS.md Section 7.5 for artifacts and limitations. The Moto G's restricted music-access setting remains unverified; this APK cannot remove Android's installation restriction. [Phone retest](MUSIC1_PHONE_RETEST.md) includes updated setup instructions.
-
-Milestone 3 implementation passed 34 JVM tests, six emulator tests, debug/release builds, and lint on 2026-09-12. Lint reports zero errors and eight dependency/tool version advisories. The [phone report](WAYiRUN_Phone_Test_Report_2026-09-14.md) records functional passes on a Moto G 2025 running Android 16. The [review and next-step plan](PHONE_TEST_REVIEW_2026-09-14.md) distinguishes those results from unverified accuracy, deferred tests, and reported silence in implemented state/goal audio. See TASKS.md Sections 6.5–6.7. These historical build results were not rerun for the documentation review.
+The sync1 phone checklist is user-confirmed passed, with two completed runs independently counted in development D1. Current work is sync2 authenticated restore and deletion reconciliation. See TASKS.md Section 8.0.6 for final automated results and the current handoff; earlier build reports are retained there as history. Google sign-in works on the user's phone. Music-specific device verification remains deferred.
 
 From `android/` on Windows:
 
@@ -40,11 +34,7 @@ The local SDK path belongs in ignored `android/local.properties`. Build outputs,
 
 ## 3 Next milestone
 
-Cloud setup guide Section 4 is now completed: the development Worker/D1 foundation is deployed and cloud-only commit `d57fb6e` is pushed to `development` and `codex/cloud-foundation`. See [worker/STATUS.md](worker/STATUS.md) for resources, six local tests, seven live checks, and remaining scope. Next is the Section 5 Git connection and authenticated account/run implementation; the existing Android work remains preserved locally.
-
-[Cloudflare/Git environment setup](CLOUDFLARE_GIT_SETUP.md) describes the local GitHub/Wrangler logins and planned development-only Git integration. The guide does not itself create cloud resources or push code.
-
-Music controls and the saved playlist/open action are **implemented, with phone verification deferred**, per the user's explicit decision. That verification is not a development blocker. Next is Milestone 5 accounts/cloud planning. UI polish, estimation, and photos remain later. The existing phone checklist is retained for when testing becomes practical.
+The first desktop-history slice adds private Google browser sign-in, run history, totals and validated details. See worker/DESKTOP_CONTRACT.md and GOOGLE_SIGN_IN_SETUP.md Section 7. Section 9.1 now includes desktop GPS route maps using Leaflet/OpenStreetMap. Section 9.2 adds one complete CSV export of all synced runs. Desktop run selection/deletion is also implemented using worker/EXPORT_DELETION_PLAN.md. Next is deletion acceptance, then AI coaching planning. Production release, AI, achievements, photos and Health Connect remain later work. Announcement-selector work and phone music checks remain deferred by user direction. The existing sync2 APK remains current.
 
 ## 4 Git handoff
 
@@ -52,8 +42,8 @@ The existing branch, origin, and commit history were preserved when the redundan
 
 The user will review, commit, and push the baseline. No commit or push was performed during consolidation.
 
-## 6 Current sync1 handoff - September 16, 2026
+## 5 Current sync2 handoff - September 16, 2026
 
-Current build is **0.1.0-dev-sync1**. Completed account-owned runs queue for resumable cloud upload. Existing runs remain local until the explicit import action in gear settings; discard removes local data immediately and queues protected cloud deletion. Tracking remains offline-capable. Startup splash, permissions and sparse main-screen controls are preserved. Settings hold sync status, retry and import. Download/restore is the next Milestone 5 slice.
+Current build: **0.1.0-dev-sync2**, adding authenticated download/restore and deletion reconciliation. Upload/import/discard phone checks already passed; two completed cloud runs are confirmed. Restore verifies exact manifest/chunk hashes, account ownership and archive contents before transactional local insertion. Existing local records are never overwritten. Main-screen controls, splash and permissions remain unchanged; sync status/retry/import stay behind the gear.
 
-58 JVM tests, 34 emulator tests, debug build and lint passed (zero errors, 11 version advisories); 29 backend tests passed. Phone sync is not yet verified. The sole handoff APK is `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-16_07-57-16_EDT.apk` relative to the repository root. See root PHONE_TEST_SYNC1.md and TASKS.md Section 8.0.5. Room schemas v1 and v2 must both remain in source control.
+Install `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-16_15-46-55_EDT.apk` (repository-relative) over the existing app. Do not uninstall. See root TASKS.md Section 8.0.6 for actual gates and PHONE_TEST_SYNC2.md for optional separate-device checks. Room schemas 1, 2 and 3 must remain in source control. Desktop history/maps now exist; production remains untouched.
