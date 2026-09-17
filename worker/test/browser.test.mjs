@@ -54,6 +54,24 @@ async function login(mf, subject, patch = {}) {
 }
 const bearer = value => ({ Authorization: `Bearer ${value}` });
 
+test("browser shell supplies a fresh style nonce for Google's widget and an origin referrer", async t => {
+  const { mf } = await runtime(t);
+  const nonces = [];
+  for (let i = 0; i < 2; i++) {
+    const response = await call(mf, "/");
+    const html = await response.text();
+    const nonce = html.match(/nonce="([0-9a-f]{64})" src="https:\/\/accounts.google.com\/gsi\/client"/)?.[1];
+    assert.ok(nonce);
+    assert.ok(!html.includes("__CSP_NONCE__"));
+    const csp = response.headers.get("Content-Security-Policy");
+    assert.ok(csp.includes(`'nonce-${nonce}'`));
+    assert.ok(!csp.includes("unsafe-inline"));
+    assert.equal(response.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin");
+    nonces.push(nonce);
+  }
+  assert.notEqual(nonces[0], nonces[1]);
+});
+
 
 const origin = "https://wayirun-dev.unopenedparachute.workers.dev";
 const browserHeaders = {Origin: origin, "X-WAYIRUN-Request":"1", "Sec-Fetch-Site":"same-origin"};
