@@ -2,3 +2,5 @@
 
 /* Keep the identity control compact, including when third-party sizing is unavailable. */
 #google-button{width:260px;max-width:100%;min-height:40px}#google-button svg{width:20px;height:20px}
+
+#route-panel{margin:0 0 32px}#route-map{height:420px;border:1px solid var(--line);border-radius:12px;background:#e7ece5;isolation:isolate}#route-status,.map-legend{font-size:14px;color:var(--muted);line-height:1.5}.map-legend{display:flex;gap:8px;align-items:center}.route-start{color:#6b922a}.route-end{color:#205e50}.leaflet-container{font-family:inherit}.leaflet-control-attribution{font-size:12px!important}.leaflet-control-zoom a{text-decoration:none}@media(max-width:650px){#route-map{height:320px}}

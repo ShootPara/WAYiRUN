@@ -1,4 +1,4 @@
-import { handleBrowser } from "./browser.js";
+import { handleBrowser, browserAssetPaths } from "./browser.js";
 import { handleRuns } from "./runs.js";
 import { handleAuth, type AuthEnv } from "./auth.js";
 
@@ -26,7 +26,7 @@ export default {
     const head = request.method === "HEAD";
     if (env.APP_ENV !== "development") return json({ error: "environment_not_configured" }, 503, head);
 
-    if (["/", "/app.js", "/style.css"].includes(path) || path.startsWith("/web-api/")) return handleBrowser(request, env);
+    if (browserAssetPaths.includes(path) || path.startsWith("/web-api/")) return handleBrowser(request, env);
     if (["/api/auth/challenge", "/api/auth/google", "/api/auth/logout", "/api/account"].includes(path)) {
       return handleAuth(request, env);
     }

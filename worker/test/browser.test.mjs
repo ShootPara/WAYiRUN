@@ -54,6 +54,20 @@ async function login(mf, subject, patch = {}) {
 }
 const bearer = value => ({ Authorization: `Bearer ${value}` });
 
+test("map assets are served locally with correct types and only the tile image host allowed", async t => {
+  const {mf}=await runtime(t);
+  for(const path of ["/route.js","/map.js","/leaflet.js","/leaflet.css"]){
+    const response=await call(mf,path);assert.equal(response.status,200);
+    assert.match(response.headers.get("Content-Type"),path.endsWith(".css")?/text\/css/:/text\/javascript/);
+    const csp=response.headers.get("Content-Security-Policy");
+    assert.match(csp,/img-src[^;]*https:\/\/tile.openstreetmap.org/);
+    assert.ok(!csp.includes("unsafe-inline"));
+    assert.ok((await response.text()).length>100);
+    assert.equal((await call(mf,path,"POST")).status,405);
+    assert.equal(await (await call(mf,path,"HEAD")).text(),"");
+  }
+});
+
 test("browser shell supplies a fresh style nonce for Google's widget and an origin referrer", async t => {
   const { mf } = await runtime(t);
   const nonces = [];

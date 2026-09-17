@@ -1,4 +1,8 @@
+import { prepareRoute } from "/route.js";
+import { showRouteMap } from "/map.js";
 const $ = id => document.getElementById(id);
+let destroyMap = null, mapGeneration = 0;
+function clearMap() { mapGeneration++; destroyMap?.(); destroyMap = null; $("route-map").replaceChildren(); $("route-panel").hidden = true; $("fit-route").disabled = true; $("route-status").textContent = ""; }
 let account = null, runs = new Map(), next = null, selected = null, generation = 0;
 let staged = { key: null, chunks: new Map() };
 let controller = new AbortController();
@@ -6,7 +10,7 @@ const unit = () => $("units").value === "MILES" ? { meters: 1609.344, label: "mi
 const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 function check(value) { if (!value) throw new Error("This run could not be verified. Its saved data is unchanged."); }
 function message(text = "") { $("message").textContent = text; }
-function reset() { generation++; controller.abort(); controller = new AbortController(); runs.clear(); next = null; selected = null; staged = {key:null,chunks:new Map()}; $("runs").replaceChildren(); $("splits").replaceChildren(); $("settings").replaceChildren(); $("totals").replaceChildren(); $("detail-totals").replaceChildren(); $("detail").hidden = true; }
+function reset() { clearMap(); generation++; controller.abort(); controller = new AbortController(); runs.clear(); next = null; selected = null; staged = {key:null,chunks:new Map()}; $("runs").replaceChildren(); $("splits").replaceChildren(); $("settings").replaceChildren(); $("totals").replaceChildren(); $("detail-totals").replaceChildren(); $("detail").hidden = true; }
 async function api(path, method = "GET", body) {
   const response = await fetch(`/web-api/${path}`, {method, credentials:"same-origin", cache:"no-store", signal:controller.signal,
     headers: {"X-WAYIRUN-Request":"1", ...(body ? {"Content-Type":"application/json"} : {})}, ...(body ? {body:JSON.stringify(body)} : {})});
@@ -93,11 +97,12 @@ async function archive(run,current){
   check(Number.isInteger(s.settings.countdownSeconds)&&s.settings.countdownSeconds>=0&&s.settings.countdownSeconds<=10);
   check(s.settings.strideLengthMeters===null||(Number.isFinite(s.settings.strideLengthMeters)&&s.settings.strideLengthMeters>0));
   const final=await json(`runs/${run.runId}`);check(final.manifestHash===run.manifestHash&&current===generation);
-  return {value,s};
+  const geometry = prepareRoute(s.settings.mode, s.segments, value.route);
+  return {value,s,geometry};
 }
 async function openRun(run){
   const current=++generation;message("Opening run…");
-  try{const data=await archive(run,current);if(current!==generation)return;selected=data;renderDetail();$("history").hidden=true;$("detail").hidden=false;$("detail").focus();message();}
+  try{const data=await archive(run,current);if(current!==generation)return;selected=data;renderDetail();$("history").hidden=true;$("detail").hidden=false;$("detail").focus();message();renderMap();}
   catch(error){if(current===generation&&error.name!=="AbortError")message(error.message);}
 }
 function renderDetail(){
@@ -106,7 +111,22 @@ function renderDetail(){
   for(const split of value.splits){const row=document.createElement("tr");row.append(cell(split.partial?"Partial":String(split.number)),cell(distance(split.meters)),cell(duration(split.durationMs)),cell(pace(split.durationMs,split.meters)));$("splits").append(row);}
   const settings=s.settings,goal=settings.goal;const goalText=goal?.meters?distance(goal.meters):goal?.durationMs?duration(goal.durationMs):"None";
   $("settings").replaceChildren();for(const [label,text]of [["Goal",goalText],["Countdown",`${settings.countdownSeconds} seconds`],["Stride",settings.strideLengthMeters?`${(settings.strideLengthMeters*100).toFixed(1)} cm`:"Not set"],["Finished",date(s.endedUtcMs,value.run.zoneId)]])$("settings").append(cell(label,"dt"),cell(text,"dd"));
-  $("route-note").textContent=s.settings.mode==="INDOOR"?"Indoor run · no GPS route.":value.route.length?"GPS route saved. Map display is coming in the next desktop update.":"No GPS route was recorded for this run.";
+  $("route-note").textContent=selected.geometry.note;$("route-note").hidden=selected.geometry.parts.length>0;$("route-end-legend").hidden=selected.geometry.pointCount<2;
+}
+async function renderMap() {
+  clearMap();
+  const geometry = selected.geometry;
+  if (!geometry.parts.length) return;
+  const current = mapGeneration;
+  $("route-panel").hidden = false;
+  $("route-status").textContent = "Loading map…";
+  try {
+    const cleanup = await showRouteMap($("route-map"), $("route-status"), $("fit-route"), geometry, () => current === mapGeneration);
+    if (current !== mapGeneration) { cleanup?.(); return; }
+    destroyMap = cleanup; $("fit-route").disabled = false;
+  } catch {
+    if (current === mapGeneration) $("route-status").textContent = "The map could not load. Your run details are still available. Reopen the run to try again.";
+  }
 }
 async function signedIn(){const data=await json("account");reset();account=data.account;$("name").textContent=account.displayName||"Your account";$("avatar").hidden=true;
   if(account.pictureUrl){try{const url=new URL(account.pictureUrl);if(url.protocol==="https:"&&url.hostname.endsWith(".googleusercontent.com")){$("avatar").src=url.href;$("avatar").hidden=false;}}catch{}}
@@ -126,6 +146,6 @@ async function setupSignIn(){
 $("signin-retry").addEventListener("click",setupSignIn);
 $("logout").addEventListener("click",async()=>{reset();$("history").hidden=true;message("Signing out…");try{await json("logout","POST");account=null;$("profile").hidden=true;$("name").textContent="";$("avatar").removeAttribute("src");$("welcome").hidden=false;window.google?.accounts?.id.disableAutoSelect();message();await setupSignIn();}catch(error){message(error.message);}});
 $("refresh").addEventListener("click",()=>loadHistory());$("more").addEventListener("click",()=>loadHistory(true));
-$("back").addEventListener("click",()=>{generation++;selected=null;$("detail").hidden=true;$("history").hidden=false;message();});
+$("back").addEventListener("click",()=>{clearMap();generation++;selected=null;$("detail").hidden=true;$("history").hidden=false;message();});
 $("units").addEventListener("change",()=>{renderHistory();if(selected)renderDetail();});
 try{await signedIn();}catch{account=null;$("history").hidden=true;await setupSignIn();}

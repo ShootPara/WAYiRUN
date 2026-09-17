@@ -3,6 +3,17 @@ import { handleRuns } from "./runs.js";
 import page from "../web/index.html";
 import script from "../web/app.browserjs";
 import style from "../web/style.css";
+import routeScript from "../web/route.browserjs";
+import mapScript from "../web/map.browserjs";
+import leaflet from "../web/vendor/leaflet.browserjs";
+import leafletStyle from "../web/vendor/leaflet.css";
+
+const assets: Record<string, [string, string]> = {
+  "/app.js": [script, "text/javascript"], "/style.css": [style, "text/css"],
+  "/route.js": [routeScript, "text/javascript"], "/map.js": [mapScript, "text/javascript"],
+  "/leaflet.js": [leaflet, "text/javascript"], "/leaflet.css": [leafletStyle, "text/css"],
+};
+export const browserAssetPaths = ["/", ...Object.keys(assets)];
 
 export const WEB_ORIGIN = "https://wayirun-dev.unopenedparachute.workers.dev";
 const sessionName = "__Host-wayirun";
@@ -23,7 +34,7 @@ function protect(response: Response, nonce: string): Response {
   out.headers.set("X-Content-Type-Options", "nosniff");
   out.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   out.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com https://tile.openstreetmap.org data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
   return out;
 }
 export async function handleBrowser(request: Request, env: AuthEnv): Promise<Response> {
@@ -34,10 +45,10 @@ export async function handleBrowser(request: Request, env: AuthEnv): Promise<Res
 }
 async function route(request: Request, env: AuthEnv, nonce: string): Promise<Response> {
   const url = new URL(request.url), path = url.pathname;
-  if (["/", "/app.js", "/style.css"].includes(path)) {
+  if (browserAssetPaths.includes(path)) {
     if (request.method !== "GET" && request.method !== "HEAD") return reply({ error: "method_not_allowed" }, 405);
-    const body = path === "/" ? page.replaceAll("__CSP_NONCE__", nonce) : path === "/app.js" ? script : style;
-    return new Response(request.method === "HEAD" ? null : body, { headers: { "Content-Type": path === "/" ? "text/html; charset=utf-8" : path === "/app.js" ? "text/javascript; charset=utf-8" : "text/css; charset=utf-8" } });
+    const [body, type] = path === "/" ? [page.replaceAll("__CSP_NONCE__", nonce), "text/html"] : assets[path]!;
+    return new Response(request.method === "HEAD" ? null : body, { headers: { "Content-Type": `${type}; charset=utf-8` } });
   }
   // Fixed deployment origin, no wildcard CORS, no bearer or caller-selected owner at this boundary.
   if (url.origin !== WEB_ORIGIN || request.headers.has("Authorization") ||

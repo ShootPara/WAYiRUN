@@ -24,7 +24,7 @@ for (const [path, method, status, expected] of [
   else assert.equal(await response.text(), "");
   passed.push(`PASS ${method} ${path} (${status})`);
 }
-for (const [path, type, marker] of [["/", "text/html", "WAYiRUN"], ["/app.js", "text/javascript", "setupSignIn"], ["/style.css", "text/css", ".totals"]]) {
+for (const [path, type, marker] of [["/", "text/html", "WAYiRUN"], ["/app.js", "text/javascript", "setupSignIn"], ["/style.css", "text/css", ".totals"], ["/route.js", "text/javascript", "prepareRoute"], ["/map.js", "text/javascript", "showRouteMap"], ["/leaflet.js", "text/javascript", "1.9.4"], ["/leaflet.css", "text/css", ".leaflet-container"]]) {
   const response = await fetch(origin + path, { signal: AbortSignal.timeout(15000), redirect: "error" });
   assert.equal(response.status, 200); assert.ok(response.headers.get("Content-Type")?.startsWith(type));
   assert.equal(response.headers.get("Cache-Control"), "no-store");
