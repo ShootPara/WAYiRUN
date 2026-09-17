@@ -3,7 +3,7 @@ import http from "node:http";
 import { readFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 const root=new URL("../web/",import.meta.url), sha=b=>createHash("sha256").update(b).digest("hex");
-const records=new Map();let throttlePending=true;
+const records=new Map();let throttlePending=true,deleteFailure=true;
 function fixture(number,kind) {
  const id=`00000000-0000-4000-8000-${String(number).padStart(12,"0")}`,op=`10000000-0000-4000-8000-${String(number).padStart(12,"0")}`;
  const segments=kind==="indoor"||kind==="empty"?[]:[{id:1,source:"GPS",startedMonotonicMs:0,startedActiveMs:0,endedMonotonicMs:10000,distanceMeters:50},{id:2,source:"GPS",startedMonotonicMs:20000,startedActiveMs:10000,endedMonotonicMs:30000,distanceMeters:75}];
@@ -51,6 +51,10 @@ http.createServer((req,res)=>{
    return json({runs:rows.slice(start,end),next:end<rows.length?String(end):null});
  }
  const record=records.get(path.split("/")[3]);
+ if(req.method==="DELETE"&&record){
+   if(record.kind==="indoor"&&deleteFailure){deleteFailure=false;return json({error:"fixture_failure"},503);}
+   records.delete(record.receipt.runId);return json({runId:record.receipt.runId,deleted:true});
+ }
  if(record&&path.endsWith("/chunks/0")){if(req.headers.cookie?.includes("fixture-case=throttle")&&throttlePending){throttlePending=false;res.setHeader("Retry-After","2");return json({error:"too_many_requests"},429);}res.setHeader("Content-Type","application/octet-stream");const send=()=>res.end(record.kind==="corrupt"?Buffer.from("corrupt"):record.bytes);if(req.headers.cookie?.includes("fixture-case=slow"))return setTimeout(send,3000);return send();}
  if(record)return json({...record.receipt,manifest:record.manifest,manifestJson:record.manifestJson});
  return json({error:"not_found"},404);

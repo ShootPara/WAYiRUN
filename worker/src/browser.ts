@@ -61,9 +61,16 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
   const auth = authPaths[path];
   const runs = /^\/web-api\/runs(?:\/[0-9a-f-]+(?:\/chunks\/(0|[1-9][0-9]*))?)?$/.test(path);
   if (!auth && !runs && path !== "/web-api/config") return reply({ error: "not_found" }, 404);
-  const mutating = ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
-  if (request.method !== (mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
+  const deleting = request.method === "DELETE" && /^\/web-api\/runs\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
+  const mutating = deleting || ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
+  if (request.method !== (deleting ? "DELETE" : mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
   if (mutating && (request.headers.get("Origin") !== WEB_ORIGIN || request.headers.get("X-WAYIRUN-Request") !== "1")) return reply({ error: "csrf_rejected" }, 403);
+  if (deleting && request.body) {
+    const reader = request.body.getReader();
+    try {
+      while (true) { const {done,value}=await reader.read(); if(done)break; if(value.length){await reader.cancel();return reply({error:"invalid_request"},400);} }
+    } finally { reader.releaseLock(); }
+  }
   if (path === "/web-api/config") return reply({ clientId: env.GOOGLE_WEB_CLIENT_ID ?? null });
   const headers = new Headers();
   const ip = request.headers.get("CF-Connecting-IP"); if (ip) headers.set("CF-Connecting-IP", ip);

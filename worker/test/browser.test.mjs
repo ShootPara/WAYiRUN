@@ -33,6 +33,9 @@ async function runtime(t, configured = true, rateLimit = 1000) {
     const sql = readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     await db.batch(sql.replace(/^--.*$/gm, "").split(";").map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
   }
+  const deletion=readFileSync(new URL("../migrations/0004_run_deletions.sql",import.meta.url),"utf8");
+  const split=deletion.indexOf("CREATE TRIGGER");
+  await db.prepare(deletion.slice(0,split)).run();await db.prepare(deletion.slice(split)).run();
   return { mf, db };
 }
 function call(mf, path, method = "GET", body, headers = {}) {
@@ -112,7 +115,7 @@ test("browser login hides tokens, protects cookies, isolates accounts, and revok
  assert.equal((await (await call(mf,"/web-api/runs","GET",undefined,alice)).json()).runs.length,1);
  assert.equal((await (await call(mf,"/web-api/runs","GET",undefined,bob)).json()).runs.length,0);
  assert.equal((await call(mf,`/web-api/runs/${runId}`,"GET",undefined,bob)).status,404);
- assert.equal((await call(mf,`/web-api/runs/${runId}`,"DELETE",undefined,{...alice,...browserHeaders})).status,405);
+ assert.equal((await call(mf,`/web-api/runs/${runId}`,"DELETE",undefined,alice)).status,403);
  assert.equal((await call(mf,"/api/account","GET",undefined,alice)).status,401);
  const logout=await call(mf,"/web-api/logout","POST",undefined,{...alice,...browserHeaders});assert.equal(logout.status,200);assert.match(logout.headers.get("Set-Cookie"),/Max-Age=0/);
  assert.equal((await call(mf,"/web-api/account","GET",undefined,alice)).status,401);
@@ -162,4 +165,28 @@ test("browser challenge replay, expired session and static response policies fai
  const headers={...browserHeaders,Cookie:start.headers.get("Set-Cookie").split(";")[0]};const body={nonce,idToken:await token(nonce)};
  assert.equal((await call(mf,"/web-api/google","POST",body,headers)).status,200);assert.equal((await call(mf,"/web-api/google","POST",body,headers)).status,401);
  for(const path of ["/","/app.js","/style.css"]){const response=await call(mf,path);assert.equal(response.status,200);assert.equal(response.headers.get("Cache-Control"),"no-store");assert.match(response.headers.get("Content-Security-Policy"),/frame-ancestors 'none'/);assert.equal(response.headers.get("Cross-Origin-Opener-Policy"),"same-origin-allow-popups");assert.ok((await response.text()).length>100);}
+});
+
+test("browser deletion requires exact route, empty body and CSRF; removes only owner data and retries safely",async t=>{
+ const {mf,db}=await runtime(t);const alice=await webLogin(mf,"alice"),bob=await webLogin(mf,"bob");
+ const owner=(await (await call(mf,"/web-api/account","GET",undefined,alice)).json()).account.id;
+ const id=crypto.randomUUID(),op=crypto.randomUUID(),path=`/web-api/runs/${id}`;
+ const summary={state:"FINISHED",startedUtcMs:1,endedUtcMs:2,activeDurationMs:1,distanceMeters:1,mode:"OUTDOOR",units:"MILES"};
+ const manifest={schemaVersion:1,runId:id,operationId:op,summary,chunks:[{sha256:"a".repeat(64),bytes:1}]};
+ await db.prepare("INSERT INTO run_uploads VALUES (?, ?, ?, ?, ?, 1, 1, 100, 2)").bind(owner,id,op,JSON.stringify(manifest),"b".repeat(64)).run();
+ await db.prepare("INSERT INTO run_chunks VALUES (?, ?, 0, ?, ?)").bind(owner,id,"a".repeat(64),new Uint8Array([42])).run();
+ for(const headers of [alice,{...alice,Origin:origin},{...alice,...browserHeaders,Origin:"https://evil.example"}])assert.equal((await call(mf,path,"DELETE",undefined,headers)).status,403);
+ const authorized={...alice,...browserHeaders};
+ assert.equal((await call(mf,path,"DELETE",{},authorized)).status,400);
+ for(const invalid of ["/web-api/runs",path+"/chunks/0","/web-api/runs/abc"])assert.equal((await call(mf,invalid,"DELETE",undefined,authorized)).status,405);
+ assert.equal((await call(mf,path+"?owner=other","DELETE",undefined,authorized)).status,400);
+ assert.equal((await call(mf,path,"POST",undefined,authorized)).status,405);
+ assert.equal((await call(mf,path,"DELETE",undefined,{...bob,...browserHeaders})).status,200);
+ assert.equal((await call(mf,path,"GET",undefined,alice)).status,200);
+ assert.equal((await call(mf,path+"/chunks/0","GET",undefined,alice)).status,200);
+ for(let i=0;i<2;i++){const response=await call(mf,path,"DELETE",undefined,authorized);assert.equal(response.status,200);assert.deepEqual(await response.json(),{runId:id,deleted:true});}
+ assert.equal((await call(mf,path,"GET",undefined,alice)).status,404);
+ assert.equal((await call(mf,path+"/chunks/0","GET",undefined,alice)).status,404);
+ assert.equal((await db.prepare("SELECT count(*) AS n FROM run_chunks WHERE owner_id=? AND run_id=?").bind(owner,id).first()).n,0);
+ assert.equal((await db.prepare("SELECT count(*) AS n FROM run_deletions WHERE owner_id=? AND run_id=?").bind(owner,id).first()).n,1);
 });
