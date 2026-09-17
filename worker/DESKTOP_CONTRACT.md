@@ -27,3 +27,7 @@ Backend tests use bundled workerd/D1 and real test-generated signatures. Browser
 ## 5 References
 
 [Google Web client setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid) and [Google button API](https://developers.google.com/identity/gsi/web/reference/js-reference).
+
+## 8 Complete CSV export
+
+Export all runs reads every history page and verifies each complete owner-scoped archive before downloading one UTF-8 CSV. Six record types and record_json preserve summaries and every retained detail. Cancel and sign-out prevent late downloads; any failed archive aborts the whole export. No new mutation endpoint or persistent browser cache is added. See EXPORT_DELETION_PLAN.md for format, size limits and separate deletion scope.

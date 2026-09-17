@@ -1,16 +1,54 @@
 import { prepareRoute } from "/route.js";
 import { showRouteMap } from "/map.js";
+import { collectExportRuns, createCsvExport } from "/export.js";
 const $ = id => document.getElementById(id);
 let destroyMap = null, mapGeneration = 0;
 function clearMap() { mapGeneration++; destroyMap?.(); destroyMap = null; $("route-map").replaceChildren(); $("route-panel").hidden = true; $("fit-route").disabled = true; $("route-status").textContent = ""; }
 let account = null, runs = new Map(), next = null, selected = null, generation = 0;
 let staged = { key: null, chunks: new Map() };
 let controller = new AbortController();
+let exporting = false;
+function exportControls(busy) {
+  exporting = busy;
+  for (const id of ["refresh","more","units","export"]) $(id).disabled=busy;
+  for (const button of $("runs").querySelectorAll("button")) button.disabled=busy;
+  $("cancel-export").hidden=!busy;
+}
+async function exportRuns() {
+  if(exporting)return;
+  const current=++generation, isCurrent=()=>current===generation;
+  exportControls(true);message("Gathering all synced runs…");
+  let writer;
+  try {
+    const all=await collectExportRuns(after=>json("runs"+(after?`?after=${encodeURIComponent(after)}`:"")),isCurrent);
+    writer=createCsvExport();
+    for(const [index,run] of all.entries()) {
+      summaryValid(run.summary);message(`Exporting run ${index+1} of ${all.length}…`);
+      await writer.add(await archive(run,current),isCurrent);
+      staged={key:null,chunks:new Map()};
+    }
+    if(!isCurrent())return;
+    const url=URL.createObjectURL(writer.finish()), link=document.createElement("a");
+    link.href=url;link.download=`WAYiRUN-all-runs-${new Date().toISOString().replace(/[:.]/g,"-")}.csv`;
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+    message(`CSV ready: ${all.length} synced run${all.length===1?"":"s"}, including all retained details.`);
+  } catch(error) {
+    if(isCurrent()&&error.name!=="AbortError")message(`${error.message} No export was downloaded.`);
+  } finally {
+    writer?.discard();
+    if(isCurrent()){staged={key:null,chunks:new Map()};exportControls(false);}
+  }
+}
+$("export").addEventListener("click",exportRuns);
+$("cancel-export").addEventListener("click",()=>{
+  generation++;controller.abort();controller=new AbortController();staged={key:null,chunks:new Map()};
+  exportControls(false);message("Export cancelled. No file was downloaded.");
+});
 const unit = () => $("units").value === "MILES" ? { meters: 1609.344, label: "mi" } : { meters: 1000, label: "km" };
 const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 function check(value) { if (!value) throw new Error("This run could not be verified. Its saved data is unchanged."); }
 function message(text = "") { $("message").textContent = text; }
-function reset() { clearMap(); generation++; controller.abort(); controller = new AbortController(); runs.clear(); next = null; selected = null; staged = {key:null,chunks:new Map()}; $("runs").replaceChildren(); $("splits").replaceChildren(); $("settings").replaceChildren(); $("totals").replaceChildren(); $("detail-totals").replaceChildren(); $("detail").hidden = true; }
+function reset() { exportControls(false); clearMap(); generation++; controller.abort(); controller = new AbortController(); runs.clear(); next = null; selected = null; staged = {key:null,chunks:new Map()}; $("runs").replaceChildren(); $("splits").replaceChildren(); $("settings").replaceChildren(); $("totals").replaceChildren(); $("detail-totals").replaceChildren(); $("detail").hidden = true; }
 async function api(path, method = "GET", body) {
   const response = await fetch(`/web-api/${path}`, {method, credentials:"same-origin", cache:"no-store", signal:controller.signal,
     headers: {"X-WAYIRUN-Request":"1", ...(body ? {"Content-Type":"application/json"} : {})}, ...(body ? {body:JSON.stringify(body)} : {})});
@@ -50,7 +88,7 @@ function renderHistory() {
   $("scope").textContent=`${runs.size} ${next?"loaded ":""}run${runs.size===1?"":"s"}${next?" · totals for loaded runs":""}`;
 }
 async function loadHistory(append=false) {
-  const current=++generation;$("refresh").disabled=true;$("more").disabled=true;message("Loading your runs…");
+  const current=++generation;$("export").disabled=true;$("refresh").disabled=true;$("more").disabled=true;message("Loading your runs…");
   try {
     const result=await json("runs"+(append&&next?`?after=${encodeURIComponent(next)}`:""));
     if(current!==generation)return;
@@ -59,7 +97,7 @@ async function loadHistory(append=false) {
     for(const run of result.runs){check(uuid.test(run.runId));summaryValid(run.summary);runs.set(run.runId,run);}
     check(result.next===null||typeof result.next==="string");next=result.next;renderHistory();message();
   }catch(error){if(current===generation&&error.name!=="AbortError")message(error.message);}
-  finally{if(current===generation){$("refresh").disabled=false;$("more").disabled=false;}}
+  finally{if(current===generation){$("export").disabled=false;$("refresh").disabled=false;$("more").disabled=false;}}
 }
 async function hash(bytes){return [...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(b=>b.toString(16).padStart(2,"0")).join("");}
 async function archive(run,current){

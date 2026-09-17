@@ -19,7 +19,7 @@ function fixture(number,kind) {
  records.set(id,{receipt,manifest,manifestJson,bytes,kind});
 }
 ["outdoor","indoor","empty","single","corrupt"].forEach((kind,i)=>fixture(i+1,kind));
-const files={"/":"index.html","/app.js":"app.browserjs","/route.js":"route.browserjs","/map.js":"map.browserjs","/style.css":"style.css","/leaflet.js":"vendor/leaflet.browserjs","/leaflet.css":"vendor/leaflet.css"};
+const files={"/":"index.html","/app.js":"app.browserjs","/route.js":"route.browserjs","/map.js":"map.browserjs","/export.js":"export.browserjs","/style.css":"style.css","/leaflet.js":"vendor/leaflet.browserjs","/leaflet.css":"vendor/leaflet.css"};
 http.createServer((req,res)=>{
  const url=new URL(req.url,"http://127.0.0.1:8788"),path=url.pathname;
  const nonce=randomBytes(32).toString("hex");
@@ -28,7 +28,7 @@ http.createServer((req,res)=>{
  const json=(value,status=200)=>{res.statusCode=status;res.setHeader("Content-Type","application/json");res.end(JSON.stringify(value));};
  if(files[path]){
    let body=readFileSync(new URL(files[path],root),"utf8").replaceAll("__CSP_NONCE__",nonce);
-   if(path==="/"){body=body.replace('src="https://accounts.google.com/gsi/client"','src="/fixture-google.js"');res.setHeader("Set-Cookie",`fixture-case=${url.searchParams.get("case")==="tile-failure"?"tile-failure":"normal"}; Path=/`);}
+   if(path==="/"){body=body.replace('src="https://accounts.google.com/gsi/client"','src="/fixture-google.js"');res.setHeader("Set-Cookie",`fixture-case=${["tile-failure","export","empty","slow"].includes(url.searchParams.get("case"))?url.searchParams.get("case"):"normal"}; Path=/`);}
    if(path==="/map.js")body=body.replace("https://tile.openstreetmap.org/{z}/{x}/{y}.png","/tiles/{z}/{x}/{y}.svg");
    res.setHeader("Content-Type",path==="/"?"text/html":path.endsWith(".css")?"text/css":"text/javascript");return res.end(body);
  }
@@ -43,9 +43,15 @@ http.createServer((req,res)=>{
  if(path==="/web-api/logout"){res.setHeader("Set-Cookie","fixture-signed=no; Path=/");return json({signedOut:true});}
  if(req.headers.cookie?.includes("fixture-signed=no"))return json({error:"unauthorized"},401);
  if(path==="/web-api/account")return json({account:{id:"fixture",displayName:"Local map verification"}});
- if(path==="/web-api/runs")return json({runs:[...records.values()].map(r=>r.receipt),next:null});
+ if(path==="/web-api/runs"){
+   if(req.headers.cookie?.includes("fixture-case=empty"))return json({runs:[],next:null});
+   const exporting=/fixture-case=(export|slow)/.test(req.headers.cookie||"");
+   const rows=[...records.values()].filter(r=>!exporting||r.kind!=="corrupt").map(r=>r.receipt);
+   const start=Number(url.searchParams.get("after")||0),end=exporting?start+2:rows.length;
+   return json({runs:rows.slice(start,end),next:end<rows.length?String(end):null});
+ }
  const record=records.get(path.split("/")[3]);
- if(record&&path.endsWith("/chunks/0")){res.setHeader("Content-Type","application/octet-stream");return res.end(record.kind==="corrupt"?Buffer.from("corrupt"):record.bytes);}
+ if(record&&path.endsWith("/chunks/0")){res.setHeader("Content-Type","application/octet-stream");const send=()=>res.end(record.kind==="corrupt"?Buffer.from("corrupt"):record.bytes);if(req.headers.cookie?.includes("fixture-case=slow"))return setTimeout(send,3000);return send();}
  if(record)return json({...record.receipt,manifest:record.manifest,manifestJson:record.manifestJson});
  return json({error:"not_found"},404);
 }).listen(8788,"127.0.0.1",()=>console.log("Local-only map fixture: http://127.0.0.1:8788 (five synthetic runs; ?case=tile-failure for failed tiles)"));

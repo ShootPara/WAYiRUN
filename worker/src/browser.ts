@@ -5,10 +5,12 @@ import script from "../web/app.browserjs";
 import style from "../web/style.css";
 import routeScript from "../web/route.browserjs";
 import mapScript from "../web/map.browserjs";
+import exportScript from "../web/export.browserjs";
 import leaflet from "../web/vendor/leaflet.browserjs";
 import leafletStyle from "../web/vendor/leaflet.css";
 
 const assets: Record<string, [string, string]> = {
+  "/export.js": [exportScript, "text/javascript"],
   "/app.js": [script, "text/javascript"], "/style.css": [style, "text/css"],
   "/route.js": [routeScript, "text/javascript"], "/map.js": [mapScript, "text/javascript"],
   "/leaflet.js": [leaflet, "text/javascript"], "/leaflet.css": [leafletStyle, "text/css"],

@@ -56,7 +56,7 @@ const bearer = value => ({ Authorization: `Bearer ${value}` });
 
 test("map assets are served locally with correct types and only the tile image host allowed", async t => {
   const {mf}=await runtime(t);
-  for(const path of ["/route.js","/map.js","/leaflet.js","/leaflet.css"]){
+  for(const path of ["/export.js","/route.js","/map.js","/leaflet.js","/leaflet.css"]){
     const response=await call(mf,path);assert.equal(response.status,200);
     assert.match(response.headers.get("Content-Type"),path.endsWith(".css")?/text\/css/:/text\/javascript/);
     const csp=response.headers.get("Content-Security-Policy");
