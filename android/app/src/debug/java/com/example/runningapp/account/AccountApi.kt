@@ -30,7 +30,7 @@ class AccountApi {
     suspend fun logout(token: String) { request("/api/auth/logout", "POST", token = token) }
     private fun JSONObject.optionalString(name: String) = if (isNull(name)) null else getString(name)
 
-    private suspend fun request(path: String, method: String, body: JSONObject? = null, token: String? = null): JSONObject =
+    internal suspend fun request(path: String, method: String, body: JSONObject? = null, token: String? = null): JSONObject =
         withContext(Dispatchers.IO) {
             val connection = URL(origin + path).openConnection() as HttpsURLConnection
             try {
@@ -46,7 +46,11 @@ class AccountApi {
                     connection.outputStream.use { stream -> stream.write(it.toString().toByteArray(Charsets.UTF_8)) }
                 }
                 val status = connection.responseCode
-                if (status !in 200..299) throw AccountRequestException(status)
+                if (status !in 200..299) {
+                    val code = runCatching { connection.errorStream?.use { JSONObject(it.readBytesBounded().toString(Charsets.UTF_8)).optString("error") } }
+                        .getOrNull()?.takeIf { it.matches(Regex("[a-z_]{1,64}")) }
+                    throw AccountRequestException(status, code)
+                }
                 val bytes = connection.inputStream.use { it.readBytesBounded() }
                 JSONObject(bytes.toString(Charsets.UTF_8))
             } finally { connection.disconnect() }
@@ -63,4 +67,4 @@ class AccountApi {
     }
 }
 
-class AccountRequestException(val status: Int) : Exception("Account request failed ($status)")
+class AccountRequestException(val status: Int, val code: String? = null) : Exception("Account request failed ($status)")

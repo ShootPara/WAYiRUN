@@ -172,6 +172,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
                     val accountEnabled = !view.busy && view.snapshot?.state !in listOf(RunState.COUNTDOWN, RunState.RUNNING, RunState.PAUSED)
                     AccountPanel(accountView, accountEnabled, onSignIn, onSignOut)
                     SyncPanel(accountView, accountEnabled, onImport, onRetrySync)
+                    CoachingKeyPanel(accountView, accountEnabled)
 
                     Setup(view.busy, preferences, dark, { dark = it; preferences.edit { putBoolean("dark", it) } },
 
@@ -215,7 +216,9 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 
                         RunState.RUNNING, RunState.PAUSED -> ActiveRun(view, online) { action -> command(action, s.settings) }
 
-                        RunState.FINISHED -> Summary(s, view.busy, view.error, { command(TrackingService.DISCARD, null) }) { command(TrackingService.NEW, null) }
+                        RunState.FINISHED -> if (view.coaching.visible) {
+                            CoachingAnimation(view.coaching.label) { command(TrackingService.DISMISS_COACHING, null) }
+                        } else Summary(s, view.busy, view.error, { command(TrackingService.DISCARD, null) }) { command(TrackingService.NEW, null) }
 
                     }
 
@@ -489,7 +492,15 @@ private fun ActiveRun(view: TrackingView, online: Boolean, command: (String) -> 
 
     }
 
-    if (paused) FinishSwipe(!view.busy) { command(TrackingService.FINISH) }
+    var coachingSelected by rememberSaveable(s.runId) { mutableStateOf(true) }
+    if (paused) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = coachingSelected, onCheckedChange = { coachingSelected = it }, enabled = !view.busy,
+                modifier = Modifier.testTag("finish-coaching"))
+            Text("Post-run coaching")
+        }
+        FinishSwipe(!view.busy) { command(if (coachingSelected) TrackingService.FINISH else TrackingService.FINISH_WITHOUT_COACHING) }
+    }
 
 }
 

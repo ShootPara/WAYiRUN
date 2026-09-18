@@ -14,6 +14,9 @@ for (const [path, method, status, expected] of [
   ["/api/run-uploads", "POST", 401, { error: "unauthorized" }],
   ["/api/auth/google", "POST", 400, { error: "invalid_request" }],
   ["/api/account", "GET", 401, { error: "unauthorized" }],
+  ["/api/account/openai-key", "GET", 401, { error: "unauthorized" }],
+  ["/api/coaching/00000000-0000-0000-0000-000000000001", "GET", 401, { error: "unauthorized" }],
+  ["/api/coaching/00000000-0000-0000-0000-000000000001/audio", "GET", 401, { error: "unauthorized" }],
   ["/web-api/account", "GET", 401, { error: "unauthorized" }],
   ["/web-api/runs", "GET", 401, { error: "unauthorized" }],
 ]) {

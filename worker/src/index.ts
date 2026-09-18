@@ -1,11 +1,14 @@
 import { handleBrowser, browserAssetPaths } from "./browser.js";
 import { handleRuns } from "./runs.js";
 import { handleAuth, type AuthEnv } from "./auth.js";
+import { handleAccountKey } from "./account-key.js";
+import { handleCoaching } from "./coaching-jobs.js";
 
 export interface Env extends AuthEnv {
   DB: D1Database;
   APP_ENV: string;
   GOOGLE_WEB_CLIENT_ID?: string;
+  COACHING_KEYRING?: string;
 }
 
 function json(body: unknown, status = 200, head = false, extra: Record<string, string> = {}): Response {
@@ -27,6 +30,8 @@ export default {
     if (env.APP_ENV !== "development") return json({ error: "environment_not_configured" }, 503, head);
 
     if (browserAssetPaths.includes(path) || path.startsWith("/web-api/")) return handleBrowser(request, env);
+    if (path === "/api/account/openai-key") return handleAccountKey(request, env);
+    if (path.startsWith("/api/coaching/")) return handleCoaching(request, env);
     if (["/api/auth/challenge", "/api/auth/google", "/api/auth/logout", "/api/account"].includes(path)) {
       return handleAuth(request, env);
     }

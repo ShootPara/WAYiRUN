@@ -118,3 +118,11 @@ Verified the user-provided export: four RUN records, 6720 GPS_POINT, 6722 MEASUR
 
 Desktop deletion is live as 2dcd76a. All 58 tests pass, Workers Builds succeeded, 19 live smoke checks passed and the deployed HTML contains the deletion interface. Browser disposable fixtures verified selected-only scope, confirmation cancel/Escape, sequential partial failure/retry, totals, unselected runs, sign-out cleanup and narrow modal layout. No real user runs were deleted; no Android changes/install or production deployment. Test infrastructure was cleaned up. User can inspect confirmation then Cancel, or use a disposable run for actual deletion and subsequent phone-sync reconciliation. Next milestone is AI coaching planning after acceptance; charts/statistics expansion remain deferred.
 
+
+## 14 Per-user OpenAI key storage - September 18, 2026
+
+Deployed directly without Git commit/push per user preference. Worker version 1905ec88-bad5-411e-b20e-a0515cf043de, migration 0005; COACHING_KEYRING verified present. All 65 Worker tests and 20 live smoke checks pass. Android assembly/lint and two focused emulator tests pass. Personal-key provider validation remains the user's check. See KEY_STORAGE_CONTRACT.md for secret recovery limitations and rotation procedure. No real API key was used in tests and no paid coaching generated. Preserve uncommitted source; later coaching execution is not yet implemented.
+
+## 15 September 18 coaching integration update
+
+Development migration 0006 and Worker version 88261b78-b67b-4993-b3e8-6c388c3c7aff add authenticated coaching request/status/audio routes and durable single-attempt jobs. Current/previous run deletion removes associated coaching audio; a dependent-job receipt prevents regeneration after previous-run deletion. All 80 automated tests and 22 live smoke checks pass. See COACHING_JOBS_CONTRACT.md. Android assembly/lint, 58 JVM tests and seven focused emulator tests pass; actual Cedar quality/model access awaits phone acceptance. No personal API key used by the agent, no production deployment and no commit/push.

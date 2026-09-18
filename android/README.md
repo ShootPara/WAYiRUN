@@ -65,8 +65,18 @@ The debug package task produces WAYiRUN plus the date/time stamp directly. There
 
 Current build: **0.1.0-dev-sync2**, adding authenticated download/restore and deletion reconciliation. Upload/import/discard phone checks already passed; two completed cloud runs are confirmed. Restore verifies exact manifest/chunk hashes, account ownership and archive contents before transactional local insertion. Existing local records are never overwritten. Main-screen controls, splash and permissions remain unchanged; sync status/retry/import stay behind the gear.
 
-Install `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-17_19-59-43_EDT.apk` (repository-relative) over the existing app. Do not uninstall. See root TASKS.md Section 8.0.6 for actual gates and PHONE_TEST_SYNC2.md for optional separate-device checks. Room schemas 1, 2 and 3 must remain in source control. Desktop history/maps is the next sequential development step; production remains untouched.
+Install `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-18_08-58-18_EDT.apk` (repository-relative) over the existing app. Do not uninstall. See root TASKS.md Section 8.0.6 for actual gates and PHONE_TEST_SYNC2.md for optional separate-device checks. Room schemas 1, 2 and 3 must remain in source control. Desktop history/maps is the next sequential development step; production remains untouched.
 
 ## 7 Login compatibility repair - September 18, 2026
 
 The latest APK accepts the server's 90-day session duration; the old one-hour parser bound rejected otherwise successful Google sign-in. Assembly and lint passed. Install over the current app and test Google sign-in; do not uninstall. Coaching settings are planned separately and are not in this APK.
+
+## 8 Per-account coaching key settings - September 18, 2026
+
+The current APK adds masked Add/Replace/Remove OpenAI key controls behind the gear, backed by encrypted account-scoped server storage. Login repair is user-confirmed. Assembly/lint and two emulator key-panel tests pass. Personal-key validation remains a user check; coaching speech generation is not enabled in this slice. See worker/KEY_STORAGE_CONTRACT.md and root TASKS.md Section 12.
+
+## 9 Current coaching handoff - September 18, 2026
+
+This supersedes the historical APK references above. Current APK: app/build/outputs/apk/debug/WAYiRUN-2026-09-18_12-43-46_EDT.apk (34516894 bytes). Install over the existing app, without uninstalling. Key setup is user-confirmed. Selected finishes now request current/previous-run coaching with Cedar playback, a dismissible animation and onboard fallback recordings; unchecked finishes play only the normal completion cue. See PHONE_TEST_COACHING.md for the real-phone check and remaining limitations.
+
+Normal assembly/lint and 58 JVM tests pass; seven focused emulator tests pass, including fallback playback completion. Generated build directories had ReadOnly attributes that blocked incremental Gradle cleanup; clearing those attributes only under app/build restored the normal build. The temporary build-location override is not needed. The version label remains 0.1.0-dev-sync2; identify this handoff by its APK timestamp. Source is uncommitted by user preference.

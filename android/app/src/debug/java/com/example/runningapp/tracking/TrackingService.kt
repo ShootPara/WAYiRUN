@@ -13,6 +13,8 @@ import com.example.runningapp.domain.*
 import com.example.runningapp.storage.*
 import com.example.runningapp.account.SessionStore
 import com.example.runningapp.sync.SyncScheduler
+import com.example.runningapp.coaching.CoachingView
+import com.example.runningapp.coaching.PostRunCoaching
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,7 @@ data class TrackingView(
     val snapshot: RunSnapshot? = null, val interrupted: Boolean = false, val distanceAvailable: Boolean = false,
     val ready: Boolean = false, val busy: Boolean = false, val error: String? = null,
     val musicStatus: String = "Music controls off · Runs still work",
+    val coaching: CoachingView = CoachingView(),
 )
 
 /** All commands, measurements and disk commits pass through one serial consumer. */
@@ -47,6 +50,7 @@ class TrackingService : Service() {
     private val clock = RunClock { RunTime(SystemClock.elapsedRealtime(), System.currentTimeMillis()) }
     private lateinit var sensors: SensorAdapters
     private lateinit var cues: RunCues
+    private lateinit var coaching: PostRunCoaching
     private lateinit var repository: RunRepository
     private lateinit var music: MusicSessionAdapter
     private val musicPolicy = MusicLinkPolicy()
@@ -74,6 +78,10 @@ class TrackingService : Service() {
         super.onCreate()
         sensors = SensorAdapters(this)
         cues = RunCues(this) { messages.trySend(Message.AudioIdle) }
+        coaching = PostRunCoaching(this, scope, { cues.isPlaying }) {
+            if (loaded) publish()
+            messages.trySend(Message.AudioIdle)
+        }
         music = MusicSessionAdapter(this) { generation, state -> messages.trySend(Message.Player(generation, state)) }
         repository = RunRepository(RunDatabase.get(this).runs())
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WAYiRUN:tracking")
@@ -165,6 +173,7 @@ class TrackingService : Service() {
                     if (saved?.state == RunState.FINISHED && message.expectedRunId == saved.runId) {
                         try {
                             check(repository.discard(saved.runId, owner))
+                            coaching.cancel()
                             SyncScheduler.enqueue(this)
                             cues.cancel(); musicPolicy.detach()
                             controller = null; input = null; lastSaved = null; interrupted = false
@@ -179,6 +188,7 @@ class TrackingService : Service() {
                     if (controller?.snapshot()?.state == RunState.FINISHED) {
                         val stored = RunDatabase.get(this).runs().get(controller!!.snapshot().runId)
                         if (stored == null || (stored.cloudOwnerId != null && stored.cloudOwnerId != selected)) {
+                            coaching.cancel()
                             controller = null; input = null; lastSaved = null; interrupted = false; cloudOwner = null
                             load()
                         } else cloudOwner = stored.cloudOwnerId
@@ -198,6 +208,7 @@ class TrackingService : Service() {
                     }
                 }
                 NEW -> if (controller?.snapshot()?.state == RunState.FINISHED) {
+                    coaching.cancel()
                     cues.cancel()
                     controller = null; input = null; lastSaved = null; interrupted = false
                 }
@@ -222,7 +233,8 @@ class TrackingService : Service() {
                     interrupted = false
                     result = TrackingResult(controller!!.resume())
                 }
-                FINISH -> if (controller != null) {
+                DISMISS_COACHING -> coaching.dismiss()
+                FINISH, FINISH_WITHOUT_COACHING -> if (controller != null) {
                     sensors.stop(); listening = false; input?.reset()
                     result = TrackingResult(controller!!.finish())
                 }
@@ -268,11 +280,15 @@ class TrackingService : Service() {
                 // Persist event IDs/goal state before cues; a crash may omit a cue but cannot replay it.
                 cues.play(result.update.events, s.settings.units)
                 if (result.update.events.isNotEmpty() && cues.isPlaying) { cueSerial++; musicPolicy.cueStarted() }
+                if (s.state == RunState.FINISHED && message is Message.Command) {
+                    // Coaching setup failure must never turn a committed finish into a storage error.
+                    runCatching { coaching.start(s.runId, cloudOwner, message.action == FINISH) }
+                }
             }
         }
         if (controller == null) musicPolicy.runChanged(null)
         publish()
-        if ((controller?.snapshot()?.state == RunState.FINISHED && !cues.isPlaying) || controller == null) {
+        if ((controller?.snapshot()?.state == RunState.FINISHED && !cues.isPlaying && !coaching.view.busy) || controller == null) {
             if (foregroundStarted) { stopForeground(STOP_FOREGROUND_REMOVE); foregroundStarted = false }
         } else if (foregroundStarted) getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification())
     }
@@ -308,7 +324,7 @@ class TrackingService : Service() {
             music.current == PlayerStatus.PLAYING -> "YouTube Music available · Links when tracking starts"
             else -> "YouTube Music not playing · Run starts normally"
         }
-        view.value = TrackingView(controller?.snapshot(), interrupted, input?.distanceAvailable == true, true, error = actionError, musicStatus = status)
+        view.value = TrackingView(controller?.snapshot(), interrupted, input?.distanceAvailable == true, true, error = actionError, musicStatus = status, coaching = coaching.view)
     }
 
     private fun performMusic(actions: List<MusicAction>) {
@@ -365,7 +381,7 @@ class TrackingService : Service() {
     private fun releaseWakeLock() { if (wakeLock.isHeld) wakeLock.release() }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
-        sensors.stop(); releaseWakeLock(); music.close(); cues.close(); scope.cancel(); messages.close()
+        sensors.stop(); releaseWakeLock(); music.close(); cues.close(); coaching.cancel(); scope.cancel(); messages.close()
         view.value = view.value.copy(ready = false, busy = false)
         super.onDestroy()
     }
@@ -377,6 +393,8 @@ class TrackingService : Service() {
         const val PAUSE = "pause"
         const val RESUME = "resume"
         const val FINISH = "finish"
+        const val FINISH_WITHOUT_COACHING = "finish-without-coaching"
+        const val DISMISS_COACHING = "dismiss-coaching"
         const val DISCARD = "discard"
         private const val RUN_ID = "run-id"
         private const val SETTINGS = "settings"
