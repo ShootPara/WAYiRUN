@@ -16,7 +16,8 @@ class AccountApi {
         val result = request("/api/auth/google", "POST", JSONObject().put("idToken", idToken).put("nonce", nonce))
         val token = result.getString("accessToken")
         require(token.matches(Regex("[0-9a-f]{64}")))
-        val expiry = issuedAt + result.getLong("expiresIn").also { require(it in 1..3600) } * 1000
+        // The service issues 90-day sessions; retain a bound before converting to milliseconds.
+        val expiry = issuedAt + result.getLong("expiresIn").also { require(it in 1L..90L * 24 * 60 * 60) } * 1000
         try {
             val profile = request("/api/account", "GET", token = token).getJSONObject("account")
             return AccountSession(profile.getString("id"), profile.optionalString("displayName"),

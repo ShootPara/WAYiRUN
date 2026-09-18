@@ -442,7 +442,7 @@ All 58 automated tests pass, including browser CSRF/body/method boundaries, acco
 
 ### 9.3 AI coaching
 
-Add encrypted per-user OpenAI keys, completed-run comparisons, voice, checkbox behavior, and onboard fallback recordings. Resolve model/voice, context limits, timeout/unknown-outcome handling, and animation behavior. Test two-account credential isolation, invalid keys, offline failure, opt-out, and duplicate requests. No shared owner key is permitted.
+Add encrypted per-user OpenAI keys, completed-run comparisons, voice, checkbox behavior, and onboard fallback recordings. Voice and history are settled: Cedar through gpt-4o-mini-tts; all stored data for the current and immediately previous completed run. See REQUIREMENTS.md 8.2–8.4 and worker/COACHING_PLAN.md. First bounded slice is per-account API-key setup/encrypted storage. The separate text model, full-input size limits, timeout/unknown-outcome handling and animation remain integration planning items. Test two-account credential isolation, invalid keys, offline failure, opt-out, and duplicate requests. No shared owner key is permitted.
 
 ### 9.4 Achievements and celebrations
 
@@ -465,3 +465,9 @@ Complete requirements Section 16 on actual target devices, including units, dark
 Milestone 5 synchronization is implemented with sync1 phone acceptance and separate sync2 restore evidence. Section 9.1 implements private Google sign-in, history, loaded-run totals, validated details and desktop route maps. Real browser sign-in/history is user-confirmed. Maps are user-accepted. Section 9.2 now has a complete single-file CSV export. Section 9.2 now also implements desktop selection/deletion. Next is user acceptance of deletion, then Section 9.3 AI coaching planning. Expanded statistics, charts and achievement displays remain deferred. AI, photos, Health Connect and production stay later.
 
 The user baseline remains 4306728 on codex/account-sessions. Remote development receives scoped Worker work; the latest slice is commit 2dcd76a through codex/desktop-run-deletion, based on e5e45a5. Preserve both histories and prepare subsequent cloud changes from the current remote development head. Android/root-document commits remain user-owned. The existing sync2 APK is unchanged by web work.
+
+## 11 September 18 handoff and execution priority
+
+Login repair takes priority. The server's 90-day session response was rejected by Android AccountApi's one-hour maximum; the previous claim that no Android update was needed was incorrect. Updated the bounded parser to accept 1 through 7776000 seconds. assembleDebug and lintDebug both passed (BUILD SUCCESSFUL, 51 tasks). Replacement APK: android/app/build/outputs/apk/debug/WAYiRUN-2026-09-17_19-59-43_EDT.apk, 33820584 bytes, version 0.1.0-dev-sync2. Install over the existing app; do not uninstall. Actual Google phone sign-in remains the user's check; no phone installation was performed.
+
+User requested incorporation of the pasted coaching decisions before continuing. REQUIREMENTS.md now records Cedar/gpt-4o-mini-tts and all current-plus-previous run data; broader PR/trend claims are deferred. worker/COACHING_PLAN.md defines the next bounded key-management slice and remaining generation decisions. No API key was requested or used, and no coaching code or paid generation was added. Do not commit or push unless requested; the earlier one-time backup is already on GitHub as b3f0d51.

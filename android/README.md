@@ -65,4 +65,8 @@ The debug package task produces WAYiRUN plus the date/time stamp directly. There
 
 Current build: **0.1.0-dev-sync2**, adding authenticated download/restore and deletion reconciliation. Upload/import/discard phone checks already passed; two completed cloud runs are confirmed. Restore verifies exact manifest/chunk hashes, account ownership and archive contents before transactional local insertion. Existing local records are never overwritten. Main-screen controls, splash and permissions remain unchanged; sync status/retry/import stay behind the gear.
 
-Install `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-16_15-46-55_EDT.apk` (repository-relative) over the existing app. Do not uninstall. See root TASKS.md Section 8.0.6 for actual gates and PHONE_TEST_SYNC2.md for optional separate-device checks. Room schemas 1, 2 and 3 must remain in source control. Desktop history/maps is the next sequential development step; production remains untouched.
+Install `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-17_19-59-43_EDT.apk` (repository-relative) over the existing app. Do not uninstall. See root TASKS.md Section 8.0.6 for actual gates and PHONE_TEST_SYNC2.md for optional separate-device checks. Room schemas 1, 2 and 3 must remain in source control. Desktop history/maps is the next sequential development step; production remains untouched.
+
+## 7 Login compatibility repair - September 18, 2026
+
+The latest APK accepts the server's 90-day session duration; the old one-hour parser bound rejected otherwise successful Google sign-in. Assembly and lint passed. Install over the current app and test Google sign-in; do not uninstall. Coaching settings are planned separately and are not in this APK.

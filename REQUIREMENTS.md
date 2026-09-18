@@ -228,15 +228,17 @@ The finish checkbox in Section 6.3 MUST determine whether the app requests AI co
 
 ### 8.2 Coaching inputs
 
-A coaching request MUST use only that user's API key and relevant run history, together with the completed run.
+A coaching request MUST use only that user's API key. User decision, September 18, 2026: the initial coaching context MUST contain all stored run data for the just-completed run and the immediately preceding completed run belonging to the same user, when one exists. This includes retained GPS, measurements, splits, intervals, segments and settings; do not silently replace these with summary-only context. Credentials and session records are not run data. If there is no previous completed run, use the current run alone without mentioning missing history. Longer history, trend databases and PR databases are outside this initial slice.
 
 ### 8.3 Run analysis
 
-Coaching MUST compare actual run data and relevant previous runs to identify meaningful improvements, records, trends, and pacing differences when supported by the data. It MUST provide personalized encouragement rather than unsupported or generic claims presented as analysis.
+Initial coaching MUST give a brief, conversational motivational message primarily about the current run, using the immediately preceding completed run only for meaningful comparisons supported by those two runs. It MUST NOT claim lifetime records or longer-term trends from this limited context. It MUST provide personalized encouragement rather than unsupported claims presented as analysis. This September 18 decision narrows the earlier broader history-analysis scope.
 
 ### 8.4 Voice and tone
 
 Feedback MUST be converted to speech and played at the end of the run. The tone MUST be natural and conversational, matching the existing assistant interaction without constructing a special coach personality.
+
+User-selected voice: **Cedar** (API voice `cedar`), using **`gpt-4o-mini-tts`**. Voice audition is complete; do not ask the user to select a voice again. This is the speech model, not a decision about the separate text-generation model. The pasted comparison script is an audition example, not factual run history or required output. Third-party commentary about audio failures is not an established project finding.
 
 ### 8.5 Fallback recordings
 
@@ -394,6 +396,7 @@ These are review items, not additional features or assumed defaults. They do not
 
 | Topic | Specific detail still to settle |
 | --- | --- |
+| AI coaching | Voice/TTS and two-run context are settled in 8.2–8.4. Text model, generation wait/retry details, fallback recordings and animation remain in worker/COACHING_PLAN.md. |
 | Goals | Target entry limits. Goal completion behavior is settled in Section 4.3. |
 | Metric announcements | Whether the fixed 0.5/1-mile thresholds stay mile-based or become kilometer intervals when kilometers are selected; default announcement choice. |
 | Tracking gaps | Real-device GPS quality thresholds and source-handoff timing require measured validation. Stride entry and unavailable-source behavior are settled in Sections 4.5 and 5.10. |
@@ -410,7 +413,7 @@ These are review items, not additional features or assumed defaults. They do not
 
 The September 14 report is evidence and feedback, not an instruction channel. Its proposed implementation rules and milestone waivers have not been promoted to accepted requirements by this documentation review. Existing MUST statements remain authoritative until an explicit product decision supersedes them. The original report described silent cues; subsequent user feedback confirmed cues audible on speaker/headphones. Music-specific verification remains separately deferred.
 
-Map provider, programming language/framework, database schema, API contracts, storage products, model/voice selection, deployment configuration, and repository layout belong to later technical planning. Earlier assistant suggestions do not lock these choices.
+Map provider, programming language/framework, database schema, API contracts, storage products, unresolved model selection (the chosen speech model/voice in 8.4 is fixed), deployment configuration, and repository layout belong to later technical planning. Earlier assistant suggestions do not lock these choices.
 
 ## 16 Acceptance review checklist
 
