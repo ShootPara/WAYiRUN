@@ -23,12 +23,14 @@ This is not an implementation pass. The first execution milestone must update th
 - Add deterministic test/anomaly classification before AI feedback.
 - Move the shared-photo route noodle to the lower-right and remove its dark background box.
 - Add weather emoji plus temperature in F and C to photo overlays, with a toggle.
+- Keep weather attribution out of primary running UI; place it unobtrusively in settings and on public/shared pages.
 - Add shared-run controls for photo visibility and unsharing.
 - Add short run-share links and copy/share the short version.
 - Fix the last-completed-run reopening on app launch and app focus return.
 - Make the New Run Outdoor, Indoor, None, Time, and Distance controls square with appropriate emojis.
 - Put Outdoor/Indoor status on the left and Online/Fallback status on the right.
 - Use green for Outdoor, blue for Indoor, green for Online, and red for Fallback.
+- Replace exact coordinate text on public pages with the matching city and state when a recorded route location exists.
 
 ## 1.3 Current repo findings
 
@@ -137,9 +139,9 @@ Update source-of-truth planning docs so the new user decisions are not contradic
 
 Record that route-only graphics replace basemap maps for this pass. Public and private pages should show route graphics from stored GPS data, not Leaflet/OpenStreetMap/Mapbox. GPS data remains stored.
 
-Record that music-player pause no longer pauses the run. Decide during this milestone whether to remove only player-to-run control or all automatic run/player linkage. Default: remove all automatic media-session transport control except opening the saved YouTube playlist and ducking audio during WAYiRUN cues.
+Record that music-player pause no longer pauses the run. Remove automatic media-session transport control in both directions. Preserve only opening the saved YouTube playlist and ducking audio during WAYiRUN cues.
 
-Record that sharing is explicit: a run remains private until the user deliberately creates/enables a shared run link. Photo display on the shared page is a separate owner-controlled preference.
+Record that sharing is explicit: a run remains private until the user deliberately attempts to share run results, which creates/enables a shared run link. Photo display on the shared page is a separate owner-controlled preference.
 
 Add the new stabilization/features as planned follow-ups: route-only rendering, link shortening, share controls, milestone announcements, weather overlay, auto-pause, anomaly-aware coaching, New Run UI polish, status indicator colors, and last-completed-run launch fix.
 
@@ -211,7 +213,7 @@ Keep `prepareRoute()` or an equivalent provider-independent validator. Render ro
 
 Private desktop run details should show a route panel when GPS exists and the existing honest no-route message for indoor/no-GPS runs.
 
-Public shared-run pages should show the route graphic if GPS exists, but must not print exact starting latitude/longitude. Use labels such as "Outdoor route recorded" or "No GPS route recorded."
+Public shared-run pages should show the route graphic if GPS exists, but must not print exact starting latitude/longitude. If a GPS route exists, display the matching city and state instead of coordinates. If reverse geocoding fails or no route exists, use labels such as "Outdoor route recorded" or "No GPS route recorded."
 
 Fit the route to the container. Show start and finish markers. Do not invent streets, parks, labels, or locations.
 
@@ -221,7 +223,7 @@ Fit the route to the container. Show start and finish markers. Do not invent str
 - Private and public pages render routes from stored GPS data without external map requests.
 - Pauses/gaps remain visually disconnected.
 - Indoor/no-GPS runs remain map-free and honest.
-- Public page no longer exposes exact coordinate text.
+- Public page no longer exposes exact coordinate text and shows city/state when available.
 
 ### 5.5 Verification
 
@@ -251,11 +253,11 @@ Make run sharing explicit and owner-controlled, add short share links, and let t
 
 ### 6.3 Required behavior
 
-Introduce a server-side publication state separate from the existence of a kept photo. Default new runs/photos to private until the user explicitly shares and a link is created.
+Introduce a server-side publication state separate from the existence of a kept photo. Default new runs/photos to private until the user explicitly attempts to share the run results and a link is created.
 
 Add owner-authenticated controls:
 
-- Create or enable shared-run link.
+- Create or enable shared-run link on any intentional run-result sharing action.
 - Unshare a run, disabling public access through the shared link.
 - Toggle "Display photo with shared run" without unintentionally changing whether the run is shared.
 
@@ -296,11 +298,11 @@ Improve the rendered share image: route noodle lower-right with no extra dark re
 
 ### 7.3 Weather default
 
-Default implementation: use Open-Meteo as the first weather source because it has no required API key for non-commercial/free usage and historical weather support. At execution time, re-check current terms. The app must attribute the data wherever the weather overlay is configured or displayed.
+Default implementation: use Open-Meteo as the first weather source because it has no required API key for non-commercial/free usage and historical weather support. At execution time, re-check current terms. The app must attribute the data unobtrusively: small print in settings for the Android app and out-of-the-way text on public/shared pages. Do not put attribution in the main running UI or inside the photo overlay unless required by updated provider terms.
 
 To reduce location exposure, query with rounded coordinates sufficient for weather, not full-precision route points. Use the first recorded GPS point and run start time for outdoor GPS runs. For indoor/no-GPS runs, leave weather unavailable unless the user later chooses a manual location feature.
 
-Store the resolved weather code/emoji, temperature F/C, source, approximate query coordinates, and observation time with the kept photo/public metadata so the overlay and public page are stable. Do not refetch every time the photo is viewed.
+Store the resolved weather code/emoji, temperature F/C, source, attribution label/URL, approximate query coordinates, and observation time with the kept photo/public metadata so the overlay and public page are stable. Do not refetch every time the photo is viewed.
 
 ### 7.4 Required behavior
 
@@ -317,6 +319,7 @@ Weather:
 - Show a small weather emoji with small temperature text underneath in both F and C.
 - If weather is unavailable, disable or hide the checkbox with short non-alarming text.
 - Weather failure must not block keeping, saving, sharing, syncing, or publishing the photo.
+- Weather attribution must be present but visually out of the way.
 
 ### 7.5 Acceptance
 
@@ -453,7 +456,7 @@ Unavailable:
 
 ### 10.4 Required behavior
 
-Add an Auto-pause setting behind the gear. Snapshot it at run start.
+Add an Auto-pause setting behind the gear. It defaults on for new and existing installs, and the user can turn it off for testing or preference. Snapshot it at run start.
 
 Represent automatic pause state distinctly enough that manual pause remains manual and cannot be auto-resumed.
 
@@ -606,73 +609,77 @@ Run full Android/Worker checks. Build one timestamped handoff APK if Android cha
 
 The ordering front-loads the likely bugs and removals before larger schema/API work. Public sharing and weather are later because they require more product precision and migrations.
 
-## 15 Questions with default responses
+## 15 Accepted answers and remaining defaults
 
 ### 15.1 Music controls
 
-Question: Should WAYiRUN remove all automatic media-session control, or only remove the direction where music pause/resume controls the run?
+Decision: WAYiRUN removes all automatic media-session control.
 
-Default response: Remove all automatic media-session control. Keep only Open YouTube playlist and audio ducking during WAYiRUN cues. This eliminates notification-listener setup and the fragile Nike-style linkage.
+Implementation default: Keep only Open YouTube playlist and audio ducking during WAYiRUN cues. This eliminates notification-listener setup and the fragile Nike-style linkage.
 
 ### 15.2 Kilometer announcements
 
-Question: When units are kilometers, should the 0.5 mile and 1 mile announcement choices convert to equivalent kilometers, or should distance announcements become 0.5 km and 1 km?
+Decision: Distance-announcement choices use the selected unit.
 
-Default response: Keep the choices as distance intervals in the selected unit: 0.5 km and 1 km when kilometers are selected. It is easier to understand while running.
+Implementation default: 0.5 mile and 1 mile when miles are selected; 0.5 km and 1 km when kilometers are selected.
 
 ### 15.3 Auto-pause cues
 
-Question: Should auto-pause/resume speak cues?
+Decision: Auto-pause/resume should speak distinct cues.
 
-Default response: Yes, but use distinct short cues: "Auto-paused" and "Resumed." Do not use the manual "Run paused" wording for auto-pause.
+Implementation default: Use "Auto-paused" and "Resumed." Do not use the manual "Run paused" wording for auto-pause.
 
 ### 15.4 Auto-pause default setting
 
-Question: Should auto-pause default on or off?
+Decision: Auto-pause defaults on.
 
-Default response: Off by default for existing and new installs until real-phone testing proves it behaves well on the Moto G. Make it easy to enable in settings.
+Implementation default: Enable it by default for new and existing installs, and keep the settings toggle easy to turn off for testing.
 
 ### 15.5 Weather provider and privacy
 
-Question: Is it acceptable for the Worker to query a weather provider using rounded start-location coordinates and run time?
+Decision: The Worker may query weather using rounded start-location coordinates and run time.
 
-Default response: Yes. Use Open-Meteo after re-checking current terms at execution, round coordinates before querying, store stable weather metadata with the photo, and show attribution. If no GPS exists, weather is unavailable.
+Implementation default: Use Open-Meteo after re-checking current terms at execution, round coordinates before querying, store stable weather metadata with the photo, and show attribution in small print in settings and unobtrusively on public/shared pages. If no GPS exists, weather is unavailable.
 
 ### 15.6 Weather for existing photos
 
-Question: Should existing kept photos get weather overlays retroactively?
+Decision: Existing kept photos do not get weather retroactively.
 
-Default response: No. Apply weather only when creating or replacing a run photo after the feature ships.
+Implementation default: Apply weather only when creating or replacing a run photo after the feature ships.
 
 ### 15.7 Public sharing default
 
-Question: Should the current default-checked "Make this run public" behavior be replaced?
+Decision: Replace the current default-checked "Make this run public" behavior.
 
-Default response: Yes. New runs/photos stay private. Sharing becomes a deliberate action that creates a link.
+Implementation default: New runs/photos stay private. Any intentional attempt to share run results creates/enables a public shared-run link because that action is deliberate.
 
 ### 15.8 Photo visibility on shared pages
 
-Question: If a run is shared but photo display is off, should the public page still show stats/splits/route?
+Decision: If a run is shared but photo display is off, the public page still shows stats/splits/route.
 
-Default response: Yes. Keep the public run page available, but hide the photo and any photo-derived image.
+Implementation default: Keep the public run page available, but hide the photo and any photo-derived image.
 
 ### 15.9 Short link length
 
-Question: How short should short links be?
+Decision: Use internal short links.
 
-Default response: Use a collision-checked 10-character base62 token under `/r/{token}`. It is short enough to share and large enough for this app.
+Implementation default: Use a collision-checked 10-character base62 token under `/r/{token}`. It is short enough to share and large enough for this app.
 
 ### 15.10 AI anomaly thresholds
 
-Question: Are the default suspicious-run thresholds acceptable?
+Decision: The default suspicious-run thresholds are acceptable to start.
 
-Default response: Yes: under 90 seconds or under 0.05 miles for likely test/incomplete, faster than 3:30/mile sustained or over 18 mph GPS speed for likely vehicle/non-running, and obvious distance/time jumps for GPS anomaly. Adjust after seeing real examples.
+Implementation default: Under 90 seconds or under 0.05 miles for likely test/incomplete, faster than 3:30/mile sustained or over 18 mph GPS speed for likely vehicle/non-running, and obvious distance/time jumps for GPS anomaly. Adjust after seeing real examples.
 
-### 15.11 Route-only public pages
+### 15.11 Public route location
 
-Question: Should public pages show any exact coordinate text?
+Decision: Public pages must not show exact coordinate text.
 
-Default response: No. Show the route shape and high-level route status only. Keep exact coordinates internal.
+Implementation default: Replace coordinates with city and state matching the recorded route location. Keep exact coordinates internal. If city/state lookup fails, show a generic route-location message rather than coordinates.
+
+### 15.12 Blank response
+
+Decision: The user's item 12 was blank; no implementation change is attached to it.
 
 ## 16 External source note
 
