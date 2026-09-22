@@ -7,6 +7,49 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class SyncMigrationTest {
+    @Test fun healthMigrationPreservesPhotosAndQueues() {
+        val name="health-migration-test"
+        helper.createDatabase(name,5).apply {
+            execSQL("INSERT INTO runs VALUES ('run','local','FINISHED',NULL,'checkpoint','UTC',0,1000,0,'alice')")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',0,0,NULL)")
+            execSQL("INSERT INTO run_sync VALUES ('run','alice','operation','UPLOAD','PENDING',1,10,NULL)")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,6,true,RunDatabase.MIGRATION_5_6).apply {
+            for(table in listOf("runs","run_photos","run_sync"))query("SELECT COUNT(*) FROM $table").use {it.moveToFirst();assertEquals(1,it.getInt(0))}
+            query("SELECT COUNT(*) FROM health_exports").use {it.moveToFirst();assertEquals(0,it.getInt(0))};close()
+        }
+    }
+
+    @Test fun photoMigrationPreservesRunsAndCascadesPhotoDeletion() {
+        val name="photo-migration-test"
+        helper.createDatabase(name,4).apply {
+            execSQL("INSERT INTO runs VALUES ('run', 'local-owner', 'FINISHED', NULL, 'checkpoint', 'UTC', 0, 1000, 0, 'alice')")
+            execSQL("INSERT INTO achievement_cache VALUES ('alice','[]')")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,5,true,RunDatabase.MIGRATION_4_5).apply {
+            query("SELECT checkpoint FROM runs").use {it.moveToFirst();assertEquals("checkpoint",it.getString(0))}
+            execSQL("PRAGMA foreign_keys=ON")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',0,0,NULL)")
+            execSQL("DELETE FROM runs WHERE id='run'")
+            query("SELECT COUNT(*) FROM run_photos").use {it.moveToFirst();assertEquals(0,it.getInt(0))}
+            close()
+        }
+    }
+
+    @Test fun achievementMigrationPreservesRunsAndQueues() {
+        val name="achievement-migration-test"
+        helper.createDatabase(name,3).apply {
+            execSQL("INSERT INTO run_sync VALUES ('run', 'alice', 'op', 'DELETE', 'PENDING', 2, 123, 'offline')")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,4,true,RunDatabase.MIGRATION_3_4).apply {
+            query("SELECT COUNT(*) FROM run_sync").use { it.moveToFirst();assertEquals(1,it.getInt(0)) }
+            query("SELECT COUNT(*) FROM achievement_cache").use { it.moveToFirst();assertEquals(0,it.getInt(0)) }
+            close()
+        }
+    }
     @get:Rule val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), RunDatabase::class.java)
     @Test fun versionOneMigrationPreservesEveryTableAndNeverClaimsLegacyRuns() {
         val name = "sync-migration-test"

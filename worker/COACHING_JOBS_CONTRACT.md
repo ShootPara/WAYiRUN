@@ -28,4 +28,10 @@ Two general encouragement WAV files are bundled under android/app/src/debug/res/
 
 ## 1.5 Verification boundaries
 
-Backend tests use local D1 and synthetic provider responses. They cover simultaneous requests, operation reuse, owner isolation, chunked audio, deletion of current/previous runs, key removal/logout during text, stale stages, unknown outcomes and native request boundaries. No personal key is retrieved or billed in automated tests. Real model access, meaningful recap quality, Cedar delivery and speaker/headphone behavior require a selected finish on the user's phone. Existing CSV export still describes the run archives; newly stored coaching results/audio are not part of that archive export and need a follow-up export contract.
+Backend tests use local D1 and synthetic provider responses. They cover simultaneous requests, operation reuse, owner isolation, chunked audio, deletion of current/previous runs, key removal/logout during text, stale stages, unknown outcomes and native request boundaries. No personal key is retrieved or billed in automated tests. The user reported the phone update tests OK on September 18; this is separate from the automated evidence.
+
+## 1.6 Saved desktop coaching and export
+
+GET /api/coaching-history/{runId} and its cookie-authenticated /web-api/coaching-history/{runId} bridge return a read-only owner-scoped snapshot. A completed run with no job returns coaching:null; missing, deleted or foreign runs return 404. The endpoint never generates, retries or expires jobs. Session/run/job state is rechecked after audio assembly. It exposes only the explicit result fields, never key revisions, session hashes or credentials.
+
+Run details display retained recap text safely as text and offer manual replay of verified WAV bytes. Navigation and sign-out pause playback and revoke its Blob URL. Incomplete speech can still display its retained recap. Missing coaching does not prevent viewing the run. CSV version 2 includes metadata and all saved audio; see EXPORT_DELETION_PLAN.md 1.6. No new OpenAI call or charge occurs for replay or export.

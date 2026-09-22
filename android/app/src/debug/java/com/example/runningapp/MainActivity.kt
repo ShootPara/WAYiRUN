@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.example.runningapp.health.HealthScheduler.enqueue(this)
         // Refresh tracking after settings/permission changes, without presenting any UI.
         TrackingService.send(this, TrackingService.OPEN)
     }

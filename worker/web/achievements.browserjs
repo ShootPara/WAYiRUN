@@ -1,0 +1,70 @@
+// Version 1 mirrors the pure Kotlin evaluator. Cross-platform fixtures guard this contract.
+const dayMs=86400000;
+const dateMs=d=>Date.parse(d+'T00:00:00Z');
+const iso=ms=>new Date(ms).toISOString().slice(0,10);
+const weekday=d=>new Date(dateMs(d)).getUTCDay();
+const monday=d=>iso(dateMs(d)-((weekday(d)+6)%7)*dayMs);
+const distances=[1000,1609.344,5000,10000,16093.44,21097.5,32186.88,42195,50000];
+const firstNames=['Kicking It Off','Mile Marker','Five Alive','Double Digits','Going the Distance','Halfway to Legendary','The Long Game','Marathon Mindset','Beyond the Finish'];
+export function holidays(d){
+ const y=Number(d.slice(0,4));const fixed=(m,n)=>`${y}-${String(m).padStart(2,'0')}-${String(n).padStart(2,'0')}`;
+ const nth=(m,w,n)=>{if(n<0){const last=iso(Date.UTC(y,m,0));return iso(dateMs(last)-((weekday(last)-w+7)%7)*dayMs);}const first=fixed(m,1);return iso(dateMs(first)+((w-weekday(first)+7)%7+7*(n-1))*dayMs);};
+ const a=y%19,b=Math.floor(y/100),c=y%100,h=(19*a+b-Math.floor(b/4)-Math.floor((b-Math.floor((b+8)/25)+1)/3)+15)%30;
+ const l=(32+2*(b%4)+2*Math.floor(c/4)-h-c%4)%7,m=Math.floor((a+11*h+22*l)/451),n=h+l-7*m+114;
+ const dates=[fixed(1,1),nth(1,1,3),fixed(2,14),nth(2,1,3),fixed(3,17),fixed(Math.floor(n/31),n%31+1),fixed(4,22),nth(5,0,2),nth(5,1,-1),nth(6,3,1),fixed(6,19),nth(6,0,3),fixed(7,4),nth(9,1,1),nth(10,1,2),fixed(10,31),fixed(11,11),nth(11,4,4),fixed(12,24),fixed(12,25),fixed(12,31)];
+ const ids=['new-year','mlk','valentine','presidents','patrick','easter','earth','mother','memorial','running','juneteenth','father','independence','labor','indigenous','halloween','veterans','thanksgiving','christmas-eve','christmas','year-end'];
+ const names=['Fresh Tracks','Strides Toward the Dream','Heart & Sole','Executive Pace','Shamrock & Roll','Spring in Your Step','Leave Only Footprints','Miles of Appreciation','Miles of Remembrance','One World, Many Strides','Freedom in Motion','A Run for the Long Haul','Stars, Stripes & Strides','Putting in the Legwork','Honoring the Path','Sole Survivor','Strides of Honor','Gravy Train','Silent Night Strider','Sleigh the Miles','The Final Lap'];
+ const labels=["New Year's Day","Martin Luther King Jr. Day","Valentine's Day","Presidents' Day","St. Patrick's Day","Easter","Earth Day","Mother's Day","Memorial Day","Global Running Day","Juneteenth","Father's Day","Independence Day","Labor Day","Indigenous Peoples' Day","Halloween","Veterans Day","Thanksgiving","Christmas Eve","Christmas Day","New Year's Eve"];
+ return dates.flatMap((v,i)=>v===d?[{id:ids[i],name:names[i],detail:labels[i]}]:[]);
+}
+export function achievementInput({value,s}){
+ const format=new Intl.DateTimeFormat('en-CA',{timeZone:value.run.zoneId,year:'numeric',month:'2-digit',day:'2-digit'});
+ const date=ms=>{const p=Object.fromEntries(format.formatToParts(new Date(ms)).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}`;};
+ const movement={};const samples=value.measurements;
+ for(const m of samples){if(m.deltaMeters<=0||!Number.isFinite(m.deltaMeters))continue;
+  const interval=s.activeIntervals.find(i=>m.activeMs>i.startActiveMs&&m.activeMs<=(i.endActiveMs??s.activeDurationMs));if(!interval)continue;
+  const d=date(interval.startUtcMs+m.activeMs-interval.startActiveMs);movement[d]=(movement[d]??0)+m.deltaMeters;
+ }
+ if(!samples.length&&s.startedUtcMs!=null&&s.endedUtcMs!=null&&date(s.startedUtcMs)===date(s.endedUtcMs))movement[date(s.startedUtcMs)]=s.distanceMeters;
+ const points=[{meters:0,activeMs:0}];let total=0,active=0,valid=s.segments.length===1&&s.activeIntervals.length===1;
+ for(const m of samples){if(m.deltaMeters<=0)continue;if(Math.abs(m.totalMeters-total-m.deltaMeters)>0.000001||m.activeMs<=active||m.activeMs-active>10000)valid=false;
+  points.push({meters:m.totalMeters,activeMs:m.activeMs});total=m.totalMeters;active=m.activeMs;
+ }
+ return {id:s.runId,endedMs:s.endedUtcMs,meters:s.distanceMeters,activeMs:s.activeDurationMs,movement,points:valid?points:[],endDate:s.endedUtcMs!=null||s.startedUtcMs!=null?date(s.endedUtcMs??s.startedUtcMs):null};
+}
+function timeAt(p,d){if(d<=0)return 0;let lo=1,hi=p.length-1;while(lo<hi){const mid=Math.floor((lo+hi)/2);if(p[mid].meters<d)lo=mid+1;else hi=mid;}const a=p[lo-1],b=p[lo];return a.activeMs+(b.activeMs-a.activeMs)*(d-a.meters)/(b.meters-a.meters);}
+export function evaluateAchievements(input){
+ if(new Set(input.map(r=>r.id)).size!==input.length)throw Error('Duplicate achievement run');
+ const result=new Map(),days=new Set(),months=new Map(),best=new Map();let total=0,count=0,longest=0,anniversary=null;
+ const runs=[...input].sort((a,b)=>a.endedMs-b.endedMs||(a.id<b.id?-1:a.id>b.id?1:0));
+ for(const r of runs){
+  if(!Number.isFinite(r.meters)||r.meters<0||r.activeMs<0)throw Error('Invalid achievement run');
+  const dates=Object.keys(r.movement).sort();if(r.meters<=0||r.activeMs<=0)continue;const date=dates.at(-1)??r.endDate;if(!date)continue;
+  const award=(id,occurrence,name,detail,at=date)=>{const key=`${id}:${occurrence}`;if(!result.has(key))result.set(key,{id,occurrence,runId:r.id,name,detail,date:at,version:1});};
+  count++;total+=r.meters;award('first-run','once','First Footprint','Your first completed run');
+  distances.forEach((target,i)=>{if(r.meters>=target)award(`distance-${i}`,'once',firstNames[i],`One run of ${target/1000} km`);});
+  [50,100,250,500,1000,2500,5000].forEach((n,i)=>{if(total>=n*1000)award(`lifetime-${n}`,'once',['Finding Your Stride','Making Tracks','Road Regular','Horizon Hunter','Distance Devourer','Long Haul Legend','Beyond the Horizon'][i],`${n} lifetime km`);});
+  [10,50,100,1000].forEach((n,i)=>{if(count>=n)award(`count-${n}`,'once',['Showing Up','Regular Fixture','Triple-Digit Club','A Thousand Starts'][i],`${n} completed runs`);});
+  if(longest>0&&r.meters>longest)award('longest',r.id,'Raising the Bar','Your longest run so far');longest=Math.max(longest,r.meters);anniversary??=dates[0]??date;
+  for(const d of dates){const meters=r.movement[d];if(!Number.isFinite(meters)||meters<=0)continue;days.add(d);const month=d.slice(0,7);months.set(month,(months.get(month)??0)+meters);
+   [25,50,100,200].forEach((n,i)=>{if(months.get(month)>=n*1000)award(`month-${n}`,month,['Making Headway','Month in Motion','Triple-Digit Month','Going Places'][i],`${n} km in ${month}`,d);});
+   const week=monday(d),nDays=[...days].filter(x=>monday(x)===week).length;
+   [3,5,7].forEach((n,i)=>{if(nDays>=n)award(`week-${n}`,week,["Three's a Stride",'High Five','Full House'][i],`${n} run days in the week of ${week}`,d);});
+   const weeks=new Set([...days].map(monday));let start=week,streak=1;while(weeks.has(iso(dateMs(start)-7*dayMs))){start=iso(dateMs(start)-7*dayMs);streak++;}
+   [4,8,13,52].forEach((n,i)=>{if(streak>=n)award(`streak-${n}`,start,['Finding a Rhythm','On a Roll','Seasoned Strider','Year in Motion'][i],`${n} consecutive weeks with a run`,d);});
+   if(weekday(d)===0)[1,5,10].forEach((n,i)=>{if(meters>=n*1000)award(`sunday-${n}`,d,['Sunday Strollout','Sunday Fiver','Sunday Long Game'][i],`${n} km in a Sunday run`,d);});
+   holidays(d).forEach(h=>award(`holiday-${h.id}`,d.slice(0,4),h.name,h.detail,d));
+   if(d.slice(0,4)>anniversary.slice(0,4)&&d.slice(5)===anniversary.slice(5))award('anniversary',d.slice(0,4),'Another Lap Around the Sun','Your running anniversary',d);
+  }
+  const p=r.points??[],valid=p.length>=2&&p[0].meters===0&&p[0].activeMs===0&&Math.abs(p.at(-1).meters-r.meters)<0.000001&&p.every((v,i)=>Number.isFinite(v.meters)&&Number.isFinite(v.activeMs)&&(!i||(v.meters>p[i-1].meters&&v.activeMs>p[i-1].activeMs)));
+  if(valid){
+   [1000,1609.344,5000,10000,21097.5,42195].forEach((target,i)=>{if(r.meters<target)return;const max=r.meters-target;let time=Infinity;
+    for(const start of [0,max,...p.flatMap(v=>[v.meters,v.meters-target])])if(start>=0&&start<=max)time=Math.min(time,timeAt(p,start+target)-timeAt(p,start));
+    if(best.has(target)&&time<best.get(target)-0.001)award(`pr-${i}`,r.id,`Personal Best: ${['1K','Mile','5K','10K','Half','Marathon'][i]}`,`Fastest recorded ${target} m effort`);best.set(target,Math.min(best.get(target)??Infinity,time));
+   });
+   if(r.meters>=2000){const half=timeAt(p,r.meters/2);if(timeAt(p,r.meters)-half<=half*0.98)award('negative-split',r.id,'Strong Finish','Second half at least 2% faster');}
+   let previous=Infinity,chain=0;for(let k=1;k<=Math.floor(r.meters/1000);k++){const duration=timeAt(p,k*1000)-timeAt(p,(k-1)*1000);chain=duration<=previous*0.98?chain+1:1;previous=duration;if(chain>=3)award('progression',r.id,'Building Steam','Three progressively faster kilometer splits');}
+  }
+ }
+ return [...result.values()];
+}

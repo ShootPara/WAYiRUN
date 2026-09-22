@@ -19,6 +19,9 @@ class SyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWork
                 val api = CloudSyncApi()
                 val more = SyncEngine(dao, api, { store.read() }).runOnce()
                 val pullMore = RestoreEngine(dao, api, DownloadCache(java.io.File(applicationContext.noBackupFilesDir, "run-downloads")), { store.read() }).runOnce()
+                com.example.runningapp.health.HealthScheduler.enqueue(applicationContext)
+                val photoMore = com.example.runningapp.photos.PhotoSync(applicationContext).runOnce()
+                if (photoMore) SyncScheduler.continueLater(applicationContext, 60000)
                 if (more || pullMore) {
                     val owner = store.read()?.ownerId
                     val next = owner?.let { id ->

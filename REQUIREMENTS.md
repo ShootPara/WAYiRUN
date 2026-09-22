@@ -236,6 +236,8 @@ Initial coaching MUST give a brief, conversational motivational message primaril
 
 ### 8.4 Voice and tone
 
+September 18 user decision: the current coaching update tests OK. A selectable voice setting is deferred to a later milestone; keep Cedar for now.
+
 Feedback MUST be converted to speech and played at the end of the run. The tone MUST be natural and conversational, matching the existing assistant interaction without constructing a special coach personality.
 
 User-selected voice: **Cedar** (API voice `cedar`), using **`gpt-4o-mini-tts`**. Voice audition is complete; do not ask the user to select a voice again. This is the speech model, not a decision about the separate text-generation model. The pasted comparison script is an audition example, not factual run history or required output. Third-party commentary about audio failures is not an established project finding.
@@ -265,6 +267,8 @@ The feature inventory includes personal records, distance, cumulative distance, 
 ### 9.4 Achievement definitions
 
 Achievement definitions SHOULD be data-driven so adding achievements/events does not require individually engineering each one. This records the inventory's explicit preference without prescribing a data model.
+
+September 18 direction: use Nike Run Club as achievement research, include major-holiday awards, and give WAYiRUN achievements original names. See ACHIEVEMENTS_PLAN.md for the researched catalog, proposed thresholds/calendar rules and implementation boundaries. The user accepted that catalog and authorized implementation; Section 1.8 records the implemented calculation limits. Photos remain the next feature milestone after achievements.
 
 ## 10 Photo, overlay, save, and share
 
@@ -403,7 +407,7 @@ These are review items, not additional features or assumed defaults. They do not
 | Connectivity status | Which reachable services define Online versus Fallback, and how the pre-run indicator reflects partial service availability. |
 | Music | Playlist entry/open is settled in Section 4.6. Phone playback verification is explicitly deferred by the user and is not a development blocker. Pause-source handling is settled in Section 7.6; event-loop prevention is required by Section 7.7. |
 | Finish experience | Animation behavior with no achievement or AI unchecked; handling multiple earned animations. Audio behavior when AI is unchecked is settled in Section 8.1. |
-| Achievements | Initial catalog, numeric thresholds, repeatability, holiday calendar/time zone, and effects of deleting runs on cumulative awards and records. |
+| Achievements | Catalog/calendar/deletion policies accepted and initial implementation complete; ACHIEVEMENTS_PLAN.md 1.8 defines conservative performance-data eligibility and future refinements. |
 | Photo/publication | Exact overlay choices/layout; retake behavior for an existing photo; how offline publication completes; whether publication can occur without a photo. |
 | Export/deletion | Single CSV summary/detail format selected by the user September 17. Technical representation, indefinite anti-resurrection markers and future own-record Health Connect cleanup are planned in worker/EXPORT_DELETION_PLAN.md. Health Connect implementation remains later. |
 | Recovery | Cloud retry/synchronization is implemented in Milestone 5; unavailable Health Connect access remains for its later milestone. Local interrupted-run presentation is settled in Section 13.3. |

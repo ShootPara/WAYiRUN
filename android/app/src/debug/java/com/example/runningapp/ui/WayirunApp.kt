@@ -173,6 +173,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
                     AccountPanel(accountView, accountEnabled, onSignIn, onSignOut)
                     SyncPanel(accountView, accountEnabled, onImport, onRetrySync)
                     CoachingKeyPanel(accountView, accountEnabled)
+                    com.example.runningapp.health.HealthPanel(accountEnabled)
 
                     Setup(view.busy, preferences, dark, { dark = it; preferences.edit { putBoolean("dark", it) } },
 
@@ -216,7 +217,9 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 
                         RunState.RUNNING, RunState.PAUSED -> ActiveRun(view, online) { action -> command(action, s.settings) }
 
-                        RunState.FINISHED -> if (view.coaching.visible) {
+                        RunState.FINISHED -> if (view.achievements.isNotEmpty()) {
+                            AchievementCelebration(view.achievements) { command(TrackingService.DISMISS_COACHING, null) }
+                        } else if (view.coaching.visible) {
                             CoachingAnimation(view.coaching.label) { command(TrackingService.DISMISS_COACHING, null) }
                         } else Summary(s, view.busy, view.error, { command(TrackingService.DISCARD, null) }) { command(TrackingService.NEW, null) }
 
@@ -568,7 +571,7 @@ private fun Summary(s: RunSnapshot, busy: Boolean, error: String?, onDiscard: ()
 
             title = { Text("ARE YOU SURE YOU WANT TO DISCARD THIS RUN??") },
 
-            text = { Text(error ?: "This deletes the run from this phone. Any cloud copy is removed when signed in and connected.") },
+            text = { Text(error ?: "This deletes the run from this phone. Any cloud copy is removed when signed in and connected. Achievements and records are recalculated.") },
 
             confirmButton = {
 
@@ -583,6 +586,8 @@ private fun Summary(s: RunSnapshot, busy: Boolean, error: String?, onDiscard: ()
             })
 
     }
+
+    com.example.runningapp.photos.RunPhotoButton(s)
 
     Text("Run saved", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
 

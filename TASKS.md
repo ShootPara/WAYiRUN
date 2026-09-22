@@ -6,7 +6,7 @@ FILE: <repository-root>\TASKS.md (NEW)
 
 ## 1 Current state
 
-WAYiRUN has debug-build tracking, recovery, audio cues, linked music controls, saved settings, Google sign-in, account-owned cloud uploads, explicit legacy import and protected discard. The user confirmed sync1 device checks pass on September 16 and reports two tracked runs; a read-only D1 query independently confirms two completed cloud runs. Music-specific verification remains separately deferred. Milestone 5 download/restore and cross-device deletion reconciliation are the current bounded slice. Desktop history/maps is next; AI, achievements, photos, Health Connect and production release remain later milestones. The release build remains a name-only shell. Historical verification below is dated; it must not be mistaken for current feature status. Repository root and cumulative local changes are preserved.
+Current through September 18: tracking, basic audio, music controls, account sync/restore/deletion, desktop history/maps/export, coaching and the initial achievements milestone are implemented. End-of-run photos and public run pages (9.5) are NEXT. See REMAINING_WORK.md for the concise remaining schedule and Sections 15–16 for current artifacts/evidence. Music/device verification and announcement-selector work remain deferred. The release variant is still a shell. Historical entries below are dated and do not override this current status.
 
 Read [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), and [the then-current working guide](User%20Preferences%20LLM%20Guide.md) before work. Product requirements take precedence over proposed technical details.
 
@@ -448,6 +448,8 @@ Add encrypted per-user OpenAI keys, completed-run comparisons, voice, checkbox b
 
 Agree the catalog, thresholds, repeatability, calendar/time-zone rules, deletion effects, and multiple-award presentation. Implement immediate awards with finish-time reveals and persistent history. Verify offline and cross-device reconciliation.
 
+September 18: user accepted ACHIEVEMENTS_PLAN.md and authorized implementation. Initial evaluator, owner-scoped derived persistence, finish celebration, desktop history and CSV export are implemented; see that document's Section 1.8 for verification and conservative performance-data limits. Photos in 9.5 are next, before voice selection or expanded statistics. REMAINING_WORK.md is the concise current remaining schedule.
+
 ### 9.5 Photos and public run pages
 
 Implement camera/picker/skip, selectable overlays, preview/retake/keep, Android save/share, private storage, and checked-by-default publication. Resolve offline publication, existing-photo retake behavior, and publication without a photo before those paths. Test public-field allowlists, unchecked privacy, and deletion of public assets.
@@ -499,3 +501,53 @@ Build troubleshooting: generated D: build directories had ReadOnly attributes, c
 Current verified APK: android/app/build/outputs/apk/debug/WAYiRUN-2026-09-18_12-43-46_EDT.apk (34516894 bytes). Install over the existing app. See android/PHONE_TEST_COACHING.md for selected, unchecked, offline and animation/audio checks. Real model access, recap quality and Cedar/headphone behavior remain phone acceptance. Next follow-up is coaching history/export integration and any real-device corrections; achievements and expanded statistics remain deferred. No commit/push.
 
 Cleanup limitation: automatic approval also blocked the exact-file deletion of android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk after verification. It remains a generated test artifact, separate from the sole timestamped handoff APK. Do not mistake it for the user install. No alternative deletion method was used to bypass that restriction.
+
+## 15 Desktop coaching history and complete export - September 18, 2026
+
+User reports the phone coaching update tests OK; voice selection is explicitly deferred. The requested backup was completed as 0c1ad96 on origin/codex/account-sessions; no open PRs needed cleanup. Subsequent work is uncommitted unless separately requested.
+
+Implemented read-only saved recap/audio in desktop run details and CSV v2 containing all retained coaching metadata and reconstructable WAV chunks. No generation or paid retry is available from the website. Ownership, deletion, integrity, credential exclusion, cancelled work and incomplete speech are checked. Existing run archives and the current APK are unchanged. See worker/COACHING_JOBS_CONTRACT.md 1.6 and worker/EXPORT_DELETION_PLAN.md 1.6.
+
+All 86 automated tests passed. Browser fixture downloaded a 1,959,020-byte CSV with four runs, two coaching receipts and 88 audio chunks; independent CSV reconstruction verified all 1,440,044 WAV bytes by SHA-256. Browser playback, literal text rendering, no-coaching state and navigation cleanup were verified. An initial in-app browser tab crashed; a fresh tab completed the playback check. No personal key or run was used. Development deployment status is recorded in worker/STATUS.md.
+
+Next user check: refresh the development website, open a run that generated coaching, replay its saved audio and export all runs. No new APK is needed. Next planned milestone is achievements planning (catalog, thresholds, time boundaries and deletion effects) before implementation; expanded statistics, charts and voice selection remain deferred.
+
+## 16 Achievements implemented - September 18, 2026
+
+The accepted named catalog and 21 holiday/event awards are implemented with automatic historical calculation, immediate persisted distance/calendar progress, finish-time performance checks and a dismissible celebration. Desktop Achievements processes all synced history; CSV v3 includes earned records. Source-run deletion recomputes dependent records, totals and streaks. See ACHIEVEMENTS_PLAN.md 1.8 for exact evidence restrictions and cross-device derivation.
+
+Verification: 69 JVM tests, 93 Worker/browser tests, Android debug assembly/lint, 16 focused emulator tests and 25 live smoke checks pass. Development version e192834c-8396-41b4-82d8-e77273d2d972. Current APK: android/app/build/outputs/apk/debug/WAYiRUN-2026-09-18_20-29-35_EDT.apk (34598826 bytes), 0.1.0-dev-achievements1. Upgrade in place. User phone acceptance remains separate; no personal API calls, phone install or commit/push.
+
+NEXT: Section 9.5 end-of-run photos, overlays, save/share and public run pages. Then Health Connect, remaining deferred refinements and release verification. See REMAINING_WORK.md. Do not resume achievement expansion, statistics or voice selection ahead of photos without a new user decision.
+
+## 17 End-of-run photos - September 19, 2026
+
+Implemented TASKS 9.5: system camera/front-rear switching, image picker/skip, bounded orientation-aware image decoding, selectable time/distance/pace/actual-route overlays, preview/retake/keep, default-checked publication, Android document save and standard image/link sharing. Room v5 stores the kept JPEG and durable sync choice; temporary preview survives recreation. Cloud upload follows confirmed run sync, with atomic replacements and idempotent duplicate receipts. D1 migration 0007 stores one bounded image per owned run; deletion cascades and deletion markers revoke public access. Private website photo display and public run pages expose only the selected run; CSV v4 contains reconstructable, hashed image records. See PHOTOS_PLAN.md for limits and android/PHONE_TEST_PHOTOS.md for acceptance.
+
+Verified: assembleDebug, lintDebug, 69 JVM tests, 99 full Worker/browser tests before the final concurrency fix, then all 20 focused photo/export tests after it. Nineteen distinct focused emulator tests pass (20 executions), including v4-to-v5 preservation/deletion, owner-scoped photo queue, stale-revision acknowledgments, bounded image rendering, Skip, and Keep with public unchecked plus Save/Share controls. Local browser displayed private-account photo/shared link, public map with preserved gaps at 390px, cleared account state on logout and exported four runs; independently reconstructed all 18,874 synthetic JPEG bytes from CSV. No real camera/gallery, physical phone, personal photo publication or API-key call was performed.
+
+Development Worker 13864438-3308-4c93-95ea-0e47619f0b4e deployed; 29 live smoke checks pass. APK: android/app/build/outputs/apk/debug/WAYiRUN-2026-09-19_06-36-20_EDT.apk, 34,730,466 bytes, version 0.1.0-dev-photos1, SHA256 8eea6249ff930124c7ac0229c58198eaea313ad8155b296675a2b4b12fd92d4c. Upgrade in place. No commit/push. User will test photos and achievements on the next run; Health Connect is the next implementation milestone, with voice/stats refinements still later.
+
+## 18 Surgical coaching playback correction - September 19, 2026
+
+User confirmed photos work but reported hearing repeated coaching while the saved recap described the new short indoor run. Read-only inspection of that run's stored WAV showed RIFF and data length placeholders 0xffffffff. A synthetic fixture with the same header and length reproduced Android MediaPlayer preparation failure; finalizing those two lengths made it prepare successfully. The existing playback error branch then explains repeated onboard fallback audio. The user was asked whether playback occurred on phone or website; no reply was received during this repair, so website-specific reproduction remains unconfirmed.
+
+Changed only Android coaching download-to-file preparation: a bounded WAV helper finalizes streaming lengths without changing speech samples. Already finalized WAVs remain byte-identical; malformed/truncated chunks are rejected. One call site and a debug version label change; no photo/tracking/server/schema changes, no stored recording edits, and no paid generation. No commit/push.
+
+Verification: assembleDebug, lintDebug, 72 JVM tests, and five focused emulator checks pass (WAV preparation, opt-out, fallback after completion cue/dismissal, photo Keep with private selection and photo Skip). The original streaming-header failure was separately reproduced before applying the fix. APK: android/app/build/outputs/apk/debug/WAYiRUN-2026-09-19_08-20-22_EDT.apk, 34730478 bytes, version 0.1.0-dev-photos1-coachingfix1; SHA256 8376e1a573467896bbdd9ebeed3187a5470cc3b33cd5305c065f04f28bcfc854. Upgrade in place. Test a new short run with coaching checked and compare spoken text to its saved website recap; opening a prior finished run intentionally does not repeat coaching or billing.
+
+
+## 19 Health Connect and comprehensive acceptance plan - September 19, 2026
+
+Implemented TASKS 9.6 with stable AndroidX Health Connect 1.1.0: explicit current-account/local connection, exercise/distance write permissions only, running/treadmill sessions with recorded pauses and frozen-zone offsets, stable client IDs, background export independent of internet and durable deletion cleanup. Room v6 preserves runs/photos/sync and retains cleanup intent after source deletion. Permission loss leaves work pending; reconnect retries existing exports without duplicates. Invalid zero/backwards timing is visibly blocked without changing source records. No health imports, GPS route export or unrelated health data access. See HEALTH_CONNECT_PLAN.md.
+
+Verified assembleDebug, lintDebug, 75 JVM tests and ten focused emulator checks: actual Health Connect insertion twice returned identical record IDs, repeated deletion succeeded, partial-write retries/deletion races passed, five schema migrations passed and the prior coaching WAV preparation passed. The actual provider check used synthetic records on the owned emulator and deleted them. Eight additional coaching/run-screen regression checks passed, including photo Keep/Skip and finish/discard controls (18 focused emulator checks total). Real-phone permission UI, health display and hardware acceptance remain pending. No physical phone install, backend deployment, paid API call or commit/push.
+
+APK: android/app/build/outputs/apk/debug/WAYiRUN-2026-09-19_11-44-08_EDT.apk, 39962476 bytes, version 0.1.0-dev-health1, SHA256 f30c89b871eeab13d45935b497f733d69faac705962ff4ddd862ca08d8849955. Upgrade in place; gear → Health Connect → Connect / retry export, grant both requested write permissions. Start with HC-01–04 and CO-01 in COMPREHENSIVE_TEST_PLAN.md.
+
+Next phase is comprehensive acceptance, with bugs/quibbles/enhancements recorded in FINAL_PASS_ISSUES.md, followed by a prioritized, bounded stabilization pass. Deferred voice/statistics/announcement settings remain separately tracked; production release configuration and authorization are still outstanding.
+
+
+## 20 Multi-day acceptance handoff - September 19, 2026
+
+the owner will take several days for testing and has no rate-limit resets remaining. COMPREHENSIVE_TEST_PLAN.md sections 1.3–1.4 now provide four manageable sessions and a plain-language batched reporting template. FINAL_PASS_ISSUES.md tracks each session as not run; advanced recovery/account/device cases remain explicitly pending. No application changes, rebuild, deployment or commit/push in this documentation-only follow-up. Keep health1 as the stable test build, collect observations, then prioritize surgical fixes and separately approved enhancements.

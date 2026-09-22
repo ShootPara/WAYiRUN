@@ -75,8 +75,64 @@ data class SyncOperation(
 data class PullState(@PrimaryKey val ownerId: String, val phase: String = "DELETIONS", val cursor: String? = null,
     val status: String = "PENDING", val attempts: Int = 0, val nextAttemptMs: Long = 0, val error: String? = null)
 
+@Entity(tableName = "achievement_cache")
+data class AchievementCache(@PrimaryKey val owner: String,val awards: String)
+
+@Entity(tableName = "run_photos", foreignKeys = [ForeignKey(entity = StoredRun::class,
+    parentColumns = ["id"], childColumns = ["runId"], onDelete = ForeignKey.CASCADE)])
+data class RunPhoto(@PrimaryKey val runId: String, val revision: String, val jpeg: ByteArray,
+    val options: String, val public: Boolean, val synced: Boolean = false, val publicUrl: String? = null)
+
+@Entity(tableName = "health_exports")
+data class HealthExport(@PrimaryKey val runId: String, val state: String = "PENDING", val error: String? = null)
+
 @Dao
 abstract class RunDao {
+    @Query("INSERT OR IGNORE INTO health_exports(runId,state,error) SELECT id,'PENDING',NULL FROM runs WHERE state='FINISHED' AND (cloudOwnerId IS NULL OR cloudOwnerId=:owner)")
+    abstract suspend fun seedHealth(owner: String?)
+    @Query("SELECT h.* FROM health_exports h LEFT JOIN runs r ON r.id=h.runId WHERE h.state='DELETE' OR (h.state='PENDING' AND r.state='FINISHED' AND (r.cloudOwnerId IS NULL OR r.cloudOwnerId=:owner)) ORDER BY CASE h.state WHEN 'DELETE' THEN 0 ELSE 1 END, h.runId LIMIT 20")
+    abstract suspend fun pendingHealth(owner: String?): List<HealthExport>
+    @Query("UPDATE health_exports SET state='PENDING',error=NULL WHERE state='DONE' AND EXISTS(SELECT 1 FROM runs r WHERE r.id=health_exports.runId AND (r.cloudOwnerId IS NULL OR r.cloudOwnerId=:owner))")
+    abstract suspend fun retryHealth(owner: String?)
+    @Query("SELECT * FROM health_exports WHERE runId=:id") abstract suspend fun health(id: String): HealthExport?
+    @Query("UPDATE health_exports SET state=:state,error=:error WHERE runId=:id AND state=:expected")
+    abstract suspend fun markHealth(id: String, expected: String, state: String, error: String? = null): Int
+    @Query("UPDATE health_exports SET state='DELETE',error=NULL WHERE runId=:id AND state<>'DELETED'")
+    abstract suspend fun deleteHealth(id: String)
+    @Query("SELECT * FROM health_exports") abstract suspend fun healthStatus(): List<HealthExport>
+
+    @Query("SELECT * FROM run_photos WHERE runId=:id") abstract suspend fun photo(id: String): RunPhoto?
+    @Upsert abstract suspend fun putPhoto(photo: RunPhoto)
+    @Query("SELECT p.* FROM run_photos p JOIN runs r ON r.id=p.runId WHERE r.cloudOwnerId=:owner AND p.synced=0 LIMIT 1")
+    abstract suspend fun pendingPhotos(owner: String): List<RunPhoto>
+    @Query("UPDATE run_photos SET synced=1, publicUrl=:url WHERE runId=:id AND revision=:revision")
+    abstract suspend fun photoSynced(id: String, revision: String, url: String?)
+
+    private val achievementInputs = mutableMapOf<String,Pair<String,AchievementRun>>()
+    @Query("SELECT * FROM runs WHERE (cloudOwnerId = :cloud OR (:cloud IS NULL AND cloudOwnerId IS NULL AND ownerId = :local)) AND state IN ('FINISHED','RUNNING','PAUSED')")
+    abstract suspend fun achievementRuns(cloud: String?, local: String): List<StoredRun>
+    @Query("SELECT * FROM achievement_cache WHERE owner = :owner") abstract suspend fun achievementCache(owner: String): AchievementCache?
+    @Upsert abstract suspend fun putAchievements(value: AchievementCache)
+    @Transaction
+    open suspend fun rebuildAchievements(cloud: String?, local: String): List<Achievement> {
+        val rows=achievementRuns(cloud,local)
+        achievementInputs.keys.retainAll(rows.map { it.id }.toSet())
+        val live=rows.any { it.state!="FINISHED" }
+        val inputs=rows.map { row ->
+            val cached=achievementInputs[row.id]
+            val input=if(cached?.first==row.checkpoint) cached.second else achievementInput(row.decode().snapshot,row.zoneId,
+                measurements(row.id).map { AchievementSample(it.deltaMeters,it.totalMeters,it.activeMs,it.segmentId) }).also { achievementInputs[row.id]=row.checkpoint to it }
+            if(live) input.copy(points=emptyList()) else input
+        }
+        val retainedPerformance = if(live) achievementCache(cloud?:"local:$local")?.let { cache ->
+            Json.decodeFromString<List<Achievement>>(cache.awards).filter { a ->
+                (a.id.startsWith("pr-") || a.id in listOf("negative-split","progression")) && rows.any { it.id==a.runId && it.state=="FINISHED" }
+            }
+        }.orEmpty() else emptyList()
+        val earned=Achievements.evaluate(inputs)+retainedPerformance
+        putAchievements(AchievementCache(cloud?:"local:$local",Json.encodeToString(earned)))
+        return earned
+    }
     @Query("SELECT * FROM sync_pull WHERE ownerId = :owner") abstract suspend fun pull(owner: String): PullState?
     @Query("SELECT * FROM sync_pull WHERE ownerId = :owner") abstract fun pullStatus(owner: String): Flow<PullState?>
     @Upsert abstract suspend fun putPull(state: PullState)
@@ -101,6 +157,7 @@ abstract class RunDao {
         archive.measurements.forEach { putMeasurement(it.copy(id = 0)) }
         putSplits(archive.splits); putIntervals(archive.intervals); putSegments(archive.segments)
         putOperation(SyncOperation(id, owner, operationId, status = "SYNCED"))
+        rebuildAchievements(owner,archive.run.ownerId)
         return true
     }
     @Query("SELECT * FROM runs WHERE activeSlot = 1 LIMIT 1") abstract suspend fun active(): StoredRun?
@@ -130,6 +187,8 @@ abstract class RunDao {
             putRun(row.copy(cloudOwnerId = owner))
             addOperation(SyncOperation(row.id, owner, UUID.randomUUID().toString()))
         }
+        rows.map { it.ownerId }.distinct().forEach { rebuildAchievements(null,it) }
+        if(rows.isNotEmpty()) rebuildAchievements(owner,rows.first().ownerId)
         return rows.size
     }
     @Transaction
@@ -153,11 +212,12 @@ abstract class RunDao {
     @Transaction
     open suspend fun remoteDeleted(id: String, cloudOwner: String) {
         val row = get(id)
-        if (row != null && row.cloudOwnerId == cloudOwner && row.state == "FINISHED") deleteCompleted(id, row.ownerId)
+        if (row != null && row.cloudOwnerId == cloudOwner && row.state == "FINISHED") { deleteHealth(id); deleteCompleted(id, row.ownerId) }
         val op = operation(id)
         if (op?.ownerId == cloudOwner) putOperation(op.copy(action = "DELETE", status = "DELETED", error = null))
         else if (op == null && (row == null || row.cloudOwnerId == cloudOwner))
             putOperation(SyncOperation(id, cloudOwner, UUID.randomUUID().toString(), action = "DELETE", status = "DELETED"))
+        rebuildAchievements(cloudOwner,row?.ownerId?:"")
     }
 
     @Transaction
@@ -169,7 +229,10 @@ abstract class RunDao {
             putOperation(SyncOperation(id, cloudOwner, previous?.operationId ?: UUID.randomUUID().toString(), action = "DELETE"))
         }
         // Queue deletion and remove all measurements in the same local transaction.
-        return deleteCompleted(id, owner) == 1
+        deleteHealth(id)
+        val deleted=deleteCompleted(id, owner)==1
+        rebuildAchievements(stored.cloudOwnerId,owner)
+        return deleted
     }
 
     @Transaction
@@ -186,19 +249,43 @@ abstract class RunDao {
         putSegments(segments)
         if (route != null) putRoute(route)
         if (measurement != null) putMeasurement(measurement)
+        val prior=achievementInputs[run.id]
+        if(run.state!="FINISHED" && old!=null && prior?.first==old.checkpoint) {
+            val s=run.decode().snapshot
+            val delta=achievementInput(s,run.zoneId,listOfNotNull(measurement?.let { AchievementSample(it.deltaMeters,it.totalMeters,it.activeMs,it.segmentId) }))
+            val dates=prior.second.movement.toMutableMap()
+            delta.movement.forEach { (date,meters) -> dates[date]=(dates[date]?:0.0)+meters }
+            achievementInputs[run.id]=run.checkpoint to delta.copy(movement=dates,points=emptyList())
+        }
         if (run.state == "FINISHED" && run.cloudOwnerId != null) {
             addOperation(SyncOperation(run.id, run.cloudOwnerId, UUID.randomUUID().toString()))
         }
+        if(run.state=="FINISHED" || (measurement?.deltaMeters?:0.0)>0) rebuildAchievements(run.cloudOwnerId,run.ownerId)
     }
 }
 
 @Database(
     entities = [StoredRun::class, RoutePoint::class, StoredMeasurement::class, StoredSplit::class,
-        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, PullState::class], version = 3, exportSchema = true,
+        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class], version = 6, exportSchema = true,
 )
 abstract class RunDatabase : RoomDatabase() {
     abstract fun runs(): RunDao
     companion object {
+        val MIGRATION_5_6 = object : Migration(5,6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS health_exports (runId TEXT NOT NULL PRIMARY KEY, state TEXT NOT NULL, error TEXT)")
+            }
+        }
+        val MIGRATION_4_5 = object : Migration(4,5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS run_photos (runId TEXT NOT NULL PRIMARY KEY, revision TEXT NOT NULL, jpeg BLOB NOT NULL, options TEXT NOT NULL, public INTEGER NOT NULL, synced INTEGER NOT NULL, publicUrl TEXT, FOREIGN KEY(runId) REFERENCES runs(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            }
+        }
+        val MIGRATION_3_4 = object : Migration(3,4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS achievement_cache (owner TEXT NOT NULL PRIMARY KEY, awards TEXT NOT NULL)")
+            }
+        }
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE runs ADD COLUMN cloudOwnerId TEXT")
@@ -214,7 +301,7 @@ abstract class RunDatabase : RoomDatabase() {
         @Volatile private var instance: RunDatabase? = null
         fun get(context: Context): RunDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, RunDatabase::class.java, "wayirun-local.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
         }
     }
 }

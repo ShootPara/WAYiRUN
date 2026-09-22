@@ -4,6 +4,7 @@ import {randomBytes,randomUUID,createHash} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {Miniflare,convertV4MiniflareOptions} from "miniflare";
 import {handleCoaching} from "../build/coaching-jobs.js";
+import {handleCoachingHistory} from "../build/coaching-history.js";
 import {sealKey} from "../build/account-key.js";
 import {CoachingProviderError} from "../build/coaching-provider.js";
 const sha=x=>createHash("sha256").update(x).digest("hex");
@@ -84,4 +85,21 @@ test("native coaching boundary rejects unauthorized, origin, cookie and owner in
  for(const headers of [{Origin:"https://test"},{Cookie:"x=y"}])assert.equal((await call(id,{headers})).status,403);
  assert.equal((await call(id,{body:{operationId:randomUUID(),owner:"bob"}})).status,400);
  assert.equal((await call(id,{method:"DELETE"})).status,405);assert.equal(calls.length,0);
+});
+
+test("coaching history reconstructs every audio byte without exposing credentials or generating again",async t=>{
+ const {env,tokens,add,call,calls,db}=await runtime(t),id=await add();await call(id);
+ const history=owner=>handleCoachingHistory(new Request(`https://test/api/coaching-history/${id}`,{headers:{Authorization:`Bearer ${tokens[owner]}`}}),env);
+ const response=await history("alice");assert.equal(response.status,200);const result=await response.json(),c=result.coaching;
+ const bytes=Buffer.concat(c.audio.chunks.map((chunk,index)=>{assert.equal(chunk.index,index);const b=Buffer.from(chunk.base64,"base64");assert.equal(b.length,chunk.bytes);assert.equal(sha(b),chunk.sha256);return b;}));
+ assert.equal(bytes.length,150000);assert.equal(sha(bytes),c.audio.sha256);assert.deepEqual(bytes,Buffer.alloc(150000,7));
+ const serialized=JSON.stringify(result);for(const secret of [tokens.alice,"token_hash","key_revision","ciphertext","nonce","sk-alice-"])assert.ok(!serialized.includes(secret));
+ assert.equal((await history("bob")).status,404);assert.equal(calls.length,3);
+ await db.prepare("DELETE FROM coaching_audio WHERE run_id=? AND chunk_index=1").bind(id).run();assert.equal((await history("alice")).status,503);
+});
+test("history distinguishes an existing uncoached run from deleted or unauthorized runs",async t=>{
+ const {env,tokens,add,db}=await runtime(t),id=await add();
+ const request=()=>new Request(`https://test/api/coaching-history/${id}`,{headers:{Authorization:`Bearer ${tokens.alice}`}});
+ assert.deepEqual(await (await handleCoachingHistory(request(),env)).json(),{runId:id,coaching:null});
+ await db.prepare("DELETE FROM run_uploads WHERE run_id=?").bind(id).run();assert.equal((await handleCoachingHistory(request(),env)).status,404);
 });

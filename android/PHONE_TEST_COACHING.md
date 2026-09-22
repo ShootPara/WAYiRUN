@@ -19,3 +19,7 @@ Check speaker/headphone volume and music behavior on the real phone. Generated c
 ## 1.5 Already verified and still pending
 
 Assembly, lint and 58 JVM unit tests pass. Seven focused emulator tests pass, covering finish controls, opt-out selection, dismissible animation, persisted attempt suppression and actual onboard-recording playback completion. Backend: 80 automated tests and 22 development smoke checks pass. Automated tests did not use the user's key, send private runs to OpenAI or verify the quality of a real Cedar recap. Coaching results are stored with their runs server-side, but desktop coaching presentation and inclusion in CSV export remain follow-up work.
+
+## 1.6 September 19 playback repair check
+
+Install WAYiRUN-2026-09-19_08-20-22_EDT.apk over the current app. Finish a new short run with Post-run coaching checked and wait for the spoken recap. Compare it with that run's saved website text. Android now finalizes downloaded streaming WAV headers before MediaPlayer playback; it previously rejected the file and played reusable fallback encouragement. Photos are unchanged and their Keep/Skip regression tests pass. Existing finished runs do not automatically replay or request another paid recap.

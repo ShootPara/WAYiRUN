@@ -26,7 +26,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-dev-sync2"
+            versionNameSuffix = "-dev-health1"
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com\"")
         }
     }
@@ -56,6 +56,7 @@ kotlin {
 }
 
 dependencies {
+    debugImplementation("androidx.health.connect:connect-client:1.1.0")
     debugImplementation("androidx.work:work-runtime-ktx:2.10.5")
     androidTestImplementation("androidx.room:room-testing:2.8.4")
     debugImplementation("androidx.credentials:credentials:1.6.0")

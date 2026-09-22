@@ -130,3 +130,6 @@ export async function verifyCoachingContext(db: D1Database, context: CoachingCon
     if (row.manifest_hash !== reference.manifestHash) throw new CoachingDataError("run_unavailable");
   }
 }
+
+/** Internal verified archive access; caller must authenticate or resolve an existing publication. */
+export async function readVerifiedRun(db: D1Database, owner: string, id: string) { return readArchive(db, owner, await currentRow(db,owner,id)); }

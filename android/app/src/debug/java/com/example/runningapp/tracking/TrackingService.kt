@@ -29,6 +29,7 @@ data class TrackingView(
     val ready: Boolean = false, val busy: Boolean = false, val error: String? = null,
     val musicStatus: String = "Music controls off · Runs still work",
     val coaching: CoachingView = CoachingView(),
+    val achievements: List<Achievement> = emptyList(),
 )
 
 /** All commands, measurements and disk commits pass through one serial consumer. */
@@ -58,6 +59,7 @@ class TrackingService : Service() {
     private var cueSerial = 0L
     private var musicError: String? = null
     private var actionError: String? = null
+    private var finishAwards: List<Achievement> = emptyList()
     private lateinit var wakeLock: PowerManager.WakeLock
     private var controller: RunController? = null
     private var input: TrackingInput? = null
@@ -173,6 +175,7 @@ class TrackingService : Service() {
                     if (saved?.state == RunState.FINISHED && message.expectedRunId == saved.runId) {
                         try {
                             check(repository.discard(saved.runId, owner))
+                            com.example.runningapp.health.HealthScheduler.enqueue(this)
                             coaching.cancel()
                             SyncScheduler.enqueue(this)
                             cues.cancel(); musicPolicy.detach()
@@ -233,7 +236,7 @@ class TrackingService : Service() {
                     interrupted = false
                     result = TrackingResult(controller!!.resume())
                 }
-                DISMISS_COACHING -> coaching.dismiss()
+                DISMISS_COACHING -> { coaching.dismiss(); finishAwards=emptyList() }
                 FINISH, FINISH_WITHOUT_COACHING -> if (controller != null) {
                     sensors.stop(); listening = false; input?.reset()
                     result = TrackingResult(controller!!.finish())
@@ -274,6 +277,7 @@ class TrackingService : Service() {
                         monotonicMs = it.monotonicMs, latitude = it.latitude, longitude = it.longitude, accuracyMeters = it.accuracyMeters)
                 }
                 repository.save(checkpoint, owner, zone, offset, interrupted, point, measurement, cloudOwner)
+                if (s.state == RunState.FINISHED) com.example.runningapp.health.HealthScheduler.enqueue(this)
                 if (s.state == RunState.FINISHED && cloudOwner != null) SyncScheduler.enqueue(this)
                 lastSaved = checkpoint
                 performMusic(musicPolicy.runChanged(s.state))
@@ -281,6 +285,10 @@ class TrackingService : Service() {
                 cues.play(result.update.events, s.settings.units)
                 if (result.update.events.isNotEmpty() && cues.isPlaying) { cueSerial++; musicPolicy.cueStarted() }
                 if (s.state == RunState.FINISHED && message is Message.Command) {
+                    finishAwards = runCatching {
+                        val dao=RunDatabase.get(this).runs()
+                        dao.rebuildAchievements(cloudOwner,owner).filter { it.runId==s.runId }
+                    }.getOrDefault(emptyList())
                     // Coaching setup failure must never turn a committed finish into a storage error.
                     runCatching { coaching.start(s.runId, cloudOwner, message.action == FINISH) }
                 }
@@ -324,7 +332,8 @@ class TrackingService : Service() {
             music.current == PlayerStatus.PLAYING -> "YouTube Music available · Links when tracking starts"
             else -> "YouTube Music not playing · Run starts normally"
         }
-        view.value = TrackingView(controller?.snapshot(), interrupted, input?.distanceAvailable == true, true, error = actionError, musicStatus = status, coaching = coaching.view)
+        view.value = TrackingView(controller?.snapshot(), interrupted, input?.distanceAvailable == true, true, error = actionError, musicStatus = status, coaching = coaching.view,
+            achievements = if(controller?.snapshot()?.state==RunState.FINISHED) finishAwards.filter { it.runId==controller?.snapshot()?.runId } else emptyList())
     }
 
     private fun performMusic(actions: List<MusicAction>) {

@@ -36,6 +36,9 @@ async function runtime(t, configured = true, rateLimit = 1000) {
   const deletion=readFileSync(new URL("../migrations/0004_run_deletions.sql",import.meta.url),"utf8");
   const split=deletion.indexOf("CREATE TRIGGER");
   await db.prepare(deletion.slice(0,split)).run();await db.prepare(deletion.slice(split)).run();
+  const coaching=readFileSync(new URL("../migrations/0006_coaching_jobs.sql",import.meta.url),"utf8"),trigger=coaching.indexOf("CREATE TRIGGER");
+  await db.batch(coaching.slice(0,trigger).split(";").map(s=>s.trim()).filter(Boolean).map(s=>db.prepare(s)));
+  await db.prepare(coaching.slice(trigger)).run();
   return { mf, db };
 }
 function call(mf, path, method = "GET", body, headers = {}) {
@@ -56,6 +59,24 @@ async function login(mf, subject, patch = {}) {
   return (await response.json()).accessToken;
 }
 const bearer = value => ({ Authorization: `Bearer ${value}` });
+
+test("browser coaching history is private and read-only, includes retained text and excludes credentials",async t=>{
+ const {mf,db}=await runtime(t),access=await login(mf,"coaching-alice"),other=await login(mf,"coaching-bob");
+ const owner=(await (await call(mf,"/api/account","GET",undefined,bearer(access))).json()).account.id;
+ const id=crypto.randomUUID(),operation=crypto.randomUUID();
+ await db.prepare("INSERT INTO run_uploads VALUES (?,?,?,'{}',?,1,1,10000,2)").bind(owner,id,operation,"a".repeat(64)).run();
+ await db.prepare("INSERT INTO coaching_jobs (owner_id,run_id,operation_id,state,key_revision,token_hash,message,created_at,updated_at) VALUES (?,?,?,'failed','private-key-revision','private-session-hash','Saved recap even without speech',1,2)").bind(owner,id,crypto.randomUUID()).run();
+ const path=`/web-api/coaching-history/${id}`,cookie={Cookie:`__Host-wayirun=${access}`};
+ const response=await call(mf,path,"GET",undefined,cookie);assert.equal(response.status,200);const text=await response.text();
+ assert.equal(JSON.parse(text).coaching.message,"Saved recap even without speech");assert.ok(!text.includes("private-key")&&!text.includes("private-session"));
+ assert.match(response.headers.get("Content-Security-Policy"),/media-src 'self' blob:/);
+ assert.equal((await call(mf,path,"GET",undefined,{Cookie:`__Host-wayirun=${other}`})).status,404);
+ assert.equal((await call(mf,path,"POST",{},cookie)).status,405);
+ assert.equal((await call(mf,`/web-api/coaching/${id}`,"POST",{},cookie)).status,404);
+ assert.equal((await call(mf,path+"?owner=another","GET",undefined,cookie)).status,400);
+ assert.equal((await call(mf,path,"GET",undefined,{...cookie,Origin:"https://other.example"})).status,403);
+ assert.equal((await call(mf,path)).status,401);
+});
 
 test("map assets are served locally with correct types and only the tile image host allowed", async t => {
   const {mf}=await runtime(t);

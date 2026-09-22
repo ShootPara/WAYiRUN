@@ -12,6 +12,34 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RunDatabaseTest {
+    @Test fun photoQueueFollowsOwnerAndNeverAcknowledgesAReplacementAsSynced() = runBlocking {
+        val r=run("photo");time=1000;r.finish()
+        repo.save(r.checkpoint(),"test-owner","UTC",0,false,cloudOwnerId="alice")
+        val old=RunPhoto("photo","first",byteArrayOf(1,2,3),"{}",true)
+        db.runs().putPhoto(old)
+        assertEquals(1,db.runs().pendingPhotos("alice").size)
+        assertTrue(db.runs().pendingPhotos("bob").isEmpty())
+        db.runs().putPhoto(old.copy(revision="second",public=false))
+        db.runs().photoSynced("photo","first","https://old")
+        assertFalse(db.runs().photo("photo")!!.synced)
+        db.runs().photoSynced("photo","second",null)
+        assertTrue(db.runs().photo("photo")!!.synced)
+        repo.discard("photo","test-owner")
+        assertNull(db.runs().photo("photo"))
+    }
+
+    @Test fun achievementsAreDurableOwnerScopedAndRecomputedOnDeletion() = runBlocking {
+        val r=run("award");r.selectSource(DistanceSource.STEPS)
+        val segment=r.snapshot().currentSegmentId!!
+        r.record(RunMeasurement.Steps(segment,0,100))
+        time=10000;r.record(RunMeasurement.Steps(segment,time,1100));r.finish()
+        repo.save(r.checkpoint(),"test-owner","UTC",0,false,cloudOwnerId="alice")
+        assertTrue(db.runs().achievementCache("alice")!!.awards.contains("Kicking It Off"))
+        assertNull(db.runs().achievementCache("bob"))
+        assertEquals(db.runs().rebuildAchievements("alice","test-owner"),db.runs().rebuildAchievements("alice","test-owner"))
+        assertTrue(repo.discard("award","test-owner"))
+        assertEquals("[]",db.runs().achievementCache("alice")!!.awards)
+    }
     private lateinit var db: RunDatabase
     private lateinit var repo: RunRepository
     private var time = 0L

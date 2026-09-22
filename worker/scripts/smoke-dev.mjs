@@ -5,6 +5,9 @@ const origin = "https://wayirun-dev.unopenedparachute.workers.dev";
 await verifyRollout(async () => {
 const passed = [];
 for (const [path, method, status, expected] of [
+  ["/api/photos/00000000-0000-0000-0000-000000000001", "GET", 401, {error:"unauthorized"}],
+  ["/web-api/photos/00000000-0000-0000-0000-000000000001", "GET", 401, {error:"unauthorized"}],
+  ["/p/"+"0".repeat(64), "GET", 404, {error:"not_found"}],
   ["/healthz", "GET", 200, { service: "WAYiRUN", status: "ok" }],
   ["/readyz", "GET", 200, { service: "WAYiRUN", status: "ready" }],
   ["/readyz", "HEAD", 200, null],
@@ -19,6 +22,8 @@ for (const [path, method, status, expected] of [
   ["/api/coaching/00000000-0000-0000-0000-000000000001/audio", "GET", 401, { error: "unauthorized" }],
   ["/web-api/account", "GET", 401, { error: "unauthorized" }],
   ["/web-api/runs", "GET", 401, { error: "unauthorized" }],
+  ["/api/coaching-history/00000000-0000-0000-0000-000000000001", "GET", 401, { error: "unauthorized" }],
+  ["/web-api/coaching-history/00000000-0000-0000-0000-000000000001", "GET", 401, { error: "unauthorized" }],
 ]) {
   const response = await fetch(origin + path, { method, signal: AbortSignal.timeout(15_000), redirect: "error" });
   assert.equal(response.status, status, `${method} ${path}`);
@@ -27,7 +32,7 @@ for (const [path, method, status, expected] of [
   else assert.equal(await response.text(), "");
   passed.push(`PASS ${method} ${path} (${status})`);
 }
-for (const [path, type, marker] of [["/export.js", "text/javascript", "createCsvExport"], ["/", "text/html", "WAYiRUN"], ["/app.js", "text/javascript", "setupSignIn"], ["/style.css", "text/css", ".totals"], ["/route.js", "text/javascript", "prepareRoute"], ["/map.js", "text/javascript", "showRouteMap"], ["/leaflet.js", "text/javascript", "1.9.4"], ["/leaflet.css", "text/css", ".leaflet-container"]]) {
+for (const [path, type, marker] of [["/public-photo.js", "text/javascript", "Start location"], ["/achievements.js", "text/javascript", "evaluateAchievements"], ["/export.js", "text/javascript", "createCsvExport"], ["/", "text/html", "WAYiRUN"], ["/app.js", "text/javascript", "setupSignIn"], ["/style.css", "text/css", ".totals"], ["/route.js", "text/javascript", "prepareRoute"], ["/map.js", "text/javascript", "showRouteMap"], ["/leaflet.js", "text/javascript", "1.9.4"], ["/leaflet.css", "text/css", ".leaflet-container"]]) {
   const response = await fetch(origin + path, { signal: AbortSignal.timeout(15000), redirect: "error" });
   assert.equal(response.status, 200); assert.ok(response.headers.get("Content-Type")?.startsWith(type));
   assert.equal(response.headers.get("Cache-Control"), "no-store");

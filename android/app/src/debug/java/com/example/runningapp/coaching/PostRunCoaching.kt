@@ -73,7 +73,7 @@ class PostRunCoaching(private val context: Context, private val scope: Coroutine
                         check(bytes.size == result.getInt("audioBytes"))
                         guard()
                         file = withContext(Dispatchers.IO) {
-                            File.createTempFile("coaching-", ".wav", context.cacheDir).also { it.writeBytes(bytes) }
+                            File.createTempFile("coaching-", ".wav", context.cacheDir).also { it.writeBytes(finalizeCoachingWave(bytes)) }
                         }
                     }
                 } catch (_: TimeoutCancellationException) { /* Selected coaching falls back; never resend POST. */ }

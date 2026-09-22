@@ -126,3 +126,17 @@ Deployed directly without Git commit/push per user preference. Worker version 19
 ## 15 September 18 coaching integration update
 
 Development migration 0006 and Worker version 88261b78-b67b-4993-b3e8-6c388c3c7aff add authenticated coaching request/status/audio routes and durable single-attempt jobs. Current/previous run deletion removes associated coaching audio; a dependent-job receipt prevents regeneration after previous-run deletion. All 80 automated tests and 22 live smoke checks pass. See COACHING_JOBS_CONTRACT.md. Android assembly/lint, 58 JVM tests and seven focused emulator tests pass; actual Cedar quality/model access awaits phone acceptance. No personal API key used by the agent, no production deployment and no commit/push.
+
+## 16 Saved desktop coaching and CSV v2 - September 18, 2026
+
+The user accepted the phone coaching update. Development Worker 200767ab-9aa3-4476-b68d-844cc5bd9f79 now serves saved recap/manual audio replay and complete CSV coaching metadata/audio. All 86 automated tests and 24 live smoke checks pass. No new migration or APK. An initial Cloudflare D1 authorization error was transient: the unchanged guarded deployment succeeded on retry with the existing login, without changing permissions.
+
+Local browser verification covered literal recap text, WAV playback, empty coaching, navigation cleanup and an actual four-run CSV download. Independent parsing reconstructed 1,440,044 audio bytes from 88 chunks with the expected SHA-256. The fixture used synthetic runs and silent test audio; no personal key/provider call was made. Real saved Cedar replay is the user's development-site check. Voice selection, expanded statistics and charts remain deferred; achievements planning is next. This slice is uncommitted per the user's preference.
+
+## 17 Achievements and CSV v3 - September 18, 2026
+
+Development version e192834c-8396-41b4-82d8-e77273d2d972 adds authenticated-history-derived achievement cards and complete CSV award records; 93 automated tests and 25 live smoke checks pass. No cloud database migration or paid provider calls. Initial D1 authorization error recovered after checking the existing login and retrying the unchanged guarded deployment; no permissions changed. Phone implementation and artifact are documented in ACHIEVEMENTS_PLAN.md 1.8. Photos/public run pages are next. No commit/push.
+
+## 1.20 September 19 photos deployment
+
+Migration 0007 and Worker 13864438-3308-4c93-95ea-0e47619f0b4e deployed to existing development only. Photos/public-page/privacy/deletion/CSV v4 are implemented; 29 live checks pass. Full suite passed 99 tests; final duplicate-upload receipt fix passed 20 focused photo/export tests. Photos use existing D1, max 1,000,000 JPEG bytes/run, with run foreign-key cascade. No production, real-user image publication or Git backup performed. See PHOTOS_PLAN.md and TASKS.md 17.

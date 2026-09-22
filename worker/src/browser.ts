@@ -1,5 +1,8 @@
+import {handlePhotos} from "./photos.js";
+import publicPhotoScript from "../web/public-photo.browserjs";
 import { handleAuth, reply, smallJson, hash, SESSION_SECONDS, type AuthEnv } from "./auth.js";
 import { handleRuns } from "./runs.js";
+import { handleCoachingHistory } from "./coaching-history.js";
 import page from "../web/index.html";
 import script from "../web/app.browserjs";
 import style from "../web/style.css";
@@ -8,8 +11,11 @@ import mapScript from "../web/map.browserjs";
 import exportScript from "../web/export.browserjs";
 import leaflet from "../web/vendor/leaflet.browserjs";
 import leafletStyle from "../web/vendor/leaflet.css";
+import achievementScript from "../web/achievements.browserjs";
 
 const assets: Record<string, [string, string]> = {
+  "/public-photo.js": [publicPhotoScript,"text/javascript"],
+  "/achievements.js": [achievementScript, "text/javascript"],
   "/export.js": [exportScript, "text/javascript"],
   "/app.js": [script, "text/javascript"], "/style.css": [style, "text/css"],
   "/route.js": [routeScript, "text/javascript"], "/map.js": [mapScript, "text/javascript"],
@@ -36,7 +42,7 @@ function protect(response: Response, nonce: string): Response {
   out.headers.set("X-Content-Type-Options", "nosniff");
   out.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   out.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com https://tile.openstreetmap.org data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com https://tile.openstreetmap.org data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
   return out;
 }
 export async function handleBrowser(request: Request, env: AuthEnv): Promise<Response> {
@@ -60,7 +66,9 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
     "/web-api/account": "/api/account", "/web-api/logout": "/api/auth/logout" };
   const auth = authPaths[path];
   const runs = /^\/web-api\/runs(?:\/[0-9a-f-]+(?:\/chunks\/(0|[1-9][0-9]*))?)?$/.test(path);
-  if (!auth && !runs && path !== "/web-api/config") return reply({ error: "not_found" }, 404);
+  const photo = /^\/web-api\/photos\/[0-9a-f-]+(?:\/image)?$/.test(path);
+  const coaching = /^\/web-api\/coaching-history\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
+  if (!auth && !runs && !coaching && !photo && path !== "/web-api/config") return reply({ error: "not_found" }, 404);
   const deleting = request.method === "DELETE" && /^\/web-api\/runs\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
   const mutating = deleting || ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
   if (request.method !== (deleting ? "DELETE" : mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
@@ -88,7 +96,7 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
     headers.set("Authorization", `Bearer ${token}`);
   }
   const forwarded = new Request(`${WEB_ORIGIN}${auth ?? path.replace("/web-api/", "/api/")}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) });
-  const response = auth ? await handleAuth(forwarded, env) : await handleRuns(forwarded, env);
+  const response = auth ? await handleAuth(forwarded, env) : photo ? await handlePhotos(forwarded,env) : coaching ? await handleCoachingHistory(forwarded, env) : await handleRuns(forwarded, env);
   if (path === "/web-api/account" && response.ok) {
     const token = cookie(request, sessionName)!;
     const now = Math.floor(Date.now() / 1000);

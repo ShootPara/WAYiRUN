@@ -18,7 +18,7 @@ export async function fetchWithBackoff(send, signal, onWait, wait=abortableDelay
     await response.body?.cancel();onWait(Math.ceil(ms/1000));await wait(ms,signal);
   }
 }
-const fields = ["export_version","archive_version","record_type","run_id","record_index","start_utc","end_utc","time_zone","mode","recorded_units","distance_meters","active_duration_ms","pace_ms_per_km","pace_ms_per_mile","segment_id","monotonic_ms","latitude","longitude","accuracy_meters","measurement_source","delta_meters","total_meters","active_ms","split_number","partial","interval_number","clock_epoch","start_monotonic_ms","end_monotonic_ms","start_active_ms","end_active_ms","countdown_seconds","stride_length_meters","goal_type","goal_distance_meters","goal_duration_ms","record_json"];
+const fields = ["export_version","archive_version","record_type","run_id","record_index","start_utc","end_utc","time_zone","mode","recorded_units","distance_meters","active_duration_ms","pace_ms_per_km","pace_ms_per_mile","segment_id","monotonic_ms","latitude","longitude","accuracy_meters","measurement_source","delta_meters","total_meters","active_ms","split_number","partial","interval_number","clock_epoch","start_monotonic_ms","end_monotonic_ms","start_active_ms","end_active_ms","countdown_seconds","stride_length_meters","goal_type","goal_distance_meters","goal_duration_ms","coaching_state","coaching_text","audio_media_type","audio_bytes","audio_sha256","record_json"];
 const groups = [["route","GPS_POINT"],["measurements","MEASUREMENT"],["splits","SPLIT"],["intervals","ACTIVE_INTERVAL"],["segments","SOURCE_SEGMENT"]];
 const encoder = new TextEncoder();
 const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
@@ -32,6 +32,46 @@ function cell(value) {
   return '"' + text.replaceAll('"','""') + '"';
 }
 const iso = value => value === null || value === undefined ? null : new Date(value).toISOString();
+const fingerprint = async bytes => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b=>b.toString(16).padStart(2,"0")).join("");
+function exactKeys(value, keys) { requireValid(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join(",")===keys.split(",").sort().join(",")); }
+export async function verifyCoaching(result, runId, current = () => true) {
+  currentOrAbort(current);exactKeys(result,"runId,coaching");requireValid(result.runId===runId);
+  const c=result.coaching;if(c===null)return null;
+  exactKeys(c,"version,runId,operationId,state,currentManifestHash,previousRunId,previousManifestHash,message,error,createdAt,updatedAt,audio");
+  const digest=value=>typeof value==="string"&&/^[0-9a-f]{64}$/.test(value);
+  requireValid(c.version===1&&c.runId===runId&&uuid.test(c.operationId)&&["preparing","text_pending","speech_pending","ready","failed","unknown"].includes(c.state));
+  requireValid(c.currentManifestHash===null||digest(c.currentManifestHash));
+  requireValid(c.previousRunId===null?c.previousManifestHash===null:uuid.test(c.previousRunId)&&digest(c.previousManifestHash));
+  requireValid(c.message===null||(typeof c.message==="string"&&c.message.length<=2000));
+  requireValid(c.error===null||(typeof c.error==="string"&&/^[a-z_]{1,64}$/.test(c.error)));
+  requireValid([c.createdAt,c.updatedAt].every(v=>Number.isSafeInteger(v)&&v>=0));
+  if(c.state!=="ready"){requireValid(c.audio===null);return null;}
+  requireValid(typeof c.message==="string"&&c.message.trim().length>0&&digest(c.currentManifestHash));
+  const a=c.audio;exactKeys(a,"mediaType,bytes,sha256,chunks");
+  requireValid(a.mediaType==="audio/wav"&&Number.isSafeInteger(a.bytes)&&a.bytes>0&&a.bytes<=4194304&&digest(a.sha256));
+  requireValid(Array.isArray(a.chunks)&&a.chunks.length===Math.ceil(a.bytes/16384));
+  const bytes=new Uint8Array(a.bytes);let offset=0;
+  for(const [index,chunk] of a.chunks.entries()){
+    currentOrAbort(current);exactKeys(chunk,"index,bytes,sha256,base64");
+    requireValid(chunk.index===index&&chunk.bytes===Math.min(16384,a.bytes-offset)&&digest(chunk.sha256)&&typeof chunk.base64==="string"&&chunk.base64.length===4*Math.ceil(chunk.bytes/3));
+    const text=atob(chunk.base64),part=Uint8Array.from(text,c=>c.charCodeAt(0));
+    requireValid(part.length===chunk.bytes&&await fingerprint(part)===chunk.sha256);
+    bytes.set(part,offset);offset+=part.length;
+  }
+  requireValid(await fingerprint(bytes)===a.sha256);currentOrAbort(current);return bytes;
+}
+export async function verifyPhoto(metadata, bytes, current=()=>true) {
+  currentOrAbort(current);
+  if(metadata===null){requireValid(bytes===null);return;}
+  exactKeys(metadata,"revision,options,bytes,sha256,updatedAt,publicUrl");
+  exactKeys(metadata.options,"time,distance,pace,route");
+  requireValid(Object.values(metadata.options).every(x=>typeof x==="boolean")&&uuid.test(metadata.revision));
+  requireValid(Number.isSafeInteger(metadata.bytes)&&metadata.bytes>=4&&metadata.bytes<=1000000&&bytes instanceof Uint8Array&&bytes.length===metadata.bytes);
+  requireValid(Number.isSafeInteger(metadata.updatedAt)&&metadata.updatedAt>=0);
+  requireValid(metadata.publicUrl===null||/^https:\/\/wayirun-dev\.unopenedparachute\.workers\.dev\/p\/[0-9a-f]{64}$/.test(metadata.publicUrl));
+  requireValid(bytes[0]===255&&bytes[1]===216&&bytes.at(-2)===255&&bytes.at(-1)===217&&await fingerprint(bytes)===metadata.sha256);
+  currentOrAbort(current);
+}
 export async function collectExportRuns(fetchPage, current = () => true, limit = EXPORT_LIMIT) {
   const records = new Map(), cursors = new Set();
   let after = null, bytes = 0;
@@ -63,14 +103,15 @@ export function createCsvExport(limit = EXPORT_LIMIT) {
   }
   write("\uFEFF" + fields.map(cell).join(",") + "\r\n");
   return {
-    async add({ value, s }, current = () => true) {
+    async add({ value, s, coaching = null, photo = null }, current = () => true) {
       currentOrAbort(current);
+      await verifyCoaching({runId:value.run.id,coaching},value.run.id,current);
       requireValid(value.version === 1 && !seen.has(value.run.id) &&
         Object.keys(value).every(key => ["version","run",...groups.map(g=>g[0])].includes(key)));
       seen.add(value.run.id);
       const row = (type, index, record, projection) => {
         const values = {
-        export_version: 1, archive_version: value.version, record_type: type, run_id: value.run.id,
+        export_version: 4, archive_version: value.version, record_type: type, run_id: value.run.id,
         record_index: index, ...projection, record_json: JSON.stringify(record),
         };
         write(fields.map(key => cell(values[key])).join(",") + "\r\n");
@@ -99,7 +140,30 @@ export function createCsvExport(limit = EXPORT_LIMIT) {
           if (++count % 500 === 0) { await new Promise(resolve=>setTimeout(resolve,0)); currentOrAbort(current); }
         }
       }
+      if(coaching){
+        const {audio,...metadata}=coaching;
+        row("COACHING",0,{...metadata,audio:audio?{mediaType:audio.mediaType,bytes:audio.bytes,sha256:audio.sha256,chunkCount:audio.chunks.length}:null},
+          {coaching_state:coaching.state,coaching_text:coaching.message,audio_media_type:audio?.mediaType,audio_bytes:audio?.bytes,audio_sha256:audio?.sha256});
+        for(const chunk of audio?.chunks??[])row("COACHING_AUDIO",chunk.index,chunk,{});
+      }
+      if(photo) {
+        await verifyPhoto(photo.metadata,photo.bytes,current);
+        if(photo.metadata) {
+          row("PHOTO",0,{...photo.metadata,mediaType:"image/jpeg",chunkCount:Math.ceil(photo.bytes.length/16384)},{});
+          for(let offset=0;offset<photo.bytes.length;offset+=16384) {
+            const part=photo.bytes.slice(offset,offset+16384);
+            row("PHOTO_IMAGE",offset/16384,{index:offset/16384,bytes:part.length,sha256:await fingerprint(part),base64:btoa(String.fromCharCode(...part))},{});
+          }
+        }
+      }
       currentOrAbort(current);
+    },
+    addAchievements(awards) {
+      for(const [index,a] of awards.entries()) {
+        requireValid(seen.has(a.runId)&&a.version===1);
+        const values={export_version:4,archive_version:1,record_type:"ACHIEVEMENT",run_id:a.runId,record_index:index,record_json:JSON.stringify(a)};
+        write(fields.map(key=>cell(values[key])).join(",")+"\r\n");
+      }
     },
     finish() { requireValid(!finished); finished=true; const blob=new Blob(parts,{type:"text/csv;charset=utf-8"});parts=[];return blob; },
     discard() { finished=true;parts=[];seen.clear(); },

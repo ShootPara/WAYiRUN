@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 const source=readFileSync(new URL("../web/export.browserjs",import.meta.url),"utf8");
-const {createCsvExport,collectExportRuns,fetchWithBackoff,abortableDelay}=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+const {createCsvExport,collectExportRuns,fetchWithBackoff,abortableDelay,verifyCoaching}=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 test("throttled download retries the same chunk after Retry-After, with bounded attempts",async()=>{
  const controller=new AbortController(),waits=[];let calls=0;
  const result=await fetchWithBackoff(async()=>++calls<3?new Response("busy",{status:429,headers:{"Retry-After":"60"}}):new Response("chunk"),controller.signal,()=>{},async ms=>waits.push(ms));
@@ -79,4 +80,48 @@ test("cancel after delayed list or during a large archive aborts",async()=>{
   let current=true;await assert.rejects(collectExportRuns(async()=>{current=false;return {runs:[],next:null};},()=>current),{name:"AbortError"});
   const data=fixture();data.value.route=Array.from({length:1001},()=>data.value.route[0]);const writer=createCsvExport();current=true;
   setTimeout(()=>current=false,0);await assert.rejects(writer.add(data,()=>current),{name:"AbortError"});writer.discard();assert.throws(()=>writer.finish());
+});
+function coachingFixture() {
+ const hash=x=>createHash("sha256").update(x).digest("hex"),bytes=Buffer.alloc(40001);
+ for(let i=0;i<bytes.length;i++)bytes[i]=i%256;
+ const chunks=[];for(let offset=0;offset<bytes.length;offset+=16384){const b=bytes.subarray(offset,offset+16384);chunks.push({index:offset/16384,bytes:b.length,sha256:hash(b),base64:b.toString("base64")});}
+ return {bytes,coaching:{version:1,runId:id(1),operationId:id(101),state:"ready",currentManifestHash:"a".repeat(64),previousRunId:null,previousManifestHash:null,
+  message:'=SUM(1,2)\nA "good", run 🏃',error:null,createdAt:1,updatedAt:2,audio:{mediaType:"audio/wav",bytes:bytes.length,sha256:hash(bytes),chunks}}};
+}
+test("CSV v4 reconstructs saved recap and audio exactly with spreadsheet-safe text and bounded cells",async()=>{
+ const {bytes,coaching}=coachingFixture(),writer=createCsvExport();await writer.add({...fixture(),coaching});const rows=parse(await writer.finish().text());
+ assert.ok(rows.every(r=>r.export_version==="4"));const meta=rows.find(r=>r.record_type==="COACHING");assert.equal(meta.coaching_text,"'"+coaching.message);
+ const rebuilt=JSON.parse(meta.record_json);const audio=rows.filter(r=>r.record_type==="COACHING_AUDIO").map(r=>JSON.parse(r.record_json));
+ assert.equal(rebuilt.message,coaching.message);assert.equal(rebuilt.audio.chunkCount,audio.length);
+ assert.deepEqual(Buffer.concat(audio.map(r=>Buffer.from(r.base64,"base64"))),bytes);
+ assert.ok(rows.every(r=>r.record_json.length<32767));
+});
+test("coaching verification rejects wrong owner-run binding, corrupt/missing audio and credential fields",async()=>{
+ for(const mutate of [c=>c.runId=id(2),c=>c.audio.chunks.pop(),c=>c.audio.chunks[0].base64="x".repeat(c.audio.chunks[0].base64.length),c=>c.audio.sha256="b".repeat(64),c=>c.token_hash="private",c=>c.audio.bytes=4194305]){
+  const {coaching}=coachingFixture();mutate(coaching);await assert.rejects(verifyCoaching({runId:id(1),coaching},id(1)));
+ }
+ const {coaching}=coachingFixture();await assert.rejects(verifyCoaching({runId:id(1),coaching},id(1),()=>false),{name:"AbortError"});
+});
+test("achievement export preserves rule version and occurrence and rejects foreign runs",async()=>{
+ const data=fixture(),writer=createCsvExport();await writer.add(data);
+ const award={id:"distance-2",occurrence:"once",runId:data.value.run.id,name:"Five Alive",detail:"First 5K",date:"2026-09-18",version:1};
+ assert.throws(()=>writer.addAchievements([{...award,runId:"foreign"}]));writer.addAchievements([award]);
+ const row=parse(await writer.finish().text()).find(r=>r.record_type==="ACHIEVEMENT");assert.deepEqual(JSON.parse(row.record_json),award);assert.equal(row.export_version,"4");
+});
+test("failed speech preserves generated text in CSV without inventing an audio record",async()=>{
+ const {coaching}=coachingFixture();coaching.state="unknown";coaching.audio=null;coaching.error="interrupted";
+ const writer=createCsvExport();await writer.add({...fixture(),coaching});const rows=parse(await writer.finish().text());
+ assert.equal(rows.filter(r=>r.record_type==="COACHING_AUDIO").length,0);assert.equal(rows.find(r=>r.record_type==="COACHING").coaching_state,"unknown");
+});
+
+
+test("CSV photo records reconstruct exact JPEG bytes and reject corrupt payloads",async()=>{
+ const data=fixture(),bytes=new Uint8Array(20000).fill(7);bytes[0]=255;bytes[1]=216;bytes[19998]=255;bytes[19999]=217;
+ const hash=async b=>[...new Uint8Array(await crypto.subtle.digest("SHA-256",b))].map(v=>v.toString(16).padStart(2,"0")).join("");
+ const metadata={revision:id(3),options:{time:true,distance:true,pace:true,route:false},bytes:bytes.length,sha256:await hash(bytes),updatedAt:1,publicUrl:null};
+ const writer=createCsvExport();await writer.add({...data,photo:{metadata,bytes}});
+ const rows=parse(await writer.finish().text());assert.equal(rows.find(r=>r.record_type==="PHOTO").export_version,"4");
+ const chunks=rows.filter(r=>r.record_type==="PHOTO_IMAGE").map(r=>JSON.parse(r.record_json));
+ assert.deepEqual(Buffer.concat(chunks.map(c=>Buffer.from(c.base64,"base64"))),Buffer.from(bytes));
+ const broken=createCsvExport();await assert.rejects(()=>broken.add({...data,photo:{metadata:{...metadata,sha256:"0".repeat(64)},bytes}}));
 });

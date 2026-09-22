@@ -33,3 +33,17 @@ When Health Connect export is implemented, WAYiRUN deletion also queues deletion
 Export: independent CSV parsing/reconstruction of all six record types; commas, quotes, multiline text, Unicode, formula-like text, nulls and precise numeric values; empty history; more than one history page; corrupt/missing archive; cancellation/sign-out with delayed work; memory-budget failure; no partial or foreign-account download. Inspect the real browser download, not merely a success message. Existing owner-isolation and browser-session tests must remain green.
 
 Deletion slice: owner isolation, CSRF, forbidden methods/bodies, repeated and concurrent deletion, stale upload/restore rejection, failed/unknown/partial results, selection scope, accessible confirmation/cancel and recomputed totals. Existing phone deletion tests remain evidence for the protocol; real multi-device timing remains separate.
+
+## 1.6 CSV version 2: retained coaching
+
+Preserve all six archive record types and their exact record_json payloads. Export version 2 adds a COACHING row for each stored job and COACHING_AUDIO rows for its saved WAV. No job means no coaching rows. Failed/unknown jobs retain their saved recap when present, with no invented audio. Metadata includes operation/state, current/previous manifest references, message, sanitized error, timestamps and audio type/byte count/SHA-256/chunk count. Credentials, key revisions and session hashes are excluded.
+
+To reconstruct audio, group COACHING_AUDIO rows by run_id, order by record_index, parse record_json, base64-decode each chunk, and concatenate. Verify each chunk's bytes/SHA-256 and the whole result against the COACHING audio metadata. Chunks contain at most 16,384 decoded bytes so the JSON cells stay below common spreadsheet cell-length limits. The browser checks all hashes before replay or export. Formula-like convenience text is escaped; exact text remains inside record_json. The existing 128 MiB export bound and all-or-nothing download behavior also cover coaching. Exporting never generates coaching or calls OpenAI.
+
+## 1.7 CSV version 3: achievements
+
+Version 3 preserves every version-2 record and adds ACHIEVEMENT rows derived from the complete verified retained history. record_json includes id, occurrence, runId, name, detail, date and version (achievement rule version 1). The source run must be part of the same export. Achievement dates use recorded movement and the frozen run time zone; no display-unit conversion affects earning. Deleting a run can remove or reassign dependent achievements on the next calculation. No API keys, session information or other accounts are included. A browser-downloaded four-run fixture contained the expected First Footprint, Strides of Honor and Three's a Stride records; automated CSV tests also verify exact payload reconstruction and foreign-run rejection.
+
+## 1.7 Photo export - September 19
+
+CSV v4 adds PHOTO (revision, overlay flags, byte count, whole-image hash, update time, public URL, JPEG media type and chunk count) and PHOTO_IMAGE (index, byte count, hash, base64) records. Each image chunk is at most 16 KiB. Owner-authenticated image downloads are bounded to 1,000,000 bytes and verified against the metadata before export. Missing, changed or corrupt images abort the whole export. Existing run, coaching and achievement records remain included. Browser export and independent reconstruction verified a real synthetic JPEG. Run deletion cascades to the cloud image and revokes its public link; already downloaded copies remain independent.

@@ -1,8 +1,10 @@
+import {handlePhotos,handlePublicPhoto} from "./photos.js";
 import { handleBrowser, browserAssetPaths } from "./browser.js";
 import { handleRuns } from "./runs.js";
 import { handleAuth, type AuthEnv } from "./auth.js";
 import { handleAccountKey } from "./account-key.js";
 import { handleCoaching } from "./coaching-jobs.js";
+import { handleCoachingHistory } from "./coaching-history.js";
 
 export interface Env extends AuthEnv {
   DB: D1Database;
@@ -29,9 +31,12 @@ export default {
     const head = request.method === "HEAD";
     if (env.APP_ENV !== "development") return json({ error: "environment_not_configured" }, 503, head);
 
+    if(path.startsWith("/api/photos/")) return handlePhotos(request,env);
+    if(path.startsWith("/p/")) return handlePublicPhoto(request,env);
     if (browserAssetPaths.includes(path) || path.startsWith("/web-api/")) return handleBrowser(request, env);
     if (path === "/api/account/openai-key") return handleAccountKey(request, env);
     if (path.startsWith("/api/coaching/")) return handleCoaching(request, env);
+    if (path.startsWith("/api/coaching-history/")) return handleCoachingHistory(request, env);
     if (["/api/auth/challenge", "/api/auth/google", "/api/auth/logout", "/api/account"].includes(path)) {
       return handleAuth(request, env);
     }
