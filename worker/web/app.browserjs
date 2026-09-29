@@ -6,7 +6,59 @@ const $ = id => document.getElementById(id);
 let destroyMap = null, mapGeneration = 0;
 let coachingUrl = null;
 let photoUrl=null;
+let publication=null, publicationRun=null, publicationBusy=false, pendingPublication=null;
+const publicationPanel=document.createElement("section");
+publicationPanel.id="publication-panel";
+publicationPanel.innerHTML='<h2>Sharing</h2><p id="publication-state" role="status" aria-live="polite"></p><div class="actions"><button id="share-run" disabled>Share run link</button><button id="copy-run" class="quiet" disabled>Copy run link</button><button id="unshare-run" class="quiet" disabled>Unshare</button></div><label class="photo-visibility"><input id="photo-visible" type="checkbox" disabled> Display photo with shared run</label>';
+$("public-run").parentElement.after(publicationPanel);
+publicationPanel.append($("public-run"));
+function renderPublication() {
+ for(const id of ["share-run","copy-run","unshare-run","photo-visible"])$(id).disabled=!publication||publicationBusy;
+ if(!publicationBusy)$("photo-visible").checked=publication?.photoVisible??true;
+ $("public-run").hidden=!publication?.publicUrl;
+ if(publication?.publicUrl){$("public-run").href=publication.publicUrl;$("public-run").textContent=publication.publicUrl;}
+ else $("public-run").removeAttribute("href");
+}
+async function loadPublication(runId,current) {
+ publicationRun=runId;$("publication-state").textContent="Loading sharing status...";
+ try {
+  const result=await json(`publications/${runId}`);if(current!==generation||publicationRun!==runId)return;
+  publication=result.publication;renderPublication();$("publication-state").textContent=publication.shared?"Shared":"Private";
+ }catch(error){if(current===generation)$("publication-state").textContent="Sharing status unavailable. Reopen the run to retry.";}
+}
+async function changePublication(action,delivery=null) {
+ if(!publication||publicationBusy||!publicationRun)return;
+ const runId=publicationRun,current=generation,photoVisible=$("photo-visible").checked;
+ const key=JSON.stringify({action,...(action==="photo"?{photoVisible}:{})});
+ if(pendingPublication?.key!==key)pendingPublication={key,body:{operationId:crypto.randomUUID(),expectedRevision:publication.revision,action,...(action==="photo"?{photoVisible}:{})}};
+ const attempt=pendingPublication;
+ publicationBusy=true;renderPublication();$("publication-state").textContent="Saving sharing status...";
+ try {
+  const response=await fetch(`/web-api/publications/${runId}`,{method:"PUT",credentials:"same-origin",cache:"no-store",signal:controller.signal,
+   headers:{"Content-Type":"application/json","X-WAYIRUN-Request":"1"},body:JSON.stringify(attempt.body)});
+  if(current!==generation||publicationRun!==runId)return;
+  const result=await response.json();
+  if(current!==generation||publicationRun!==runId)return;
+  if(response.status===409){pendingPublication=null;publication=null;renderPublication();await loadPublication(runId,current);
+   if(current===generation)$("publication-state").textContent="Sharing changed elsewhere. Review its status and try again.";return;}
+  if(!response.ok)throw Error();
+  publication=result.publication;pendingPublication=null;renderPublication();
+  $("publication-state").textContent=publication.shared?"Shared":"Private";
+  if(delivery && publication.publicUrl) {
+   try {
+    if(delivery==="share"&&navigator.share)await navigator.share({title:"WAYiRUN shared run",url:publication.publicUrl});
+    else {await navigator.clipboard.writeText(publication.publicUrl);if(current===generation)$("publication-state").textContent="Shared. Link copied.";}
+   }catch(error){if(current===generation)$("publication-state").textContent=error.name==="AbortError"?"Shared":"Shared. The link is available below.";}
+  }
+ }catch(error){if(current===generation)$("publication-state").textContent="Change not confirmed. Retry the action or reopen to check status.";}
+ finally {if(current===generation){publicationBusy=false;renderPublication();}}
+}
+$("share-run").onclick=()=>changePublication("share","share");
+$("copy-run").onclick=()=>changePublication("share","copy");
+$("unshare-run").onclick=()=>changePublication("unshare");
+$("photo-visible").onchange=()=>changePublication("photo");
 function clearPhoto() {
+  publication=null;publicationRun=null;publicationBusy=false;pendingPublication=null;renderPublication();$("publication-state").textContent="";
   $("run-photo").removeAttribute("src");$("run-photo").hidden=true;$("public-run").removeAttribute("href");$("public-run").hidden=true;$("photo-state").textContent="";
   if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=null;
 }
@@ -23,12 +75,12 @@ async function readPhoto(runId,current) {
   await verifyPhoto(result.photo,bytes,()=>current===generation);return {metadata:result.photo,bytes};
 }
 async function loadPhoto(runId,current) {
+  void loadPublication(runId,current);
   $("photo-state").textContent="Loading photo…";
   try {
     const photo=await readPhoto(runId,current);if(current!==generation)return;
-    $("photo-state").textContent=photo.metadata?(photo.metadata.publicUrl?"Shared run":"Private photo"):"No photo saved for this run.";
+    $("photo-state").textContent=photo.metadata?"Saved photo":"No photo saved for this run.";
     if(photo.bytes){photoUrl=URL.createObjectURL(new Blob([photo.bytes],{type:"image/jpeg"}));$("run-photo").src=photoUrl;$("run-photo").hidden=false;}
-    if(photo.metadata?.publicUrl){$("public-run").href=photo.metadata.publicUrl;$("public-run").hidden=false;}
   }catch(error){if(current===generation&&error.name!=="AbortError")$("photo-state").textContent="Photo could not load. Reopen the run to retry.";}
 }
 function clearCoaching() {
@@ -289,13 +341,13 @@ async function renderMap() {
   if (!geometry.parts.length) return;
   const current = mapGeneration;
   $("route-panel").hidden = false;
-  $("route-status").textContent = "Loading map…";
+  $("route-status").textContent = "Loading route…";
   try {
     const cleanup = await showRouteMap($("route-map"), $("route-status"), $("fit-route"), geometry, () => current === mapGeneration);
     if (current !== mapGeneration) { cleanup?.(); return; }
     destroyMap = cleanup; $("fit-route").disabled = false;
   } catch {
-    if (current === mapGeneration) $("route-status").textContent = "The map could not load. Your run details are still available. Reopen the run to try again.";
+    if (current === mapGeneration) $("route-status").textContent = "The route could not load. Your run details are still available. Reopen the run to try again.";
   }
 }
 async function signedIn(){const data=await json("account");reset();account=data.account;$("name").textContent=account.displayName||"Your account";$("avatar").hidden=true;

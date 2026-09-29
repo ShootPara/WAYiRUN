@@ -63,12 +63,24 @@ export async function verifyCoaching(result, runId, current = () => true) {
 export async function verifyPhoto(metadata, bytes, current=()=>true) {
   currentOrAbort(current);
   if(metadata===null){requireValid(bytes===null);return;}
-  exactKeys(metadata,"revision,options,bytes,sha256,updatedAt,publicUrl");
-  exactKeys(metadata.options,"time,distance,pace,route");
+  exactKeys(metadata,"revision,options,bytes,sha256,updatedAt,publicUrl"+(metadata.weather!==undefined?",weather":""));
+  exactKeys(metadata.options,"time,distance,pace,route"+(metadata.options.weather!==undefined?",weather":""));
+  requireValid((metadata.options.weather===true)===(metadata.weather!==undefined));
+  if(metadata.weather!==undefined){
+    const w=metadata.weather;
+    exactKeys(w,"version,source,latitude,longitude,observedUtcMs,endpoint,weatherCode,emoji,temperatureC,temperatureF,retrievedUtcMs,attribution");
+    exactKeys(w.attribution,"label,url,licenseUrl,changes");
+    requireValid(w.version===1&&w.source==="open-meteo"&&["forecast","archive"].includes(w.endpoint));
+    requireValid(Number.isFinite(w.latitude)&&Math.abs(w.latitude)<=90&&Number.isFinite(w.longitude)&&Math.abs(w.longitude)<=180);
+    requireValid(Number.isFinite(w.temperatureC)&&Number.isFinite(w.temperatureF)&&Number.isInteger(w.weatherCode));
+    requireValid(Number.isSafeInteger(w.observedUtcMs)&&w.observedUtcMs>=0&&Number.isSafeInteger(w.retrievedUtcMs)&&w.retrievedUtcMs>=0);
+    requireValid(typeof w.emoji==="string"&&w.emoji.length<=16&&w.attribution.url==="https://open-meteo.com/"&&w.attribution.licenseUrl==="https://creativecommons.org/licenses/by/4.0/");
+    requireValid(typeof w.attribution.label==="string"&&w.attribution.label.length<=100&&typeof w.attribution.changes==="string"&&w.attribution.changes.length<=300);
+  }
   requireValid(Object.values(metadata.options).every(x=>typeof x==="boolean")&&uuid.test(metadata.revision));
   requireValid(Number.isSafeInteger(metadata.bytes)&&metadata.bytes>=4&&metadata.bytes<=1000000&&bytes instanceof Uint8Array&&bytes.length===metadata.bytes);
   requireValid(Number.isSafeInteger(metadata.updatedAt)&&metadata.updatedAt>=0);
-  requireValid(metadata.publicUrl===null||/^https:\/\/wayirun-dev\.unopenedparachute\.workers\.dev\/p\/[0-9a-f]{64}$/.test(metadata.publicUrl));
+  requireValid(metadata.publicUrl===null||/^https:\/\/wayirun-dev\.unopenedparachute\.workers\.dev\/(?:p\/[0-9a-f]{64}|r\/[0-9a-f]{32})$/.test(metadata.publicUrl));
   requireValid(bytes[0]===255&&bytes[1]===216&&bytes.at(-2)===255&&bytes.at(-1)===217&&await fingerprint(bytes)===metadata.sha256);
   currentOrAbort(current);
 }

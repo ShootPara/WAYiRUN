@@ -1,4 +1,5 @@
 import {handlePhotos} from "./photos.js";
+import {handlePublication} from "./publication.js";
 import publicPhotoScript from "../web/public-photo.browserjs";
 import { handleAuth, reply, smallJson, hash, SESSION_SECONDS, type AuthEnv } from "./auth.js";
 import { handleRuns } from "./runs.js";
@@ -9,8 +10,6 @@ import style from "../web/style.css";
 import routeScript from "../web/route.browserjs";
 import mapScript from "../web/map.browserjs";
 import exportScript from "../web/export.browserjs";
-import leaflet from "../web/vendor/leaflet.browserjs";
-import leafletStyle from "../web/vendor/leaflet.css";
 import achievementScript from "../web/achievements.browserjs";
 
 const assets: Record<string, [string, string]> = {
@@ -19,7 +18,6 @@ const assets: Record<string, [string, string]> = {
   "/export.js": [exportScript, "text/javascript"],
   "/app.js": [script, "text/javascript"], "/style.css": [style, "text/css"],
   "/route.js": [routeScript, "text/javascript"], "/map.js": [mapScript, "text/javascript"],
-  "/leaflet.js": [leaflet, "text/javascript"], "/leaflet.css": [leafletStyle, "text/css"],
 };
 export const browserAssetPaths = ["/", ...Object.keys(assets)];
 
@@ -42,7 +40,7 @@ function protect(response: Response, nonce: string): Response {
   out.headers.set("X-Content-Type-Options", "nosniff");
   out.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   out.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com https://tile.openstreetmap.org data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
   return out;
 }
 export async function handleBrowser(request: Request, env: AuthEnv): Promise<Response> {
@@ -67,11 +65,13 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
   const auth = authPaths[path];
   const runs = /^\/web-api\/runs(?:\/[0-9a-f-]+(?:\/chunks\/(0|[1-9][0-9]*))?)?$/.test(path);
   const photo = /^\/web-api\/photos\/[0-9a-f-]+(?:\/image)?$/.test(path);
+  const publication = /^\/web-api\/publications\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
   const coaching = /^\/web-api\/coaching-history\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
-  if (!auth && !runs && !coaching && !photo && path !== "/web-api/config") return reply({ error: "not_found" }, 404);
+  if (!auth && !runs && !coaching && !photo && !publication && path !== "/web-api/config") return reply({ error: "not_found" }, 404);
   const deleting = request.method === "DELETE" && /^\/web-api\/runs\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
-  const mutating = deleting || ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
-  if (request.method !== (deleting ? "DELETE" : mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
+  const publishing = publication && request.method === "PUT";
+  const mutating = publishing || deleting || ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
+  if (request.method !== (publishing ? "PUT" : deleting ? "DELETE" : mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
   if (mutating && (request.headers.get("Origin") !== WEB_ORIGIN || request.headers.get("X-WAYIRUN-Request") !== "1")) return reply({ error: "csrf_rejected" }, 403);
   if (deleting && request.body) {
     const reader = request.body.getReader();
@@ -83,6 +83,10 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
   const headers = new Headers();
   const ip = request.headers.get("CF-Connecting-IP"); if (ip) headers.set("CF-Connecting-IP", ip);
   let body: string | undefined;
+  if (publishing) {
+    try { body=JSON.stringify(await smallJson(request)); } catch { return reply({error:"invalid_request"},400); }
+    headers.set("Content-Type","application/json");
+  }
   if (path === "/web-api/google") {
     let input: Record<string, unknown>;
     try { input = await smallJson(request); } catch { return reply({ error: "invalid_request" }, 400); }
@@ -96,7 +100,7 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
     headers.set("Authorization", `Bearer ${token}`);
   }
   const forwarded = new Request(`${WEB_ORIGIN}${auth ?? path.replace("/web-api/", "/api/")}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) });
-  const response = auth ? await handleAuth(forwarded, env) : photo ? await handlePhotos(forwarded,env) : coaching ? await handleCoachingHistory(forwarded, env) : await handleRuns(forwarded, env);
+  const response = auth ? await handleAuth(forwarded, env) : publication ? await handlePublication(forwarded,env) : photo ? await handlePhotos(forwarded,env) : coaching ? await handleCoachingHistory(forwarded, env) : await handleRuns(forwarded, env);
   if (path === "/web-api/account" && response.ok) {
     const token = cookie(request, sessionName)!;
     const now = Math.floor(Date.now() / 1000);

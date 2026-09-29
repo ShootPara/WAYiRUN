@@ -23,6 +23,8 @@ Generated `build/`, `.wrangler/`, and `node_modules/` are ignored by the reposit
 
 ## 3 Development deployment
 
+Current September 28 deployment and photo recovery are recorded in [PHOTO_SYNC_REPAIR.md](../PHOTO_SYNC_REPAIR.md). Authorized photo rollouts also run `node scripts/verify-photo-deployment.mjs --confirm-development-write` after smoke checks. This guarded command uses disposable synthetic account/run/photo records in development, verifies authenticated uploads and privacy transitions, and removes its records. Resolve any reported cleanup failure before handoff. Ordinary local tests continue to use only local fixtures.
+
 Configuration binds only the new `wayirun-dev-db` to Worker `wayirun-dev` in the selected account. IDs in configuration are resource identifiers, not credentials. There is no production environment, route, custom domain, R2 bucket, or scheduled trigger.
 
 ```powershell

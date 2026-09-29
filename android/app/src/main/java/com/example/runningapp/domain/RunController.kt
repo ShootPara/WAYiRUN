@@ -16,6 +16,8 @@ class RunController(
     init { require(runId.isNotBlank()) }
 
     private var state = RunState.READY
+    private var distanceGoalOccurrenceMs: Long? = null
+    private var pauseReason: PauseReason? = null
     private var lastNow: Long? = null
     private var lastUtc = 0L
     private var epoch = 0
@@ -27,6 +29,7 @@ class RunController(
     private var distanceMeters = 0.0
     private var goalReached = false
     private var eventSequence = 0L
+    private var announcedTimeIndex = 0L
     private var selectedSource: DistanceSource? = null
     private var currentSegment: MeasurementSegment? = null
     private var baseline: RunMeasurement? = null
@@ -43,21 +46,34 @@ class RunController(
 
     fun tick(): RunUpdate = update { _, _ -> }
 
-    fun pause(): RunUpdate = update { now, events ->
+    fun pause(): RunUpdate = pauseWithReason(PauseReason.MANUAL)
+
+    fun autoPause(): RunUpdate = pauseWithReason(PauseReason.AUTOMATIC)
+
+    private fun pauseWithReason(reason: PauseReason): RunUpdate = update { now, events ->
         if (state == RunState.RUNNING) {
             closeSegment(now.monotonicMs)
             closeActive(now)
             state = RunState.PAUSED
-            emit(events, RunEventType.PAUSED)
+            pauseReason = reason
+            emit(events, RunEventType.PAUSED, reason = reason)
+        } else if (state == RunState.PAUSED && reason == PauseReason.MANUAL) {
+            pauseReason = PauseReason.MANUAL
         }
     }
 
-    fun resume(): RunUpdate = update { now, events ->
+    fun autoResume(): RunUpdate = if (pauseReason == PauseReason.AUTOMATIC) resumeWithReason(PauseReason.AUTOMATIC)
+        else RunUpdate(snapshot(), emptyList())
+
+    fun resume(): RunUpdate = resumeWithReason(PauseReason.MANUAL)
+
+    private fun resumeWithReason(reason: PauseReason): RunUpdate = update { now, events ->
         if (state == RunState.PAUSED) {
             state = RunState.RUNNING
+            pauseReason = null
             openActive(now)
             selectedSource?.let { openSegment(it, now.monotonicMs) }
-            emit(events, RunEventType.RESUMED)
+            emit(events, RunEventType.RESUMED, reason = reason)
         }
     }
 
@@ -66,6 +82,7 @@ class RunController(
             closeSegment(now.monotonicMs)
             closeActive(now)
             state = RunState.FINISHED
+            pauseReason = null
             endedUtcMs = now.utcMs
             emit(events, RunEventType.FINISHED)
         }
@@ -134,12 +151,14 @@ class RunController(
             require(s.state in listOf(RunState.RUNNING, RunState.PAUSED, RunState.FINISHED))
             return RunController(s.runId, s.settings, clock).apply {
                 state = if (s.state == RunState.FINISHED) RunState.FINISHED else RunState.PAUSED
+                pauseReason = if (state == RunState.PAUSED) PauseReason.INTERRUPTED else null
                 activeMs = s.activeDurationMs
                 distanceMeters = s.distanceMeters
                 startedUtcMs = s.startedUtcMs
                 endedUtcMs = s.endedUtcMs
                 goalReached = s.goalReached
                 eventSequence = saved.eventSequence
+                announcedTimeIndex = activeMs / requireNotNull(s.settings.effectiveAnnouncements().timeInterval.timeMs)
                 epoch = saved.epoch + 1
                 segments += s.segments.map { it.copy(endedMonotonicMs = it.endedMonotonicMs ?: saved.lastMonotonicMs) }
                 splits += s.splits
@@ -163,6 +182,7 @@ class RunController(
             .takeIf { it.isFinite() } else null,
         goalReached, currentSegment?.id,
         segments.toList() + listOfNotNull(currentSegment), splits.toList(), activeIntervals.toList(),
+        pauseReason,
     )
 
     private fun update(action: (RunTime, MutableList<RunEvent>) -> Unit): RunUpdate {
@@ -180,8 +200,10 @@ class RunController(
         lastUtc = now.utcMs
         advanceCountdown(now, events)
         checkGoal(events)
+        checkTimeAnnouncements(events)
         action(now, events)
         checkGoal(events)
+        checkTimeAnnouncements(events)
         return RunUpdate(snapshot(), events.toList())
     }
 
@@ -226,6 +248,11 @@ class RunController(
     private fun addDistance(delta: Double, fromActive: Long, toActive: Long, events: MutableList<RunEvent>) {
         val oldDistance = distanceMeters
         distanceMeters += delta
+        val goal = settings.goal as? RunGoal.Distance
+        if (!goalReached && goal != null && oldDistance < goal.meters && distanceMeters >= goal.meters) {
+            val fraction = ((goal.meters - oldDistance) / delta).coerceIn(0.0, 1.0)
+            distanceGoalOccurrenceMs = fromActive + ((toActive - fromActive) * fraction).roundToLong()
+        }
         val unit = settings.units.metersPerUnit
         var boundary = (splits.size.toDouble() + 1) * unit
         while (boundary <= distanceMeters) {
@@ -240,6 +267,30 @@ class RunController(
             emit(events, RunEventType.SPLIT_COMPLETED, endActive, boundary, split)
             boundary = (splits.size.toDouble() + 1) * unit
         }
+        val announcements = settings.effectiveAnnouncements()
+        if (announcements.distanceEnabled) {
+            val interval = requireNotNull(announcements.distanceInterval.distanceUnits) * unit
+            var index = kotlin.math.floor(oldDistance / interval).toLong() + 1
+            while (index * interval <= distanceMeters) {
+                val meters = index * interval
+                val fraction = ((meters - oldDistance) / delta).coerceIn(0.0, 1.0)
+                val endActive = fromActive + ((toActive - fromActive) * fraction).roundToLong()
+                emit(events, RunEventType.ANNOUNCEMENT, endActive, meters, channel = AnnouncementChannel.DISTANCE)
+                index++
+            }
+        }
+    }
+
+    private fun checkTimeAnnouncements(events: MutableList<RunEvent>) {
+        val announcements = settings.effectiveAnnouncements()
+        if (!announcements.timeEnabled || state != RunState.RUNNING) return
+        val interval = requireNotNull(announcements.timeInterval.timeMs)
+        val reached = activeMs / interval
+        while (announcedTimeIndex < reached) {
+            announcedTimeIndex++
+            // Distance is the last accepted total; never invent motion for a delayed timer tick.
+            emit(events, RunEventType.ANNOUNCEMENT, announcedTimeIndex * interval, channel = AnnouncementChannel.TIME)
+        }
     }
 
     private fun checkGoal(events: MutableList<RunEvent>) {
@@ -251,14 +302,21 @@ class RunController(
         }
         if (reached) {
             goalReached = true
-            emit(events, RunEventType.GOAL_REACHED)
+            val occurrence = when (val goal = settings.goal) {
+                is RunGoal.Time -> goal.durationMs
+                is RunGoal.Distance -> distanceGoalOccurrenceMs ?: activeMs
+                RunGoal.None -> activeMs
+            }
+            emit(events, RunEventType.GOAL_REACHED, occurrence = occurrence)
         }
     }
 
     private fun emit(
         events: MutableList<RunEvent>, type: RunEventType,
         timeMs: Long = activeMs, meters: Double = distanceMeters, split: FullSplit? = null,
+        reason: PauseReason? = null,
+        occurrence: Long = timeMs, channel: AnnouncementChannel? = null,
     ) {
-        events += RunEvent(RunEventId(runId, ++eventSequence), type, timeMs, meters, split)
+        events += RunEvent(RunEventId(runId, ++eventSequence), type, timeMs, meters, split, reason, occurrence, channel)
     }
 }

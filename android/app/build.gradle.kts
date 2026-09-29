@@ -26,7 +26,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-dev-health1"
+            versionNameSuffix = "-dev-photo-sync1"
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com\"")
         }
     }

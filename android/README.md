@@ -10,6 +10,8 @@ The launch icon is a simple provisional route graphic. Automatic backup and devi
 
 ## 2 Build
 
+September 28 photo-repair handoff and current verification: [PHOTO_SYNC_REPAIR.md](../PHOTO_SYNC_REPAIR.md). Before handing off a cloud-dependent APK, verify its compatibility with the actual deployed Worker and applied remote migrations. A locally passing app/backend pair is not sufficient; an APK awaiting its backend must remain an internal artifact. The matching development backend is now deployed. Older milestone descriptions in this README are historical; TASKS.md records current product scope.
+
 Use JDK 17 or a compatible newer runtime, Android SDK platform 36, and the Gradle wrapper. Local verification uses Android Studio's bundled JDK 21. Set your own SDK path in the ignored `local.properties`, or configure the Android SDK environment through your development tools. Do not commit machine-specific paths.
 
 From this directory on Windows:

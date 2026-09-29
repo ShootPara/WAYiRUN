@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 
 import androidx.core.content.edit
 
@@ -91,7 +92,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
     accountView: AccountView = AccountView(), onSignIn: () -> Unit = {}, onSignOut: () -> Unit = {},
 
     onImport: (String) -> Unit = {}, onRetrySync: () -> Unit = {},
-    onAppPermissions: () -> Unit = {}, onMusicAccess: () -> Unit = {}, settingsError: String? = null,
+    onAppPermissions: () -> Unit = {}, settingsError: String? = null,
 
     onStart: (RunSettings) -> Unit) {
 
@@ -159,8 +160,6 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 
                     Text("Build ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
 
-                    Text(view.musicStatus, style = MaterialTheme.typography.bodyMedium)
-
                     Text("Settings", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.testTag("settings-screen"))
 
                     if (view.snapshot?.state in listOf(RunState.RUNNING, RunState.PAUSED, RunState.COUNTDOWN)) {
@@ -177,7 +176,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 
                     Setup(view.busy, preferences, dark, { dark = it; preferences.edit { putBoolean("dark", it) } },
 
-                        onPermissions, onStart, true, onAppPermissions, onMusicAccess, settingsError)
+                        onPermissions, onStart, true, onAppPermissions, settingsError)
 
                 } else {
 
@@ -215,7 +214,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 
                         }
 
-                        RunState.RUNNING, RunState.PAUSED -> ActiveRun(view, online) { action -> command(action, s.settings) }
+                        RunState.RUNNING, RunState.PAUSED -> ActiveRun(view, online, dark) { action -> command(action, s.settings) }
 
                         RunState.FINISHED -> if (view.achievements.isNotEmpty()) {
                             AchievementCelebration(view.achievements) { command(TrackingService.DISMISS_COACHING, null) }
@@ -251,7 +250,7 @@ private fun Setup(
 
     onDark: (Boolean) -> Unit, onPermissions: () -> Unit, onStart: (RunSettings) -> Unit,
 
-    showSettings: Boolean = false, onAppPermissions: () -> Unit = {}, onMusicAccess: () -> Unit = {}, settingsError: String? = null, online: Boolean = false,
+    showSettings: Boolean = false, onAppPermissions: () -> Unit = {}, settingsError: String? = null, online: Boolean = false,
 
 ) {
 
@@ -271,17 +270,22 @@ private fun Setup(
 
     var playlist by remember { mutableStateOf(prefs.getString("music-playlist", "").orEmpty()) }
 
+    var announcementsEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("announcements-enabled", true)) }
+    var autoPauseEnabled by rememberSaveable { mutableStateOf(prefs.getBoolean("auto-pause-enabled", true)) }
+    var announcementSelection by remember { mutableStateOf(AnnouncementPreferences.read(prefs)) }
+
     val playlistContext = LocalContext.current
 
     if (!showSettings) {
 
-    Choices(listOf("Outdoor", "Indoor"), if (mode == "OUTDOOR") "Outdoor" else "Indoor") {
+    RunSetupChoices(listOf("Outdoor" to "🌳", "Indoor" to "🏠"),
+        if (mode == "OUTDOOR") "Outdoor" else "Indoor", "run-mode") {
 
         mode = it.uppercase(); prefs.edit { putString("mode", mode) }
 
     }
 
-    Choices(listOf("None", "Time", "Distance"), goal) {
+    RunSetupChoices(listOf("None" to "♾️", "Time" to "⏱️", "Distance" to "📏"), goal, "run-goal") {
 
         goal = it; target = prefs.getString("goal-target-$it", "").orEmpty()
 
@@ -303,6 +307,19 @@ private fun Setup(
 
     Choices(listOf("Miles", "Kilometers"), units) { units = it; prefs.edit { putString("units", units) } }
 
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Auto-pause", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Switch(autoPauseEnabled, { enabled ->
+            autoPauseEnabled = enabled; prefs.edit { putBoolean("auto-pause-enabled", enabled) }
+        }, Modifier.testTag("auto-pause-enabled"))
+    }
+
+    AnnouncementSettings(announcementsEnabled, announcementSelection, units == "Kilometers", { enabled ->
+        announcementsEnabled = enabled; prefs.edit { putBoolean("announcements-enabled", enabled) }
+    }, { selection ->
+        announcementSelection = selection; AnnouncementPreferences.write(prefs, selection)
+    })
+
     Column {
 
         Text("Countdown · ${countdown.roundToInt()} seconds", style = MaterialTheme.typography.titleMedium)
@@ -321,13 +338,9 @@ private fun Setup(
 
         val settingsContext = LocalContext.current
 
-        Text("Optional music controls link YouTube Music pause/resume to this run. Music can be off when you start.")
-
         TextButton(onClick = onPermissions) { Text("Request missing permissions") }
 
         TextButton(onClick = onAppPermissions) { Text("App permissions") }
-
-        TextButton(onClick = onMusicAccess) { Text("YouTube Music control access") }
 
         settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
@@ -367,6 +380,12 @@ private fun Setup(
 
         }
 
+        val weatherLinks = androidx.compose.ui.platform.LocalUriHandler.current
+        Text("Weather data by Open-Meteo.com", style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.clickable { weatherLinks.openUri("https://open-meteo.com/") })
+        Text("CC BY 4.0 · Rounded hourly model estimate; emoji representation.", style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.clickable { weatherLinks.openUri("https://creativecommons.org/licenses/by/4.0/") })
+
     }
 
     val strideValue = stride.toDoubleOrNull()
@@ -397,7 +416,7 @@ private fun Setup(
 
     playlistError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-    Text("${if (mode == "OUTDOOR") "Outdoor" else "Indoor"} · ${if (online) "Online" else "Fallback"}", fontWeight = FontWeight.SemiBold)
+    RunStatusIndicators(RunMode.valueOf(mode), online, dark)
 
     Button(onClick = {
 
@@ -423,7 +442,9 @@ private fun Setup(
 
         onStart(RunSettings(RunMode.valueOf(mode), chosenUnits, countdown.roundToInt(), selectedGoal,
 
-            strideValue?.times(if (strideUnit == "cm") 0.01 else 0.0254)))
+            strideValue?.times(if (strideUnit == "cm") 0.01 else 0.0254),
+            announcementsEnabled = announcementsEnabled, autoPauseEnabled = autoPauseEnabled,
+            announcementSelection = announcementSelection))
 
     }, enabled = !busy && units.isNotEmpty() && strideValid && targetValid,
 
@@ -457,15 +478,16 @@ private fun Choices(options: List<String>, selected: String, onSelect: (String) 
 
 @Composable
 
-private fun ActiveRun(view: TrackingView, online: Boolean, command: (String) -> Unit) {
+private fun ActiveRun(view: TrackingView, online: Boolean, dark: Boolean, command: (String) -> Unit) {
 
     val s = requireNotNull(view.snapshot)
 
-    Text("${if (s.settings.mode == RunMode.INDOOR) "Indoor" else "Outdoor"} · ${if (online) "Online" else "Fallback"}")
+    RunStatusIndicators(s.settings.mode, online, dark)
 
     val paused = s.state == RunState.PAUSED
 
-    Text(if (paused) "Paused" else "Keep moving", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+    Text(if (s.pauseReason == PauseReason.AUTOMATIC) "Auto-paused" else if (paused) "Paused" else "Keep moving",
+        style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
 
     if (view.interrupted) Text("Tracking was interrupted. Your saved progress is here. Resume or finish when you're ready.", style = MaterialTheme.typography.bodyLarge)
 
@@ -496,6 +518,10 @@ private fun ActiveRun(view: TrackingView, online: Boolean, command: (String) -> 
     }
 
     var coachingSelected by rememberSaveable(s.runId) { mutableStateOf(true) }
+    if (s.pauseReason == PauseReason.AUTOMATIC) {
+        TextButton(onClick = { command(TrackingService.PAUSE) }, enabled = !view.busy,
+            modifier = Modifier.testTag("keep-paused")) { Text("Keep paused") }
+    }
     if (paused) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = coachingSelected, onCheckedChange = { coachingSelected = it }, enabled = !view.busy,
@@ -612,6 +638,8 @@ private fun Summary(s: RunSnapshot, busy: Boolean, error: String?, onDiscard: ()
         Text("${time(it.durationMs)} · ${pace(it.paceMsPerUnit)}/${unitLabel(s.settings.units)}", fontSize = 18.sp)
 
     }
+
+    com.example.runningapp.sharing.RunSharing(s.runId)
 
     OutlinedButton(onClick = { confirmDiscard = true }, enabled = !busy,
 

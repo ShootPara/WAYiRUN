@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import {parseWeather} from "../build/run-weather.js";
 const source=readFileSync(new URL("../web/export.browserjs",import.meta.url),"utf8");
 const {createCsvExport,collectExportRuns,fetchWithBackoff,abortableDelay,verifyCoaching}=await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 test("throttled download retries the same chunk after Retry-After, with bounded attempts",async()=>{
@@ -49,6 +50,22 @@ test("single CSV reconstructs complete archive and preserves precision, Unicode 
   assert.equal(rows[0].time_zone,"'"+data.value.run.zoneId);assert.equal(rows[0].distance_meters,"0.123456789");
   assert.equal(rows[1].start_utc,"");assert.equal(rows[0].stride_length_meters,"");
 });
+test("CSV reconstructs legacy and dual announcement captures without changing checkpoint bytes",async()=>{
+ const selections=[undefined,{version:1,timeEnabled:true,timeInterval:"FIVE_MINUTES",distanceEnabled:false,distanceInterval:"ONE_UNIT"},
+  {version:1,timeEnabled:false,timeInterval:"TEN_MINUTES",distanceEnabled:true,distanceInterval:"HALF_UNIT"},
+  {version:1,timeEnabled:true,timeInterval:"TEN_MINUTES",distanceEnabled:true,distanceInterval:"ONE_UNIT"}];
+ for(const selection of selections)for(const enabled of [false,true]){
+  const data=fixture();Object.assign(data.s.settings,{announcementsEnabled:enabled,announcementInterval:"FIVE_MINUTES"});
+  if(selection)data.s.settings.announcementSelection=selection;
+  data.value.run.checkpoint=JSON.stringify({snapshot:data.s,eventSequence:9});
+  const writer=createCsvExport();await writer.add(data);
+  const row=parse(await writer.finish().text()).find(r=>r.record_type==="RUN");
+  const restored=JSON.parse(row.record_json);
+  assert.equal(restored.checkpoint,data.value.run.checkpoint);
+  assert.deepEqual(JSON.parse(restored.checkpoint).snapshot.settings,data.s.settings);
+ }
+});
+
 test("formula-like text is escaped without altering stored JSON",async()=>{
   for(const text of ["+1","-1","@SUM(A1)"," \t=1","\rhello","\nhello"]){const data=fixture();data.value.run.zoneId=text;const writer=createCsvExport();await writer.add(data);const row=parse(await writer.finish().text())[0];assert.equal(row.time_zone,"'"+text);assert.equal(JSON.parse(row.record_json).zoneId,text);}
 });
@@ -124,4 +141,22 @@ test("CSV photo records reconstruct exact JPEG bytes and reject corrupt payloads
  const chunks=rows.filter(r=>r.record_type==="PHOTO_IMAGE").map(r=>JSON.parse(r.record_json));
  assert.deepEqual(Buffer.concat(chunks.map(c=>Buffer.from(c.base64,"base64"))),Buffer.from(bytes));
  const broken=createCsvExport();await assert.rejects(()=>broken.add({...data,photo:{metadata:{...metadata,sha256:"0".repeat(64)},bytes}}));
+ for(const path of ["p/"+"a".repeat(64),"r/"+"b".repeat(32)]){
+  const linked=createCsvExport();await linked.add({...data,photo:{metadata:{...metadata,publicUrl:`https://wayirun-dev.unopenedparachute.workers.dev/${path}`},bytes}});
+ }
+ for(const url of ["https://evil.test/r/"+"a".repeat(32),"https://wayirun-dev.unopenedparachute.workers.dev/r/short"]){
+  await assert.rejects(()=>createCsvExport().add({...data,photo:{metadata:{...metadata,publicUrl:url},bytes}}));
+ }
+});
+
+test("CSV retains selected photo weather exactly and rejects selection/metadata disagreement",async()=>{
+ const data=fixture(),bytes=new Uint8Array([255,216,255,217]);
+ const weather=parseWeather({utc_offset_seconds:0,hourly_units:{time:"unixtime",temperature_2m:"\u00b0C"},hourly:{time:[0],temperature_2m:[20],weather_code:[2]}},
+  {latitude:40.8,longitude:-74,observedUtcMs:0,endpoint:"archive"},3600000);
+ const metadata={revision:id(3),options:{time:true,distance:true,pace:true,route:false,weather:true},bytes:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex"),updatedAt:1,publicUrl:null,weather};
+ const writer=createCsvExport();await writer.add({...data,photo:{metadata,bytes}});
+ const record=JSON.parse(parse(await writer.finish().text()).find(r=>r.record_type==="PHOTO").record_json);
+ assert.deepEqual(record.weather,weather);
+ for(const invalid of [{...metadata,weather:undefined},{...metadata,options:{...metadata.options,weather:false}},
+  {...metadata,weather:{...weather,owner:"unexpected"}}])await assert.rejects(()=>createCsvExport().add({...data,photo:{metadata:invalid,bytes}}));
 });

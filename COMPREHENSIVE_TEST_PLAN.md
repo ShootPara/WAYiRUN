@@ -13,16 +13,16 @@ Upgrade in place; do not uninstall or clear storage on the real phone. Export al
 3. Normal outdoor run: GPS/steps, screen off, headphones/music, goals and finish (sections 2.2–2.3). Stop safely before operating controls; no need to provoke failures while running.
 4. Controlled recovery and second account/device checks (section 2.7), then rerun failed cases after corrections.
 
-Start with HC-01 through HC-04 and CO-01 on the new APK. The remaining checklist is the next testing phase, not a demand to do everything in one run.
+After Milestone 11 verification and the combined rollout, start with SET-01, REC-04, AU-02, RUN-08 and PH-03. Then use normal runs for audio, sensors and coaching. The remaining checklist can span several sessions.
 
 ## 1.3 Practical schedule for the owner
 
-Take as many days as needed. These are sessions, not deadlines. Keep using the same health1 APK throughout so results remain comparable. You can report everything together; no need for a conversation after each check.
+Take as many days as needed. Use the verified timestamped handoff build throughout so results remain comparable; record its version from settings. Keep the current phone build until that handoff is ready. You can report results together.
 
 | Session | Actions | Record |
 |---|---|---|
 | Day 1: setup, about 15 minutes | Export a backup CSV, upgrade in place, confirm history/login/photos remain, connect Health Connect and inspect one older run. Retry export once and check for duplicates. | SET-01, HC-01, HC-03; phone model and Android version. |
-| Day 2: short indoor test, about 15–20 minutes | Make a disposable run: move for a minute, pause for 30 seconds, resume for a minute, then finish with coaching checked. Compare spoken recap with the website. Keep a test photo with publication unchecked. Inspect the Health Connect entry, then delete this disposable run and check cleanup. | RUN-01, CO-01, PH-02–03, HC-02, HC-04. Note active versus elapsed time. |
+| Day 2: short indoor test | Make a disposable run: move, pause, resume, then finish with coaching checked. Compare spoken recap with the website. Keep a test photo and confirm it stays private until a share action. Inspect the Health Connect entry, then delete this disposable run and check cleanup. | RUN-01, CO-01, PH-02–03, HC-02, HC-04. Note active versus elapsed time. |
 | Day 3: your normal outdoor run | Use your usual music/headphones. Check a pause/resume, screen-off tracking, distance/pace plausibility, finish, coaching and photo. Review the saved map and sync afterward. | RUN-02, RUN-06, AU-01–02, PH-01; any practical annoyance, even if it technically works. |
 | Day 4 or later: desk checks, about 20 minutes | Browse website on phone/desktop, change units, replay recap, export CSV, try a short offline run with coaching unchecked, reconnect and check sync. Exercise cancellation and partial finish swipe on a disposable run. | WEB-01–03, CO-02, RUN-05, REC-02. |
 
@@ -33,7 +33,7 @@ The remaining detailed cases below are a coverage backlog. Permission revocation
 Send plain notes or screenshots whenever convenient. Test IDs are optional; Codex can map your observations into the ledger. One report can cover several days. A useful template is:
 
 ```text
-Build: health1
+Build: timestamp shown in settings
 Phone / Android:
 What I tried:
 What worked:
@@ -70,13 +70,14 @@ For an intermittent problem, record whether it happened once or repeatedly and w
 | RUN-05 | Tap/partially swipe finish, then fully swipe. Only full confirmation finishes. Cancel discard preserves data; confirmed discard removes only the intended disposable run. |
 | RUN-06 | Screen off/background for a meaningful portion of a run. Resume UI and notification show consistent state, active time, distance and splits. Record battery percentage and elapsed time. |
 | RUN-07 | No usable sensor/source, denied location/steps, or source recovery: clear status, no invented distance, no crash, and valid available metrics continue. |
+| RUN-08 | Auto-pause defaults on. With reliable motion evidence, stop about five seconds and move about two seconds: automatic pause/resume, distinct cues and frozen paused accounting. Manual pause never auto-resumes. Turn the setting off for a separate run and confirm it stays off; changing settings does not alter an active run. |
 
 ## 2.3 Audio, music, coaching and achievements — requirements 7–9
 
 | ID | Check and expected result |
 |---|---|
-| AU-01 | Speaker, wired/Bluetooth headphones and YouTube Music: starting WAYiRUN does not unexpectedly start music. State/goal/full-split cues play once; music ducks and recovers appropriately. |
-| AU-02 | Pause/resume from app and headphones. Outside a WAYiRUN cue, linked music pause/resume follows the agreed behavior. During a WAYiRUN cue, a music pause event must not pause the run. No unintended auto-restart. |
+| AU-01 | Speaker and available headphones with YouTube Music: state/goal/completion cues play once; music ducks and recovers. Select each announcement interval across suitable runs: 5/10 active minutes or 0.5/1 selected distance unit, continuing beyond the goal. Announcement off preserves state/goal/completion cues. |
+| AU-02 | Open playlist, then choose playback in YouTube Music. App start/pause/resume/finish never sends music transport commands. Music/headphone pause/resume never changes run state, including during cues. No notification-listener access request or music-control setup remains. |
 | AU-03 | Notification controls, rapid repeated commands, phone call, Bluetooth disconnect/reconnect: state stays consistent; no duplicate run/service or stuck audio focus. |
 | CO-01 | One new run with coaching checked and working key/network: spoken coaching matches this run's saved recap. Completion cue precedes it. Dismissing animation does not cut off speech. Website replay matches too. |
 | CO-02 | Coaching unchecked: no AI generation or encouragement; normal completion cue still works. Offline/missing-key checked run gets onboard encouragement with a clear outcome. Reopening history does not generate/bill again. |
@@ -90,9 +91,10 @@ For an intermittent problem, record whether it happened once or repeatedly and w
 |---|---|
 | PH-01 | Rear/front camera, image picker, cancel and Skip. Saved run survives all choices; photo orientation is correct for portrait/landscape. |
 | PH-02 | Toggle overlays, preview, retake, rotate screen and Keep. Chosen time/distance/pace/actual route match run and units; no route is invented for indoor/no-GPS runs. |
-| PH-03 | Publication starts checked. Uncheck before Keep for a private disposable photo. Save and share produce usable image; private choice does not expose a public page. |
-| PH-04 | Explicitly publish a non-sensitive test photo. Logged-out public link shows only that run/photo. Replace/delete it and verify old content/link access is revoked as designed. |
-| PH-05 | Keep offline, reconnect and refresh website: upload recovers without duplicates. Deletion during pending upload cannot resurrect the photo. Website retains cloud photo access; automatic photo download on a new phone is currently not implemented. |
+| PH-03 | New run/photo is private. Keep and Save image preserve privacy. Any Share/Copy link or image-share attempt records public intent, even if the chooser is cancelled. Offline intent queues; a confirmed short link is offered only after publication succeeds. |
+| PH-04 | Share a disposable run with and without a photo. Logged-out short link shows only that run. Hide photo: stats/splits/route remain, photo and weather metadata disappear. Unshare: short link, public page/data/image become inaccessible. Reshare follows the stable-link contract. Deletion revokes access. |
+| PH-05 | Keep offline, reconnect and refresh website: upload recovers without duplicates or retaking the photo. Gear settings distinguish synced runs from photos waiting to upload; a failed photo has a safe explanation and cannot block other eligible photos. Retry sync clears the pending/error state after a verified receipt. Deletion during pending upload cannot resurrect the photo. Website retains cloud photo access; automatic photo download on a new phone is currently not implemented. |
+| PH-06 | Outdoor synced run: optional weather shows emoji and F/C from the run start. Toggle off/on, recreate editor and Keep: preview, JPEG and saved metadata agree. Route has no dark rectangle and preserves gaps. Indoor/no GPS/offline/unavailable weather never blocks Keep. Old kept photos remain unchanged. Credit appears in settings, weather-bearing JPEG and public page. |
 
 ## 2.5 Health Connect — requirements 11.6, 12
 
@@ -112,7 +114,7 @@ For an intermittent problem, record whether it happened once or repeatedly and w
 | ID | Check and expected result |
 |---|---|
 | WEB-01 | History/detail/achievements at desktop and phone width: correct counts, units, loading/empty/error states and accessible buttons. Clearly distinguish loaded-history totals from full-history awards. |
-| WEB-02 | Route with pauses/gaps and unavailable map tiles: no invented connecting path, meaningful fallback, readable run details. |
+| WEB-02 | Route with pauses/gaps: no basemap or tile requests, no invented connecting path, start/finish markers and readable details. Public location shows city/state or a generic unavailable message, never coordinate text. |
 | WEB-03 | Export all runs: one CSV includes summaries and retained detailed records, GPS/splits/settings, coaching/audio, achievements and photos. Agent reconstruction validates embedded media hashes and safe spreadsheet cells. Cancel/failure never offers a misleading partial success. |
 | WEB-04 | Select/delete disposable runs, cancel confirmation, retry network failure and refresh. Deleted runs/photos/public pages/coaching stay deleted across phone/web; unrelated records remain. |
 | WEB-05 | Logout/back navigation/second account: private content and in-progress requests cannot reappear from stale browser state. Network/rate-limit/auth failures give actionable messages without losing runs. |
@@ -124,6 +126,7 @@ For an intermittent problem, record whether it happened once or repeatedly and w
 | REC-01 | Disposable active/paused run: controlled process termination or reboot. Reopen and verify explicit recovery, preserved checkpoints and no silent duplicate run. Record exact lost interval, if any. |
 | REC-02 | Finish/save/upload around connectivity loss. Reconnect, restart and reconcile another test device: one complete owned run; pending work resumes, deletion wins over stale upload. |
 | REC-03 | Interrupt photo/coaching/export operations and rotate/back out. No crash, stale playback or cross-run result; settled billing outcomes are not blindly retried. |
+| REC-04 | Finish, open photo editor and cancel camera/picker/save/share: current workflow survives return and rotation. Ordinary warm/cold reopen shows New Run; completed data remains in history. Unfinished recovery still requires explicit resume. |
 | REL-01 | Complete a longer realistic outdoor and indoor session after fixes, covering screen-off battery, GPS/steps, headphones, finish/photo and cloud/Health Connect reconciliation. |
 | REL-02 | Production identity/OAuth, functional release variant, signing/recovery, privacy policy and Health Connect declarations, capacity/configuration and release checks require their own bounded release work. Production deployment requires separate authorization. |
 
@@ -139,4 +142,8 @@ No unresolved P0/P1 issues; rerun each fixed case plus relevant regressions. Rev
 
 ## 3.3 Current evidence
 
-Health build: assembleDebug, lintDebug and 75 JVM tests passed. Ten focused emulator checks passed, including the actual Health Connect service's stable insertion IDs/repeated deletion, queue races, migrations and WAV preparation. Eight additional coaching/run-screen checks passed, including photo Keep/Skip and finish/discard (18 focused emulator checks total). Physical-phone Health Connect consent/display and the comprehensive manual suite remain pending. Earlier photo/coaching/achievement evidence remains in TASKS.md; it does not substitute for this full acceptance pass.
+Milestone 14 combined-build automated gate passed: 118 JVM tests, build/lint, 26 targeted emulator cases and light/dark normal/200-percent settings visuals. Physical acceptance remains: at a five-minute goal with five-minute milestones, hear only the goal recap, then a normal ten-minute milestone if continuing. Repeat a matching one-mile and one-kilometer goal/distance milestone. With both channels enabled and no goal collision, simultaneous thresholds produce one recap. Check adjacent timer/distance callbacks, carried indoor motion, screen-off playback, pause/resume and finish with coaching. Milestone settings remain in the gear menu.
+
+September 28 physical feedback supersedes synthetic auto-pause confidence: BUG-006 reproduces false indoor pauses while running. After Milestone 12, record phone model/Android version and placement. Carry the phone normally for several minutes, including the initial ten seconds and manual pause/resume; no false pause is acceptable. Stop and resume repeatedly, confirming cues and frozen paused time/distance. Repeat screen-off and with auto-pause disabled. A phone resting on treadmill equipment is not evidence of the runner's motion. Time announcements already worked in the owner's phone test; preserve that regression. Do not close BUG-006 from emulator results alone.
+
+Through Milestone 11: 146 Worker tests, 95 JVM tests, Android build/lint, all 105 distinct emulator cases across the explicit Health Connect permission split, local browser checks and visual gates passed. The picker-return failure was corrected as test synchronization and passed repeatedly; the transient Compose exception did not recur in the complete suite or six focused editor runs. Artifact and evidence are recorded in TASKS.md and MILESTONE_11_TEST_HANDOFF.md. Physical sensor/audio/camera, real provider, upgrade and combined deployed-service acceptance remain pending. Automated synthetic results do not substitute for those checks.

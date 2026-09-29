@@ -94,8 +94,9 @@ class TrackingReliabilityTest {
             assertEquals(runId, TrackingService.view.value.snapshot!!.runId)
             TrackingService.send(context, TrackingService.PAUSE)
             await { TrackingService.view.value.snapshot?.state == RunState.PAUSED }
-            TrackingService.send(context, TrackingService.FINISH)
-            await { TrackingService.view.value.snapshot?.state == RunState.FINISHED && notifications.activeNotifications.isEmpty() }
+            // Coaching has its own playback tests and intentionally retains foreground ownership.
+            TrackingService.send(context, TrackingService.FINISH_WITHOUT_COACHING)
+            await(90_000) { TrackingService.view.value.snapshot?.state == RunState.FINISHED && notifications.activeNotifications.isEmpty() }
             TrackingService.send(context, TrackingService.DISCARD, runId = "stale-confirmation")
             await { !TrackingService.view.value.busy }
             assertEquals(runId, TrackingService.view.value.snapshot!!.runId)
@@ -113,8 +114,8 @@ class TrackingReliabilityTest {
         }
     }
 
-    private fun await(condition: () -> Boolean) {
-        val deadline = SystemClock.elapsedRealtime() + 30_000
+    private fun await(timeoutMs: Long = 30_000, condition: () -> Boolean) {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (!condition() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(50)
         assertTrue("Expected service state before timeout; state=${TrackingService.view.value.snapshot?.state}, error=${TrackingService.view.value.error}", condition())
     }

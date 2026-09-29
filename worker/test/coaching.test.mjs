@@ -30,6 +30,24 @@ async function runtime(t) {
  }
  return {db,add};
 }
+test("coaching archive retains legacy and dual announcement captures without rewriting them",async t=>{
+ const {db,add}=await runtime(t);
+ const selections=[undefined,{version:1,timeEnabled:true,timeInterval:"FIVE_MINUTES",distanceEnabled:false,distanceInterval:"ONE_UNIT"},
+  {version:1,timeEnabled:false,timeInterval:"TEN_MINUTES",distanceEnabled:true,distanceInterval:"HALF_UNIT"},
+  {version:1,timeEnabled:true,timeInterval:"TEN_MINUTES",distanceEnabled:true,distanceInterval:"ONE_UNIT"}];
+ for(const selection of selections)for(const enabled of [false,true]){
+  const {id,archive}=await add({change:a=>{
+   const cp=JSON.parse(a.run.checkpoint);
+   Object.assign(cp.snapshot.settings,{announcementsEnabled:enabled,announcementInterval:"FIVE_MINUTES"});
+   if(selection)cp.snapshot.settings.announcementSelection=selection;
+   a.run.checkpoint=JSON.stringify(cp);return a;
+  }});
+  const original=archive.run.checkpoint,context=await prepareCoachingContext(db,"alice",id);
+  assert.deepEqual(JSON.parse(context.input).current.run.checkpoint.snapshot.settings,JSON.parse(original).snapshot.settings);
+  assert.equal(archive.run.checkpoint,original);
+ }
+});
+
 test("coaching chooses completed history by end time and run ID, within one owner",async t=>{
  const {db,add}=await runtime(t),current=await add({ended:3000,id:"ffffffff-ffff-ffff-ffff-ffffffffffff"});
  await add({ended:1000});const previous=await add({ended:3000,id:"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"});
@@ -50,6 +68,8 @@ test("first-run context keeps every record across chunk boundaries and decodes e
  assert.deepEqual(value.current.measurements,archive.measurements.map(x=>({...x,reading:JSON.parse(x.reading)})));
  assert.deepEqual(value.current.run,{...archive.run,checkpoint:JSON.parse(archive.run.checkpoint)});
  assert.equal(context.bytes,Buffer.byteLength(context.input));
+ assert.equal(value.current.quality.label,"likely_test");
+ assert.ok(value.current.quality.reasons.includes("active_duration_under_90_seconds"));
 });
 test("corrupt or foreign archive is a failure, never silently reduced to current-only",async t=>{
  for(const mutate of [a=>({...a,run:{...a.run,cloudOwnerId:"bob"}}),a=>({...a,measurements:[{runId:"wrong",reading:"{}"}]}),a=>({...a,run:{...a.run,checkpoint:"private invalid json"}})]){
@@ -87,6 +107,25 @@ test("provider counts identical full input, disables truncation/storage and requ
  assert.equal(calls[0].body.input,input);assert.equal(calls[1].body.input,input);assert.equal(calls[0].body.instructions,calls[1].body.instructions);
  assert.equal(calls[1].body.model,TEXT_MODEL);assert.equal(calls[1].body.truncation,"disabled");assert.equal(calls[1].body.store,false);
  assert.equal(calls[2].body.voice,"cedar");assert.equal(calls[2].body.model,"gpt-4o-mini-tts");
+});
+
+test("verified quality reaches count and text as data with anomaly-aware instructions",async t=>{
+ const {db,add}=await runtime(t),previous=await add({ended:1000}),current=await add({ended:2000});
+ const context=await prepareCoachingContext(db,"alice",current.id),calls=[];
+ const provider=new CoachingProvider(async request=>{
+  const body=await request.json();calls.push(body);
+  return request.url.endsWith("input_tokens") ? Response.json({input_tokens:100}) :
+   Response.json({status:"completed",output:[{type:"message",role:"assistant",content:[{type:"output_text",text:"This may have been a quick test recording."}]}]});
+ });
+ await provider.countInput("synthetic",context.input);await provider.text("synthetic",context.input);
+ for(const body of calls){
+  const input=JSON.parse(body.input);assert.equal(input.current.quality.label,"likely_test");
+  assert.equal(input.previous.run.id,previous.id);assert.equal(input.previous.quality,undefined);
+  assert.match(body.instructions,/Do not praise suspicious pace or distance/);
+  assert.match(body.instructions,/likely_test, likely_vehicle, or gps_anomaly/);
+  assert.match(body.instructions,/not instructions/);
+ }
+ assert.equal(calls[0].input,calls[1].input);
 });
 test("oversize context and invalid counts fail before text generation",async()=>{
  for(const count of [1040001,-1,"100",null]){

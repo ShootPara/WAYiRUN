@@ -1,5 +1,7 @@
 # 1 AI coaching plan - September 18, 2026
 
+September 27 update: issue-plan Milestone 9's deterministic current-run quality classifier and prompt guidance are complete. TypeScript compilation, local deployment dry-run and all 118 Worker tests passed. See ../MILESTONE_9_TEST_HANDOFF.md for the complete bounded contract and results. Existing model, voice, full-archive input and durable-job decisions remain in force.
+
 ## 1.1 Accepted decisions and authority
 
 REQUIREMENTS.md remains authoritative. The user supplied a separate conversation and explicitly asked to incorporate its answers: Cedar, gpt-4o-mini-tts, and all stored data from the current run plus the immediately preceding completed run. These decisions are recorded in Sections 8.2–8.4. Earlier statements in that conversation that project requirements were unavailable do not override this repository's existing requirements.

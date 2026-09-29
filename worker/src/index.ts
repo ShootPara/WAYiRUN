@@ -1,4 +1,6 @@
 import {handlePhotos,handlePublicPhoto} from "./photos.js";
+import { handleWeather } from "./run-weather.js";
+import {handlePublication,handleShortRun} from "./publication.js";
 import { handleBrowser, browserAssetPaths } from "./browser.js";
 import { handleRuns } from "./runs.js";
 import { handleAuth, type AuthEnv } from "./auth.js";
@@ -32,6 +34,9 @@ export default {
     if (env.APP_ENV !== "development") return json({ error: "environment_not_configured" }, 503, head);
 
     if(path.startsWith("/api/photos/")) return handlePhotos(request,env);
+    if(path.startsWith("/api/weather/")) return handleWeather(request,env);
+    if(path.startsWith("/api/publications/")) return handlePublication(request,env);
+    if(path.startsWith("/r/")) return handleShortRun(request,env);
     if(path.startsWith("/p/")) return handlePublicPhoto(request,env);
     if (browserAssetPaths.includes(path) || path.startsWith("/web-api/")) return handleBrowser(request, env);
     if (path === "/api/account/openai-key") return handleAccountKey(request, env);

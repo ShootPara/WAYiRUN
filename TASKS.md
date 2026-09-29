@@ -1,14 +1,144 @@
 # WAYiRUN — Implementation Plan
 
-Version: 0.4
-Status: Milestone 5 upload/import/discard phone checks passed; sync2 restore/deletion reconciliation implemented, final gates tracked in Section 8.0.6; later product features remain planned
+Version: 0.5
+Status: September 28 issue-plan milestones 1-14 locally complete; matching development backend deployed during photo-sync repair; physical-phone acceptance remains
 FILE: <repository-root>\TASKS.md (NEW)
 
 ## 1 Current state
 
-Current through September 18: tracking, basic audio, music controls, account sync/restore/deletion, desktop history/maps/export, coaching and the initial achievements milestone are implemented. End-of-run photos and public run pages (9.5) are NEXT. See REMAINING_WORK.md for the concise remaining schedule and Sections 15–16 for current artifacts/evidence. Music/device verification and announcement-selector work remain deferred. The release variant is still a shell. Historical entries below are dated and do not override this current status.
+Current through September 22: the baseline includes tracking, audio, account sync/restore/deletion, desktop history/export, coaching/history, achievements, photos/public pages, and Health Connect. The user authorized `ISSUES_AND_QUIBBLES_IMPLEMENTATION_PLAN.md` version 0.2. Its milestone IDs are the current execution sequence; Sections 3-20 below retain historical milestone IDs and evidence. Historical map, linked-music, default-public-photo, and stop/next instructions are superseded where they conflict with current REQUIREMENTS.md and the accepted issue plan. The release variant remains a shell; device acceptance remains distinct from automated checks.
+
+### 1.1 Current issue-plan milestones
+
+| Issue-plan milestone | Scope | Status |
+| --- | --- | --- |
+| 0 | Baseline checkpoint | Complete: e772ea2 and 9a864c1 pushed |
+| 1 | Align product documents | Complete: September 22, documentation checks only |
+| 2 | Completed-run launch/focus correction | Complete: 78 JVM tests and focused emulator checks; device acceptance pending |
+| 3.0 / 3.1 | Route-only graphics / city-state lookup | Complete: Worker and desktop/mobile verification passed |
+| 7 | Remove automatic music controls | Complete: Android/JVM/lint gates and 22 focused emulator tests passed |
+| 10 | Setup controls/status indicators | Complete: build/lint, 17 focused emulator tests and visual checks passed |
+| 6 | Configurable announcements | Complete: build/lint, 78 JVM tests and focused emulator checks; physical audio acceptance pending |
+| 8.0 / 8.1 | Auto-pause policy / service integration | Complete: 95 JVM tests, build/lint, 26 focused emulator tests, repeated service test and light/dark/200-percent visuals passed |
+| 9 | Anomaly-aware coaching | Complete: Worker compile/dry-run and all 118 tests passed |
+| 4.0 / 4.1 | Publication API/web / Android sharing | Complete: Worker/browser gate plus Room v7, 95 JVM tests, 49 focused emulator cases and light/dark/200-percent visuals passed |
+| 5.0 / 5.1 | Weather contract / photo rendering | Complete locally; regression and visual qualification resolved in M11 |
+| 11 | Final verification and handoff | Complete locally: consolidated gates passed and one timestamped APK retained |
+| 12 | Correct indoor auto-pause evidence | Locally complete: 102 JVM tests, build/lint and 11 distinct focused emulator cases passed across batch/rerun; physical BUG-006 remains open |
+| 13 | Independent time/distance milestones | Locally complete: 107 JVM, 28 Worker, 27 broad emulator and 2 final visual/settings cases passed; see MILESTONE_13_TEST_HANDOFF.md |
+| 14 | Goal-audio priority | Locally complete: 118 JVM tests, build/lint, 26 targeted emulator cases and combined visual checks passed; final APK in MILESTONE_14_TEST_HANDOFF.md |
+
+Milestone 12 follows AUTO_PAUSE_AND_MILESTONES_PLAN.md. Registered step silence is now unknown, with bounded acceleration coverage and positive step evidence driving auto-pause separately from distance. See MILESTONE_12_TEST_HANDOFF.md for thresholds, exact gates, the notification test-harness correction, internal APK/hash and outstanding carried-phone acceptance. the owner authorized continuing through tests without model switching. Next: Milestone 13; no intermediate phone install requested.
+
+Milestone 13 adds independent time/distance channels behind the existing master switch, with one-time legacy preference migration and additive captured settings. Android, archive, Worker coaching/CSV and light/dark 200-percent UI gates passed; exact evidence and internal artifact are in MILESTONE_13_TEST_HANDOFF.md. Goal collision/coalescing intentionally remains Milestone 14. No intermediate phone install requested.
+
+Milestone 14 adds active-time occurrence metadata and bounded one-second cue arbitration. Goal audio suppresses coincident milestones, simultaneous time/distance channels produce one recap, and future milestones continue. Full Android and targeted emulator gates passed after the requested model switch. The final combined M12-M14 phone artifact and acceptance list are in MILESTONE_14_TEST_HANDOFF.md; BUG-006 remains open for real-device movement.
+
+Milestone 1 updated REQUIREMENTS.md, TASKS.md, REMAINING_WORK.md, FINAL_PASS_ISSUES.md, and the issue plan; PHOTOS_PLAN.md gained an explicit historical-contract notice. Verification: heading/link inspection, superseded-rule searches, and `git diff --check`. That milestone changed documentation only; Milestone 2 results follow.
+
+### 1.2 Issue-plan milestone 2 completed - September 22
+
+TrackingService now loads unfinished runs only on ordinary startup. A distinct Activity entry command clears completed in-memory summaries on ordinary reopen without deleting records. A retained entry state preserves the current summary during configuration recreation; camera/gallery/save/share launches carry the exact finished-run ID for their return, saved across process recreation. The service checks ownership before restoring that specific finished record and does not replay coaching. Routine permission/account refresh remains separate from app entry. New Run clears finished presentation state; discard and unfinished recovery retain their existing behavior.
+
+Changed MainActivity.kt, TrackingService.kt, PhotoFlow.kt; added RunEntryState.kt, RunEntryStateTest.kt, and RunEntryTest.kt. No database migration or network contract change.
+
+Verification: `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest --console=plain` passed. All 78 JVM tests passed; lint reported zero errors and 19 warnings. Fourteen emulator tests passed across RunEntryTest, TrackingReliabilityTest, StartupPermissionsTest, RunScreenTest, and CoachingFinishTest. After adding actual photo-picker return and foreign-account restoration assertions, both final RunEntryTest cases passed: 15 distinct instrumentation cases total. Emulator target was emulator-5554 only. Coverage includes warm/cold entry, summary recreation, preserved records, picker cancellation/return, exact-run restore without coaching replay, stale/foreign IDs, paused-service recovery, notification lifecycle, discard, finish/photo UI and startup permissions.
+
+Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-22_09-46-00_EDT.apk` (intermediate verification build, existing health1 version label). Reports: `android/app/build/reports/tests/testDebugUnitTest/index.html` and `android/app/build/reports/lint-results-debug.html`. Physical camera/share-target behavior and full process death while an external camera is open remain device acceptance; those are not claimed from picker and service tests. No physical-phone install, deployment, commit, or push. Next bounded milestone: issue-plan 3.0, route-only graphics.
 
 Read [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), and [the then-current working guide](User%20Preferences%20LLM%20Guide.md) before work. Product requirements take precedence over proposed technical details.
+
+### 1.3 Issue-plan milestone 3 completed - September 22
+
+Private/public route displays now use local SVG geometry with start/finish markers and preserved pause/GPS gaps. Removed Leaflet assets and tile CSP permissions; no basemap requests remain. Public data returns normalized route geometry without exact coordinate fields. City/state lookup uses a configurable Worker-side Nominatim endpoint, owner/run-scoped cache, a database-wide ten-second request gate, three-second timeout, daily failure retry, and unobtrusive public-page attribution. Indoor/no-GPS and provider failures retain honest generic labels. See worker/MAP_CONTRACT.md for the checked provider terms and limitations.
+
+Added migration 0008_run_locations.sql, public-route.ts, run-location.ts, provider/geometry tests, and a repeatable browser verification script. Updated public/private rendering, asset routes, fixtures, smoke checks and existing tests. Run archives, recorded metrics and owner CSV contents are unchanged. Remote migration and deployment were not performed.
+
+Verification: `npm.cmd test` passed all 107 tests including TypeScript and deployment dry-run. A subsequent 24-test targeted pass verified the final public outdoor API privacy case and removed-asset responses; 108 distinct tests now exist. `node scripts/verify-route-ui.mjs <playwright-module-path> http://127.0.0.1:8798` passed desktop (1365px) and mobile (390px), private/public rendering, two disconnected route sections, no-GPS state, cleanup, city/state, attribution and zero external browser requests. Screenshots were visually inspected under worker/build/verification/route-*.png. No live lookup used personal coordinates. `git diff --check` passed.
+
+The user retains the existing phone build. No new APK handoff, install, commit or push. Next: issue-plan Milestone 7, automatic music-control removal. An empty local worker/web/vendor directory may remain because automatic approval rejected its removal; all tracked vendor files are deleted.
+
+### 1.4 Issue-plan milestone 7 completed - September 22
+
+Removed automatic media transport, notification-listener registration, service media hooks and music-access setup. Playlist opening and cue ducking remain. Added replacement music-independence instrumentation and settings coverage; retired tests for the removed linkage. Audio-idle notification cleanup remains in place. No Worker, schema or network contract changed.
+
+Verification after the requested model-switch pause: the production-source removal scan returned no matches and `git diff --check` passed (line-ending notices only). `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest --console=plain` succeeded. All 68 JVM tests passed with zero failures/errors/skips; lint reported zero errors and 19 warnings. All 22 focused emulator tests passed on emulator-5554, covering music independence/listener absence plus tracking lifecycle, completed-run entry, settings, playlist opening, startup permissions, run screens and coaching finish behavior.
+
+Artifacts: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-22_18-25-34_EDT.apk` and `android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`. These are verification artifacts, not a phone handoff. Real YouTube Music/headphone behavior and audible focus ducking remain physical-device acceptance; synthetic MediaSession tests cannot prove them. No physical-phone install, deployment, commit or push. Next bounded milestone: issue-plan 10, setup controls/status indicators.
+
+### 1.5 Issue-plan milestone 10 completed - September 23
+
+Added NewRunControls.kt with square emoji radio choices, font-scale-aware column wrapping and separate left/right status labels in the requested theme-adjusted colors. WayirunApp.kt uses these for setup and active/paused status; saved preferences, goal target memory, validation and network/session checks retain their existing behavior. SettingsExperienceTest uses stable selector tags; NewRunControlsTest covers selected settings, persistence/start capture, narrow/large-text layout, rendered status colors and screenshot generation.
+
+Verification after the requested model-switch pause: `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest --console=plain` passed. All 68 JVM tests passed with zero failures/errors/skips; lint reported zero errors and 19 warnings. Seventeen focused emulator cases passed across NewRunControlsTest, SettingsExperienceTest, PlaylistSetupTest, RunScreenTest, StartupPermissionsTest and CoachingFinishTest. One combined rerun caught the existing asynchronous photo-preview test while its checkbox was temporarily disabled; RunScreenTest then passed all six cases in isolation on the final app.
+
+Visual inspection found the first 200-percent-font version left too little space between adjacent labels despite passing bounds checks. The layout safety margin and clipping assertion were corrected. Regenerated normal/200-percent selector images, light/dark status images and full app screenshots show square controls, intact emoji/labels, distinct status colors and scroll access to target, playlist, statuses and START RUNNING. Emulator font scale was restored to 1.0. Screenshots: `android/app/build/verification/milestone-10-final/milestone-10/` and `android/app/build/verification/milestone-10-app/`. Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-23_06-06-06_EDT.apk` (internal verification only). Physical-phone visual acceptance remains deferred. No phone install, deployment, commit or push. Next: issue-plan Milestone 6, configurable announcements.
+
+### 1.6 Issue-plan milestone 6 complete - September 25
+
+Prepared exactly four interval choices and an on/off switch in gear settings, saved automatically and captured at run start. New setup defaults to enabled/five minutes; old checkpoint settings decode with intervals off. Added time/distance announcement events to the controller and reused existing metric speech and audio focus. Recovery derives consumed thresholds from persisted totals; the existing save-before-play path remains authoritative. No Room schema or Worker/API changes.
+
+Controller tests cover crossings, units, countdown, pauses, goal continuation, source gaps and JSON recovery/compatibility; cue tests cover spoken values/focus; storage and UI tests cover recovery and settings persistence/start capture. `git diff --check` passed with line-ending warnings only. The Android build/JVM/lint gate passed from a fresh build tree: all 78 JVM tests passed with zero failures/errors/skips, both debug APKs assembled, and lint reported zero errors and 19 warnings.
+
+The focused emulator run passed 20 of 21 cases initially; the existing `RunEntryTest.finishedRunSurvivesRecreationButNotWarmOrColdReopen` timed out waiting for tracking state after the longer combined run, then passed immediately in isolation. The Milestone 6 announcement settings, queue, storage recovery, tracking reliability and music-independence cases all passed. Actual gear screenshots in light, dark and 200-percent font settings show the enabled five-minute default, all four choices, selected state, readable labels and scrolling without overlap. Emulator theme and font scale were restored. Screenshots: `android/app/build/verification/milestone-6/`. Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-25_19-46-41_EDT.apk` (internal verification only). Real speaker/headphone ducking, screen-off delivery and sensor behavior remain phone acceptance. No phone install, APK handoff, deployment, commit or push. Next: issue-plan Milestone 8.0, auto-pause policy.
+
+### 1.7 Issue-plan milestone 8.0 complete - September 26
+
+Added a pure Kotlin motion policy with explicit freshness, accuracy and speed thresholds; healthy silent step observation; both-source agreement; five-second stationary/two-second sustained movement dwell; source-change and delayed-poll resets. Added persisted optional pause reason and controller automatic pause/resume entry points using existing accounting. Manual override blocks auto-resume; process recovery always requires explicit resume. Existing service/UI behavior is not activated until 8.1.
+
+`git diff --check` passed with line-ending warnings only. The first Android gate encountered the known Windows lock in generated package output; after stopping Gradle and moving the verified generated build tree aside, a fresh run passed. All 88 JVM tests passed with zero failures/errors/skips, including ten new policy/accounting/JSON compatibility tests. Debug and Android-test APK assembly passed; lint reported zero errors and 19 warnings. Both APKs installed successfully on `emulator-5554`, and all 13 focused `RunDatabaseTest`/`TrackingReliabilityTest` cases passed. Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-26_10-26-28_EDT.apk` (internal verification only). No UI changed, so no visual check was required. No phone install, deployment, commit or push. Next: Milestone 8.1 service/settings/cue integration.
+
+### 1.8 Issue-plan milestone 8.1 complete - September 26
+
+Implemented sensor speed/accuracy observations, stride-independent step registration, TrackingInput policy integration, automatic-pause sensor/timer/wake-lock retention, permission-generation reconciliation and fresh resume baselines. Added the default-on saved gear toggle captured at run start, automatic cue wording, Auto-paused display and Keep paused manual override. Legacy captured settings default off; recovery still requires explicit resume. Tightened stale-step resume evidence.
+
+`git diff --check` passed with line-ending warnings only. The first Android gate hit the known generated-output Windows lock; after isolating that exact build tree, the fresh gate passed. All 95 JVM tests passed with zero failures/errors/skips. Debug and Android-test APK assembly passed; lint reported zero errors and 20 warnings. Fresh APKs installed successfully on `emulator-5554`; all 26 focused service/settings/storage/reliability/music/UI/Health Connect tests passed. The real-service auto-pause case also passed twice more while producing visual evidence, exercising background timing, persisted reasons/settings, frozen accounting, automatic resume, second-stop reset, manual override, sensor shutdown and interrupted recovery.
+
+Actual settings and Auto-paused screens passed light, dark and 200-percent-font inspection with controls reachable and no overlap. Screenshots: `android/app/build/verification/milestone-8-1/`. Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-26_22-29-19_EDT.apk` (internal verification only). Emulator font scale was restored to 1.0. Real GPS accuracy, step batching/onset timing, repeated physical stops, permission changes, audible cues and screen-off sensor behavior remain phone acceptance. No phone install, APK handoff, deployment, commit or push. Next: issue-plan Milestone 9, anomaly-aware coaching.
+
+### 1.9 Issue-plan milestone 9 complete - September 27
+
+Added deterministic current-run quality labels/reasons/metrics after archive verification while retaining all current/previous run records. The classifier uses strict test thresholds, 25-second sustained fast-motion windows, segment/source/gap boundaries, accuracy-aware GPS jump evidence and conservative label precedence. Coaching instructions acknowledge suspicious data without performance praise or blocking coaching. No Android/UI, database schema, provider model, speech or durable-job behavior changed.
+
+`git diff --check` passed with line-ending warnings only. `npm.cmd test` passed TypeScript compilation, the local Cloudflare deployment dry-run and all 118 Worker tests with zero failures/skips/cancellations. Ten new cases cover exact test thresholds, normal/sparse evidence, measured and route vehicle evidence, GPS accuracy/jumps, continuity resets, unchanged archives, actual provider request bodies and a suspicious run completing the existing durable coaching flow. Existing owner isolation, deletion, credentials, paid-stage uncertainty, history/export, route and publication coverage remained green. All OpenAI calls were synthetic stubs; no real key, paid call, deployment, migration, Android build, phone install, commit or push occurred. Real coaching tone and thresholds remain acceptance with eventual user recordings. Next: issue-plan Milestone 4.0, publication API/web.
+
+### 1.10 Issue-plan milestone 4.0 - September 27
+
+Completed migration 0009, independent owner-scoped publication state, revision-checked idempotent mutations and stable short tokens. Existing public tokens are preserved; new photo uploads and legacy visibility headers cannot publish or override sharing. Public pages/data/images and short redirects check current publication; hiding photos retains run data and private images. Added web share/copy/unshare/photo-display controls, no-photo pages and short-link export compatibility. A browser check exposed and fixed an in-flight checkbox-state overwrite; its harness was tightened for explicit multi-page contexts and deterministic mutation completion.
+
+`git diff --check` passed with line-ending warnings only. `npm.cmd test` passed TypeScript compilation, the local Cloudflare deployment dry-run and all 125 Worker tests with zero failures/skips/cancellations. Local Playwright checks passed at 1365px and 390px for share/copy/cancel, hidden and absent photos, revocation, route/locality retention, 409 refresh, failed mutation and delayed navigation; existing private/public route checks also passed. Screenshots are in `worker/build/verification/publication-*.png`. No remote migration, deployment, Android change/build, phone install, paid call, commit or push occurred. Android durable intent, queue migration and all Android sharing entry points remain Milestone 4.1; combined rollout stays deferred.
+
+### 1.11 Issue-plan milestone 4.1 complete - September 27
+
+Implemented Room v7 independent publication intent/cache, migration of obsolete photo visibility flags, owner-scoped durable mutation receipts, server-revision conflict handling, deletion/supersession guards and explicit-import transfer of local intent. Added summary/photo sharing controls and pending states; Share/Copy use confirmed short links, local image sharing first records publication intent, and Keep/Save no longer publish. Background sync never opens a chooser. Added 13 synthetic publication engine cases, four control/delivery/layout cases, a migration case and an updated private-Keep photo UI regression.
+
+Room schema 7.json was generated and inspected against migration 6-to-7. All 95 JVM tests passed; debug/test APK assembly and lint passed with zero errors and 20 existing warnings. All 49 distinct focused emulator cases passed across the main run and isolated reruns. The previously documented long-suite RunEntry lifecycle timeout occurred once after 47 passing cases and passed with both class cases in isolation. Confirmed short-link clipboard/chooser payloads, independent photo controls, migration, uncertain retry, conflicts, account changes, deletion and offline ordering passed with synthetic data only. Light/dark 200-percent-font screenshots under `android/app/build/verification/milestone-4-1/` show readable controls and wrapped labels. Internal APK: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-27_22-10-04_EDT.apk`, SHA-256 `962C7D8B4EF6AABC6A28B246EDA33625B404B49024661B0FBFDDA8054B6A5D4E`. No deployment, physical-phone install, commit or push occurred. Milestone 4 completed before the now-complete Milestone 5.0.
+
+### 1.12 Issue-plan milestone 5.0 complete - September 28
+
+Added the private Worker weather endpoint, migration 0010 owner/run cache and provider gate, exact historical-hour parsing and bounded provider/lifecycle handling. Seventeen new synthetic tests cover privacy, stable caching, historical selection, provider failures and late-response guards. Open-Meteo terms/endpoints were checked; worker/WEATHER_CONTRACT.md records decisions and the attribution constraint for 5.1. Photo persistence/API/rendering remain unchanged in this phase.
+
+Verification after the requested model switch passed: TypeScript compilation, Cloudflare deployment dry-run and all 142 Worker tests completed with zero failures, skips or cancellations. The built bundle contains the `/api/weather/{runId}` route, and `git diff --check` passed. No Android build, phone install, real weather query, deployment, remote migration, commit or push. Next: Milestone 5.1 photo rendering and stable weather metadata integration.
+
+### 1.13 Issue-plan milestone 5.1 complete - September 28
+
+Prepared weather-enabled photo editing/rendering, stable saved snapshot and upload metadata, lower-right route without its rectangle, small provider credit, Room v8 and Worker migration 0011. New optional weather requests reuse the 5.0 contract. Prepared JPEGs bind source/options/weather so Keep cannot mix a late reply or replacement image with old bytes. Legacy photos remain unchanged. Worker uploads validate the exact owned snapshot; public data omits coordinates and hidden-photo weather; CSV retains private snapshot metadata.
+
+Verification passed after the model switch: Worker compile/dry-run and all 146 tests; 95 JVM tests; Android debug/test assembly; lint with zero errors and 20 warnings; generated Room schema 8; all 13 new emulator cases; dark 200-percent editor/settings checks; and mobile/desktop weather, route and publication browser checks. One existing RunEntry lifecycle/photo-editor case remains a Milestone 11 stabilization item after failing in the combined run and alone. Internal APK: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-28_07-45-03_EDT.apk`, SHA-256 `573EEA17F7BA1793A87358FF6A3D562BE0D18E684691E8ABCA217E612B8DBA47`. No deployment, remote migration, real provider request, physical-phone install, commit or push.
+
+### 1.14 Issue-plan milestone 11 complete - September 28
+
+Reviewed the run-entry/picker return and prior transient Compose wrong-thread exception. Tightened RunEntryTest to wait for the resolved picker window before sending Back and for the restored editor. Updated COMPREHENSIVE_TEST_PLAN.md for independent music controls, announcements, default-on auto-pause, private Keep/Save, share intent, hidden photos/unshare, weather and completed-run reopening.
+
+Consolidated verification passed: Worker compile/dry-run and 146 tests; 95 JVM tests; Android debug/test assembly; lint with zero errors and 20 warnings; all 105 distinct emulator cases across an explicit Health Connect permission split; repeated picker lifecycle coverage; six focused editor restoration executions; dark 200-percent pending-weather/settings cases; light/dark large-text and three-shape image inspection; and all local Playwright weather/route/publication/history checks. The picker issue was test timing, and no production code changed. The Compose exception did not recur. Handoff APK: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-28_11-48-32_EDT.apk`, SHA-256 `573EEA17F7BA1793A87358FF6A3D562BE0D18E684691E8ABCA217E612B8DBA47`. One APK remains in the repo build tree. No deployment, remote migration, real provider call, physical-phone install, commit or push.
+
+### 1.15 Photo synchronization repair - September 28
+
+the owner authorized repairing end-of-run photos and the matching development rollout. Investigation reproduced the newer Android weather flag being rejected by the September 19 Worker, even with weather disabled. Backed up/restored the development database for verification, passed all 148 Worker tests and deployed prepared migrations 0008-0011 plus Worker ce8a67a6-ce47-4d49-9559-9314014d6efc. All 27 live smoke checks and the disposable authenticated photo/publication canary passed; synthetic records were removed. Cloud photo count grew from six in the backup to eight after deployment, with two current-format photos, supporting recovery of queued uploads.
+
+Android hardening adds Room v9 retry/error metadata, fair bounded photo batches, strict receipt/owner/revision guards and visible pending/failure states. See PHOTO_SYNC_REPAIR.md for exact gates, final artifact and phone acceptance. Future cloud-dependent APK handoffs must verify the actual deployed backend/schema, not only matching local fixtures. No production release, physical-phone install, commit or push.
+
+Verification: 118 JVM tests, build/lint (zero errors, 21 warnings), 59 distinct focused emulator cases, and inspected light/dark 200-percent status screenshots passed. Final APK is WAYiRUN-2026-09-28_18-07-05_EDT.apk; size/hash and scoped cleanup are in PHOTO_SYNC_REPAIR.md. Live cloud recovery is observed; the owner's individual photo display check remains acceptance.
 
 ## 2 Execution discipline
 
@@ -18,7 +148,7 @@ Complete one milestone at a time. Review its scope and entry decisions, implemen
 
 ### 2.2 Repository ownership
 
-The user created the repository. Its existing `.git` directory and `.gitattributes` were relocated from the redundant `RunningApp` subfolder to this project root on 2026-09-12, preserving HEAD and origin. Do not create another repository or change the remote. The user will commit and push this baseline. At task entry inspect Git status and preserve pending user changes; do not treat an uncommitted baseline as disposable. Committing and pushing require explicit delegation.
+The user created the repository. Its existing `.git` directory and `.gitattributes` were relocated from the redundant `RunningApp` subfolder to this project root on 2026-09-12, preserving HEAD and origin. Do not create another repository or change the remote. The initial checkpoint was explicitly delegated and is complete. Leave subsequent work uncommitted unless requested; milestone verification does not require a commit or push. At task entry inspect Git status and preserve pending user changes.
 
 ### 2.3 Credentials and device work
 

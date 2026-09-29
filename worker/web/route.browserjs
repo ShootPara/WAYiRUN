@@ -1,5 +1,4 @@
-// Pure archive-to-map geometry. Never recompute the run's saved distance or pace.
-const mercatorLimit = 85.05112878;
+// Pure archive-to-route geometry. Never recompute the run's saved distance or pace.
 const validTime = value => Number.isSafeInteger(value) && value >= 0;
 function requireValid(value) {
   if (!value) throw new Error("This run could not be verified. Its saved data is unchanged.");
@@ -20,7 +19,7 @@ export function prepareRoute(mode, segments, points) {
     byId.set(segment.id, { ...segment, index });
   }
   const parts = [];
-  let previous = null, lastRowId = 0, longitude = null, polar = false;
+  let previous = null, lastRowId = 0, longitude = null;
   for (const point of points) {
     const segment = byId.get(point.segmentId);
     requireValid(segment?.source === "GPS" && Number.isSafeInteger(point.id) && point.id > lastRowId &&
@@ -35,11 +34,9 @@ export function prepareRoute(mode, segments, points) {
     // Unwrap around the date line for a local view; separate parts remain separate.
     longitude = point.longitude + (longitude === null ? 0 : 360 * Math.round((longitude - point.longitude) / 360));
     parts.at(-1).push([point.latitude, longitude]);
-    polar ||= Math.abs(point.latitude) > mercatorLimit;
     previous = { index: segment.index, time: point.monotonicMs };
     lastRowId = point.id;
   }
-  if (polar) return { parts: [], pointCount: points.length, note: "This route is outside the map's supported latitude range." };
   return { parts, pointCount: points.length, note: !points.length ? "No GPS route was recorded for this run." :
     points.length === 1 ? "One GPS point recorded; there is no route line to draw." :
     "Recorded GPS only. Pauses and missing GPS sections are left unconnected." };

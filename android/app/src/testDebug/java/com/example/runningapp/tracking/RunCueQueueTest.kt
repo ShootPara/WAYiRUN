@@ -5,6 +5,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RunCueQueueTest {
+    private val scheduler = TestCueScheduler()
     private class Output : CueOutput {
         val spoken = mutableListOf<AudibleCue>()
         val tones = mutableListOf<AudibleCue>()
@@ -30,15 +31,53 @@ class RunCueQueueTest {
     private fun event(type: RunEventType, id: Long = 1) = RunEvent(RunEventId("run", id), type, 0, 0.0)
 
     @Test fun successfulSpeechNeedsNoTone() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.STARTED)))
         output.speechDone(true)
         assertEquals("Run started", output.spoken.single().text)
         assertTrue(output.tones.isEmpty())
     }
 
+    @Test fun automaticCuesHaveDistinctWordingAndReleaseFocus() {
+        val output = Output()
+        val queue = RunCueQueue(output, scheduler)
+        queue.play(listOf(event(RunEventType.PAUSED).copy(pauseReason = PauseReason.AUTOMATIC),
+            event(RunEventType.RESUMED, 2).copy(pauseReason = PauseReason.AUTOMATIC)))
+        assertEquals("Auto-paused", output.spoken.single().text)
+        output.speechDone(true)
+        assertEquals("Resumed.", output.spoken.last().text)
+        output.speechDone(true)
+        assertEquals(2, output.releases)
+        assertFalse(output.focusHeld)
+    }
+
+    @Test fun intervalSpeaksMetricsInOrderAndReleasesFocus() {
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
+        queue.play(listOf(RunEvent(RunEventId("run", 1), RunEventType.ANNOUNCEMENT, 300_000, 804.672)), RunUnits.MILES)
+        scheduler.advance(1_000)
+        assertEquals("Time: 5 minutes. Distance: 0.50 miles. Average pace: 10 minutes per mile.", output.spoken.single().text)
+        assertTrue(output.focusHeld)
+        output.speechDone(true)
+        assertFalse(output.focusHeld)
+        queue.play(listOf(RunEvent(RunEventId("run", 2), RunEventType.ANNOUNCEMENT, 600_000, 1000.0)), RunUnits.KILOMETERS)
+        scheduler.advance(1_000)
+        assertEquals("Time: 10 minutes. Distance: 1.00 kilometer. Average pace: 10 minutes per kilometer.", output.spoken.last().text)
+        output.speechDone(true)
+        assertEquals(2, output.releases)
+    }
+
+    @Test fun zeroDistanceIntervalUsesUnavailablePaceAndFallbackReleasesFocus() {
+        val output = Output().apply { accept = false }; val queue = RunCueQueue(output, scheduler)
+        queue.play(listOf(RunEvent(RunEventId("run", 1), RunEventType.ANNOUNCEMENT, 300_000, 0.0)))
+        scheduler.advance(1_000)
+        assertEquals("Time: 5 minutes. Distance: 0.00 miles. Average pace: unavailable.", output.tones.single().text)
+        output.toneDone()
+        assertFalse(output.focusHeld)
+        assertFalse(queue.isPlaying)
+    }
+
     @Test fun asynchronousFailureFallsBackOnceAndDoesNotOverlapNextCue() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.PAUSED), event(RunEventType.RESUMED, 2)))
         val staleCallback = output.speechDone
         staleCallback(false); staleCallback(false)
@@ -53,7 +92,7 @@ class RunCueQueueTest {
     }
 
     @Test fun unavailableSpeechSerializesGoalAndFinishTones() {
-        val output = Output().apply { accept = false }; val queue = RunCueQueue(output)
+        val output = Output().apply { accept = false }; val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.GOAL_REACHED), event(RunEventType.FINISHED, 2)))
         assertEquals(1, output.tones.size)
         output.toneDone()
@@ -63,14 +102,14 @@ class RunCueQueueTest {
     }
 
     @Test fun engineExceptionCannotEscapeIntoRunSaving() {
-        val output = Output().apply { throwSpeech = true }; val queue = RunCueQueue(output)
+        val output = Output().apply { throwSpeech = true }; val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.STARTED)))
         assertEquals(1, output.tones.size)
         assertFalse(output.tones.single().acknowledgement)
     }
 
     @Test fun closeIgnoresLateFailureAndQueuedEvents() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.PAUSED), event(RunEventType.RESUMED, 2)))
         queue.close(); output.speechDone(false)
         queue.play(listOf(event(RunEventType.FINISHED, 3)))
@@ -80,7 +119,7 @@ class RunCueQueueTest {
     }
 
     @Test fun controllerDuplicatesDoNotProduceExtraCuesAndSplitsStaySilent() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         val controller = RunController("run", RunSettings(RunMode.INDOOR, RunUnits.MILES, 0, RunGoal.None, null),
             RunClock { RunTime(0, 0) })
         queue.play(controller.start().events); output.speechDone(true)
@@ -98,14 +137,14 @@ class RunCueQueueTest {
 
     @Test fun deniedFocusSkipsSpeechAndToneAndDrainsQueue() {
         val output = Output().apply { grantFocus = false }; var idle = false
-        val queue = RunCueQueue(output) { idle = true }
+        val queue = RunCueQueue(output, scheduler) { idle = true }
         queue.play(listOf(event(RunEventType.STARTED)))
         assertTrue(output.spoken.isEmpty()); assertTrue(output.tones.isEmpty())
         assertFalse(queue.isPlaying); assertTrue(idle)
     }
 
     @Test fun focusHeldThroughAsyncFailureAndReleasedAfterFallback() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.STARTED)))
         assertTrue(output.focusHeld)
         output.speechDone(false)
@@ -115,7 +154,7 @@ class RunCueQueueTest {
     }
 
     @Test fun focusLossCancelsWithoutPlayingFallbackOrQueuedSpeech() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(event(RunEventType.STARTED), event(RunEventType.PAUSED, 2)))
         queue.cancel(); output.speechDone(false)
         assertFalse(output.focusHeld); assertFalse(queue.isPlaying)
@@ -124,13 +163,13 @@ class RunCueQueueTest {
     }
 
     @Test fun goalSpeaksKnownMilesMetricsInRequestedOrder() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(RunEvent(RunEventId("run", 1), RunEventType.GOAL_REACHED, 1_200_000, 3218.688)), RunUnits.MILES)
         assertEquals("Goal reached. Time: 20 minutes. Distance: 2.00 miles. Average pace: 10 minutes per mile. Keep going until you're finished.", output.spoken.single().text)
     }
 
     @Test fun finishSpeaksKilometersAndUnavailablePaceHonestly() {
-        val output = Output(); val queue = RunCueQueue(output)
+        val output = Output(); val queue = RunCueQueue(output, scheduler)
         queue.play(listOf(RunEvent(RunEventId("run", 1), RunEventType.FINISHED, 330_000, 1000.0)), RunUnits.KILOMETERS)
         assertEquals("Run complete. Time: 5 minutes, 30 seconds. Distance: 1.00 kilometer. Average pace: 5 minutes, 30 seconds per kilometer.", output.spoken.single().text)
         output.speechDone(true)

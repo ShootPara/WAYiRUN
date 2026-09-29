@@ -1,5 +1,9 @@
 # WAYiRUN — Cloud foundation handoff
 
+## 0.1 Current deployment — September 28 photo repair
+
+The historical sections below describe earlier releases. Current development Worker: `ce8a67a6-ce47-4d49-9559-9314014d6efc`, deployed under the owner's explicit photo-repair authorization. Migrations 0008-0011 are applied, with none pending. All 148 local Worker tests, compile/dry-run, 27 live smoke checks and the authenticated synthetic photo/publication canary passed. The private database backup restored successfully in isolated SQLite. After synthetic cleanup, cloud photos increased from six in the backup to eight, including two current-format uploads. See ../PHOTO_SYNC_REPAIR.md for safeguards, recovery evidence, Android hardening and the required deployed-compatibility handoff gate. No production release or Git commit/push occurred.
+
 ## 1 Completed scope
 
 Guide Section 4 was authorized after the user completed local GitHub and Cloudflare login. Implemented and deployed the development Worker, bound a dedicated D1 database, added a bootstrap migration, pinned dependencies/lockfile, tests, and reproducible deployment/smoke commands. This is Milestone 5 environment preparation, not completed account synchronization.

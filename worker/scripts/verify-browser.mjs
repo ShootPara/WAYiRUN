@@ -25,7 +25,7 @@ try {
   const send=(data,status=200)=>route.fulfill({status,contentType:"application/json",body:JSON.stringify(data)});
   if(path==="/")return route.fulfill({contentType:"text/html",body:readFileSync(new URL("index.html",root),"utf8")});
   if(path==="/app.js"||path==="/style.css")return route.fulfill({contentType:path.endsWith(".js")?"text/javascript":"text/css",body:readFileSync(new URL(path.endsWith(".js")?"app.browserjs":"style.css",root),"utf8")});
-  const extraAssets={"/route.js":"route.browserjs","/map.js":"map.browserjs","/export.js":"export.browserjs","/leaflet.js":"vendor/leaflet.browserjs","/leaflet.css":"vendor/leaflet.css"};
+  const extraAssets={"/route.js":"route.browserjs","/map.js":"map.browserjs","/export.js":"export.browserjs","/achievements.js":"achievements.browserjs"};
   if(extraAssets[path])return route.fulfill({contentType:path.endsWith(".css")?"text/css":"text/javascript",body:readFileSync(new URL(extraAssets[path],root),"utf8")});
   if(path==="/web-api/config")return send({clientId:"fixture"});
   if(path==="/web-api/challenge")return send({nonce:"a".repeat(64)});

@@ -81,13 +81,56 @@ data class AchievementCache(@PrimaryKey val owner: String,val awards: String)
 @Entity(tableName = "run_photos", foreignKeys = [ForeignKey(entity = StoredRun::class,
     parentColumns = ["id"], childColumns = ["runId"], onDelete = ForeignKey.CASCADE)])
 data class RunPhoto(@PrimaryKey val runId: String, val revision: String, val jpeg: ByteArray,
-    val options: String, val public: Boolean, val synced: Boolean = false, val publicUrl: String? = null)
+    val options: String, val public: Boolean, val synced: Boolean = false, val publicUrl: String? = null,
+    val weather: String? = null, val syncError: String? = null,
+    @ColumnInfo(defaultValue = "0") val lastAttemptMs: Long = 0)
 
 @Entity(tableName = "health_exports")
 data class HealthExport(@PrimaryKey val runId: String, val state: String = "PENDING", val error: String? = null)
 
 @Dao
 abstract class RunDao {
+    @Query("SELECT * FROM run_publications WHERE runId=:id")
+    abstract suspend fun publication(id: String): RunPublication?
+    @Query("SELECT * FROM run_publications WHERE runId=:id")
+    abstract fun publicationFlow(id: String): Flow<RunPublication?>
+    @Upsert protected abstract suspend fun putPublication(value: RunPublication)
+    @Query("SELECT p.* FROM run_publications p JOIN runs r ON r.id=p.runId WHERE p.ownerId=:owner AND r.cloudOwnerId=:owner AND r.state='FINISHED' AND (p.known=0 OR p.wantShared IS NOT NULL OR p.wantPhoto IS NOT NULL) ORDER BY CASE WHEN p.wantShared=0 THEN 0 ELSE 1 END, p.runId LIMIT 20")
+    abstract suspend fun pendingPublications(owner: String): List<RunPublication>
+
+    @Transaction
+    open suspend fun preparePublication(id: String, owner: String?, refresh: Boolean = false): RunPublication {
+        val run = requireNotNull(get(id))
+        require(run.state == "FINISHED" && run.cloudOwnerId == owner)
+        require(operation(id)?.action != "DELETE")
+        val old = publication(id) ?: RunPublication(id, owner)
+        require(old.ownerId == owner)
+        val value = if (refresh && old.wantShared == null && old.wantPhoto == null)
+            old.copy(known = false, intentId = UUID.randomUUID().toString()) else old
+        putPublication(value)
+        return value
+    }
+
+    @Transaction
+    open suspend fun queuePublication(id: String, owner: String?, shared: Boolean? = null, photo: Boolean? = null): RunPublication {
+        require((shared == null) != (photo == null))
+        val old = preparePublication(id, owner)
+        val next = old.copy(wantShared = shared ?: old.wantShared, wantPhoto = photo ?: old.wantPhoto,
+            intentId = UUID.randomUUID().toString(), requestJson = null, error = null)
+        putPublication(next)
+        return next
+    }
+
+    /** A response may update only the exact intent it read; deletion cannot recreate a queue. */
+    @Transaction
+    open suspend fun replacePublication(expected: RunPublication, next: RunPublication): Boolean {
+        val run = get(expected.runId) ?: return false
+        if (run.cloudOwnerId != expected.ownerId || operation(run.id)?.action == "DELETE" || publication(run.id) != expected) return false
+        require(next.runId == expected.runId && next.ownerId == expected.ownerId)
+        putPublication(next)
+        return true
+    }
+
     @Query("INSERT OR IGNORE INTO health_exports(runId,state,error) SELECT id,'PENDING',NULL FROM runs WHERE state='FINISHED' AND (cloudOwnerId IS NULL OR cloudOwnerId=:owner)")
     abstract suspend fun seedHealth(owner: String?)
     @Query("SELECT h.* FROM health_exports h LEFT JOIN runs r ON r.id=h.runId WHERE h.state='DELETE' OR (h.state='PENDING' AND r.state='FINISHED' AND (r.cloudOwnerId IS NULL OR r.cloudOwnerId=:owner)) ORDER BY CASE h.state WHEN 'DELETE' THEN 0 ELSE 1 END, h.runId LIMIT 20")
@@ -103,9 +146,29 @@ abstract class RunDao {
 
     @Query("SELECT * FROM run_photos WHERE runId=:id") abstract suspend fun photo(id: String): RunPhoto?
     @Upsert abstract suspend fun putPhoto(photo: RunPhoto)
+    @Transaction
+    open suspend fun keepPhoto(photo: RunPhoto, localOwner: String, cloudOwner: String?, priorRevision: String?): Boolean {
+        val run = get(photo.runId) ?: return false
+        if (run.state != "FINISHED" || run.ownerId != localOwner || run.cloudOwnerId != cloudOwner ||
+            operation(photo.runId)?.action == "DELETE" || this.photo(photo.runId)?.revision != priorRevision) return false
+        putPhoto(photo)
+        return true
+    }
     @Query("SELECT p.* FROM run_photos p JOIN runs r ON r.id=p.runId WHERE r.cloudOwnerId=:owner AND p.synced=0 LIMIT 1")
     abstract suspend fun pendingPhotos(owner: String): List<RunPhoto>
-    @Query("UPDATE run_photos SET synced=1, publicUrl=:url WHERE runId=:id AND revision=:revision")
+    @Query("SELECT p.runId FROM run_photos p JOIN runs r ON r.id=p.runId JOIN run_sync s ON s.runId=p.runId WHERE r.cloudOwnerId=:owner AND s.ownerId=:owner AND r.state='FINISHED' AND s.action='UPLOAD' AND s.status='SYNCED' AND p.synced=0 ORDER BY p.lastAttemptMs,p.runId LIMIT 5")
+    abstract suspend fun photoUploadBatch(owner: String): List<String>
+    @Query("SELECT COUNT(*) FROM run_photos p JOIN runs r ON r.id=p.runId WHERE r.cloudOwnerId=:owner AND p.synced=0")
+    abstract suspend fun pendingPhotoCount(owner: String): Int
+    @Query("SELECT COUNT(*) FROM run_photos p JOIN runs r ON r.id=p.runId WHERE r.cloudOwnerId=:owner AND p.synced=0")
+    abstract fun pendingPhotoCountFlow(owner: String): Flow<Int>
+    @Query("SELECT p.syncError FROM run_photos p JOIN runs r ON r.id=p.runId WHERE r.cloudOwnerId=:owner AND p.synced=0 AND p.syncError IS NOT NULL ORDER BY p.lastAttemptMs DESC LIMIT 1")
+    abstract fun photoErrorFlow(owner: String): Flow<String?>
+    @Query("UPDATE run_photos SET lastAttemptMs=:now WHERE runId=:id AND revision=:revision AND synced=0 AND EXISTS(SELECT 1 FROM runs r JOIN run_sync s ON s.runId=r.id WHERE r.id=:id AND r.cloudOwnerId=:owner AND s.ownerId=:owner AND s.action='UPLOAD' AND s.status='SYNCED')")
+    abstract suspend fun photoUploadAttempt(id: String, revision: String, owner: String, now: Long): Int
+    @Query("UPDATE run_photos SET synced=:synced,syncError=:error,publicUrl=NULL WHERE runId=:id AND revision=:revision AND EXISTS(SELECT 1 FROM runs r JOIN run_sync s ON s.runId=r.id WHERE r.id=:id AND r.cloudOwnerId=:owner AND s.ownerId=:owner AND s.action='UPLOAD' AND s.status='SYNCED')")
+    abstract suspend fun photoUploadResult(id: String, revision: String, owner: String, synced: Boolean, error: String?)
+    @Query("UPDATE run_photos SET synced=1, syncError=NULL, publicUrl=:url WHERE runId=:id AND revision=:revision")
     abstract suspend fun photoSynced(id: String, revision: String, url: String?)
 
     private val achievementInputs = mutableMapOf<String,Pair<String,AchievementRun>>()
@@ -185,6 +248,7 @@ abstract class RunDao {
         val rows = localCompleted()
         rows.forEach { row ->
             putRun(row.copy(cloudOwnerId = owner))
+            publication(row.id)?.let { putPublication(it.copy(ownerId = owner)) }
             addOperation(SyncOperation(row.id, owner, UUID.randomUUID().toString()))
         }
         rows.map { it.ownerId }.distinct().forEach { rebuildAchievements(null,it) }
@@ -266,11 +330,29 @@ abstract class RunDao {
 
 @Database(
     entities = [StoredRun::class, RoutePoint::class, StoredMeasurement::class, StoredSplit::class,
-        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class], version = 6, exportSchema = true,
+        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class, RunPublication::class], version = 9, exportSchema = true,
 )
 abstract class RunDatabase : RoomDatabase() {
     abstract fun runs(): RunDao
     companion object {
+        val MIGRATION_8_9 = object : Migration(8,9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE run_photos ADD COLUMN syncError TEXT")
+                db.execSQL("ALTER TABLE run_photos ADD COLUMN lastAttemptMs INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        val MIGRATION_7_8 = object : Migration(7,8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE run_photos ADD COLUMN weather TEXT")
+            }
+        }
+        val MIGRATION_6_7 = object : Migration(6,7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS run_publications (runId TEXT NOT NULL PRIMARY KEY, ownerId TEXT, known INTEGER NOT NULL, shared INTEGER NOT NULL, photoVisible INTEGER NOT NULL, revision INTEGER NOT NULL, publicUrl TEXT, wantShared INTEGER, wantPhoto INTEGER, intentId TEXT NOT NULL, requestJson TEXT, error TEXT, FOREIGN KEY(runId) REFERENCES runs(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                // Legacy Keep Photo choices were not explicit sharing intent. Preserve JPEGs and upload receipts.
+                db.execSQL("UPDATE run_photos SET public=0, publicUrl=NULL")
+            }
+        }
         val MIGRATION_5_6 = object : Migration(5,6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS health_exports (runId TEXT NOT NULL PRIMARY KEY, state TEXT NOT NULL, error TEXT)")
@@ -301,7 +383,7 @@ abstract class RunDatabase : RoomDatabase() {
         @Volatile private var instance: RunDatabase? = null
         fun get(context: Context): RunDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, RunDatabase::class.java, "wayirun-local.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
         }
     }
 }

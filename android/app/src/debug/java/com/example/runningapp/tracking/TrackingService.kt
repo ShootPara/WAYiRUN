@@ -27,7 +27,6 @@ import java.util.UUID
 data class TrackingView(
     val snapshot: RunSnapshot? = null, val interrupted: Boolean = false, val distanceAvailable: Boolean = false,
     val ready: Boolean = false, val busy: Boolean = false, val error: String? = null,
-    val musicStatus: String = "Music controls off · Runs still work",
     val coaching: CoachingView = CoachingView(),
     val achievements: List<Achievement> = emptyList(),
 )
@@ -36,15 +35,13 @@ data class TrackingView(
 class TrackingService : Service() {
     private sealed interface Message {
         data class Command(val action: String, val settings: RunSettings? = null,
-            val expectedRunId: String? = null, val mediaGeneration: Long? = null) : Message
+            val expectedRunId: String? = null) : Message
         data object Tick : Message
         data object AudioIdle : Message
-        data class Player(val generation: Long, val status: PlayerStatus) : Message
-        data object RefreshMusic : Message
-        data class MusicTimeout(val generation: Long, val serial: Long) : Message
-        data class CueSettled(val serial: Long) : Message
         data class Gps(val generation: Long, val fix: GpsFix) : Message
         data class Steps(val generation: Long, val time: Long, val count: Long) : Message
+        data class StepDetected(val generation: Long, val time: Long) : Message
+        data class Motion(val generation: Long, val window: MotionWindow) : Message
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val messages = Channel<Message>(Channel.UNLIMITED)
@@ -53,11 +50,6 @@ class TrackingService : Service() {
     private lateinit var cues: RunCues
     private lateinit var coaching: PostRunCoaching
     private lateinit var repository: RunRepository
-    private lateinit var music: MusicSessionAdapter
-    private val musicPolicy = MusicLinkPolicy()
-    private var musicSerial = 0L
-    private var cueSerial = 0L
-    private var musicError: String? = null
     private var actionError: String? = null
     private var finishAwards: List<Achievement> = emptyList()
     private lateinit var wakeLock: PowerManager.WakeLock
@@ -78,13 +70,12 @@ class TrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        sensors = SensorAdapters(this)
+        sensors = sensorFactory(this)
         cues = RunCues(this) { messages.trySend(Message.AudioIdle) }
         coaching = PostRunCoaching(this, scope, { cues.isPlaying }) {
             if (loaded) publish()
             messages.trySend(Message.AudioIdle)
         }
-        music = MusicSessionAdapter(this) { generation, state -> messages.trySend(Message.Player(generation, state)) }
         repository = RunRepository(RunDatabase.get(this).runs())
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WAYiRUN:tracking")
         wakeLock.setReferenceCounted(false)
@@ -94,7 +85,6 @@ class TrackingService : Service() {
         }
         localOwner = owner
         notificationChannel = ensureTrackingChannel(this)
-        scope.launch { MusicAccessService.connected.collect { messages.send(Message.RefreshMusic) } }
         scope.launch {
             for (message in messages) {
                 try {
@@ -106,8 +96,6 @@ class TrackingService : Service() {
                     sensors.stop(); listening = false
                     input?.reset()
                     controller = lastSaved?.let { RunController.recover(it, clock) }
-                    musicPolicy.detach()
-                    musicPolicy.runChanged(controller?.snapshot()?.state)
                     input = controller?.let { TrackingInput(it, clock) }
                     releaseWakeLock()
                     view.value = TrackingView(controller?.snapshot(), true, false, true, false,
@@ -118,20 +106,22 @@ class TrackingService : Service() {
         scope.launch {
             while (isActive) {
                 delay(1_000)
-                if (controller?.snapshot()?.state in listOf(RunState.RUNNING, RunState.COUNTDOWN)) messages.send(Message.Tick)
+                val snapshot = controller?.snapshot()
+                if (snapshot?.state in listOf(RunState.RUNNING, RunState.COUNTDOWN) || snapshot?.pauseReason == PauseReason.AUTOMATIC)
+                    messages.send(Message.Tick)
             }
         }
     }
 
     private suspend fun load() {
-        val selected = withContext(Dispatchers.IO) { SessionStore(this@TrackingService).read()?.ownerId }
-        val stored = repository.active() ?: RunDatabase.get(this).runs().latestVisible(selected)
+        val stored = repository.active()
         if (stored != null) {
             val saved = stored.decode()
             controller = RunController.recover(saved, clock)
             input = TrackingInput(requireNotNull(controller), clock)
             owner = stored.ownerId; cloudOwner = stored.cloudOwnerId; zone = stored.zoneId; offset = stored.startOffsetSeconds
-            interrupted = stored.interrupted || saved.snapshot.state == RunState.RUNNING
+            interrupted = stored.interrupted || saved.snapshot.state == RunState.RUNNING ||
+                saved.snapshot.pauseReason == PauseReason.AUTOMATIC
             lastSaved = saved
             if (saved.snapshot.state != RunState.FINISHED) {
                 repository.save(controller!!.checkpoint(), owner, zone, offset, interrupted, cloudOwnerId = cloudOwner)
@@ -160,14 +150,15 @@ class TrackingService : Service() {
     }
 
     private suspend fun handle(message: Message) {
-        if (message is Message.Command && message.expectedRunId != null &&
-            (message.expectedRunId != controller?.snapshot()?.runId ||
-                (message.mediaGeneration != null && message.mediaGeneration != music.generation))) {
+        if (message is Message.Command && message.action != ENTER && message.expectedRunId != null &&
+            message.expectedRunId != controller?.snapshot()?.runId) {
             if (controller == null && foregroundStarted) { stopForeground(STOP_FOREGROUND_REMOVE); foregroundStarted = false }
             publish(); return
         }
         if (message is Message.Command && message.action != OPEN) actionError = null
         var result: TrackingResult? = null
+        // Reconcile permission/provider changes before accepting queued sensor generations.
+        syncSensors()
         when (message) {
             is Message.Command -> when (message.action) {
                 DISCARD -> {
@@ -178,7 +169,7 @@ class TrackingService : Service() {
                             com.example.runningapp.health.HealthScheduler.enqueue(this)
                             coaching.cancel()
                             SyncScheduler.enqueue(this)
-                            cues.cancel(); musicPolicy.detach()
+                            cues.cancel()
                             controller = null; input = null; lastSaved = null; interrupted = false
                         } catch (cancel: CancellationException) { throw cancel }
                         catch (_: Exception) {
@@ -186,17 +177,28 @@ class TrackingService : Service() {
                         }
                     }
                 }
-                OPEN -> {
+                OPEN, ENTER -> {
                     val selected = withContext(Dispatchers.IO) { SessionStore(this@TrackingService).read()?.ownerId }
                     if (controller?.snapshot()?.state == RunState.FINISHED) {
                         val stored = RunDatabase.get(this).runs().get(controller!!.snapshot().runId)
-                        if (stored == null || (stored.cloudOwnerId != null && stored.cloudOwnerId != selected)) {
-                            coaching.cancel()
-                            controller = null; input = null; lastSaved = null; interrupted = false; cloudOwner = null
-                            load()
+                        if (stored == null || (stored.cloudOwnerId != null && stored.cloudOwnerId != selected) ||
+                            (message.action == ENTER && message.expectedRunId != stored.id)) {
+                            clearFinishedRun()
                         } else cloudOwner = stored.cloudOwnerId
                     }
-                    music.refresh()
+                    // An external photo return can restore its exact owned run, never the latest run.
+                    if (message.action == ENTER && controller == null && message.expectedRunId != null) {
+                        val stored = RunDatabase.get(this).runs().get(message.expectedRunId)
+                        if (stored?.state == RunState.FINISHED.name &&
+                            (stored.cloudOwnerId == selected && (selected != null || stored.ownerId == localOwner))) {
+                            val saved = stored.decode()
+                            controller = RunController.recover(saved, clock)
+                            input = TrackingInput(requireNotNull(controller), clock)
+                            owner = stored.ownerId; cloudOwner = stored.cloudOwnerId
+                            zone = stored.zoneId; offset = stored.startOffsetSeconds
+                            lastSaved = saved; interrupted = false
+                        }
+                    }
                     // Recovered paused runs also need a notification entry back to their controls.
                     if (controller?.snapshot()?.state == RunState.PAUSED && !foregroundStarted) {
                         promote(controller!!.snapshot().settings.mode)
@@ -211,12 +213,9 @@ class TrackingService : Service() {
                     }
                 }
                 NEW -> if (controller?.snapshot()?.state == RunState.FINISHED) {
-                    coaching.cancel()
-                    cues.cancel()
-                    controller = null; input = null; lastSaved = null; interrupted = false
+                    clearFinishedRun()
                 }
                 START -> if (controller == null) {
-                    music.refresh()
                     val settings = requireNotNull(message.settings)
                     cloudOwner = withContext(Dispatchers.IO) { SessionStore(this@TrackingService).read()?.ownerId }
                     owner = cloudOwner ?: localOwner
@@ -234,6 +233,7 @@ class TrackingService : Service() {
                 RESUME -> if (controller != null) {
                     if (controller!!.snapshot().state == RunState.PAUSED && !foregroundStarted) promote(controller!!.snapshot().settings.mode)
                     interrupted = false
+                    input?.reset()
                     result = TrackingResult(controller!!.resume())
                 }
                 DISMISS_COACHING -> { coaching.dismiss(); finishAwards=emptyList() }
@@ -243,22 +243,12 @@ class TrackingService : Service() {
                 }
             }
             Message.Tick -> result = input?.tick()
-            Message.AudioIdle -> {
-                val serial = ++cueSerial
-                scope.launch { delay(600); messages.send(Message.CueSettled(serial)) }
-            }
-            is Message.CueSettled -> if (message.serial == cueSerial && !cues.isPlaying) musicPolicy.cueSettled()
-            Message.RefreshMusic -> music.refresh()
-            is Message.Player -> if (message.generation == music.generation) {
-                performMusic(musicPolicy.playerChanged(message.status))
-            }
-            is Message.MusicTimeout -> if (message.generation == music.generation && message.serial == musicSerial) {
-                val wasLinked = musicPolicy.linked
-                musicPolicy.commandExpired(music.current)
-                if (wasLinked && !musicPolicy.linked) musicError = "Music didn't respond · Run controls still work"
-            }
+            // Audio completion still releases the finished run's foreground notification below.
+            Message.AudioIdle -> Unit
             is Message.Gps -> if (message.generation == sensors.generation) result = input?.gps(message.fix)
             is Message.Steps -> if (message.generation == sensors.generation) result = input?.steps(message.time, message.count)
+            is Message.StepDetected -> if (message.generation == sensors.generation) input?.detectedStep(message.time)
+            is Message.Motion -> if (message.generation == sensors.generation) input?.acceleration(message.window)
         }
         syncSensors()
         val c = controller
@@ -280,10 +270,8 @@ class TrackingService : Service() {
                 if (s.state == RunState.FINISHED) com.example.runningapp.health.HealthScheduler.enqueue(this)
                 if (s.state == RunState.FINISHED && cloudOwner != null) SyncScheduler.enqueue(this)
                 lastSaved = checkpoint
-                performMusic(musicPolicy.runChanged(s.state))
                 // Persist event IDs/goal state before cues; a crash may omit a cue but cannot replay it.
                 cues.play(result.update.events, s.settings.units)
-                if (result.update.events.isNotEmpty() && cues.isPlaying) { cueSerial++; musicPolicy.cueStarted() }
                 if (s.state == RunState.FINISHED && message is Message.Command) {
                     finishAwards = runCatching {
                         val dao=RunDatabase.get(this).runs()
@@ -294,7 +282,6 @@ class TrackingService : Service() {
                 }
             }
         }
-        if (controller == null) musicPolicy.runChanged(null)
         publish()
         if ((controller?.snapshot()?.state == RunState.FINISHED && !cues.isPlaying && !coaching.view.busy) || controller == null) {
             if (foregroundStarted) { stopForeground(STOP_FOREGROUND_REMOVE); foregroundStarted = false }
@@ -303,19 +290,31 @@ class TrackingService : Service() {
 
     private fun syncSensors() {
         val s = controller?.snapshot()
-        if (s?.state == RunState.RUNNING && !listening) {
+        val observe = s?.state == RunState.RUNNING ||
+            (s?.state == RunState.PAUSED && s.pauseReason == PauseReason.AUTOMATIC)
+        if (listening && permissionSignature != capabilities()) {
+            sensors.stop(); listening = false
+            input?.reset()
+            input?.stepsUsable = false
+            controller?.clearSource()
+        }
+        if (observe && !listening) {
             input?.stepsUsable = sensors.start(s.settings.mode, s.settings.strideLengthMeters,
                 { generation, fix -> messages.trySend(Message.Gps(generation, fix)) },
                 { generation, time, count -> messages.trySend(Message.Steps(generation, time, count)) })
+            if (s.settings.autoPauseEnabled) sensors.startMotion(
+                { generation, time -> messages.trySend(Message.StepDetected(generation, time)) },
+                { generation, window -> messages.trySend(Message.Motion(generation, window)) })
             listening = true
             permissionSignature = capabilities()
         }
-        if (s?.state !in listOf(RunState.RUNNING, RunState.COUNTDOWN)) {
+        if (!observe && s?.state != RunState.COUNTDOWN) {
             if (listening) sensors.stop()
             listening = false
+            input?.stepsUsable = false
             releaseWakeLock()
         } else {
-            // Renewed by the serial consumer; released on pause/finish/failure/destruction.
+            // Automatic pauses retain observation and the timer; manual pauses release both.
             // The timeout bounds battery use if the consumer stalls.
             wakeLock.acquire(10 * 60 * 1_000L)
         }
@@ -325,38 +324,14 @@ class TrackingService : Service() {
     private fun capabilities() = "${activityAllowed()}:${locationAllowed()}"
 
     private fun publish() {
-        val status = musicError ?: when {
-            !music.allowed -> "Music controls off · Runs still work"
-            musicPolicy.linked -> "YouTube Music linked"
-            !music.available -> "Music off · Run starts normally"
-            music.current == PlayerStatus.PLAYING -> "YouTube Music available · Links when tracking starts"
-            else -> "YouTube Music not playing · Run starts normally"
-        }
-        view.value = TrackingView(controller?.snapshot(), interrupted, input?.distanceAvailable == true, true, error = actionError, musicStatus = status, coaching = coaching.view,
+        view.value = TrackingView(controller?.snapshot(), interrupted, input?.distanceAvailable == true, true, error = actionError, coaching = coaching.view,
             achievements = if(controller?.snapshot()?.state==RunState.FINISHED) finishAwards.filter { it.runId==controller?.snapshot()?.runId } else emptyList())
     }
 
-    private fun performMusic(actions: List<MusicAction>) {
-        actions.forEach { action ->
-            when (action) {
-                MusicAction.PAUSE_RUN, MusicAction.RESUME_RUN -> {
-                    val s = controller?.snapshot() ?: return@forEach
-                    if (s.state !in listOf(RunState.RUNNING, RunState.PAUSED)) return@forEach
-                    messages.trySend(Message.Command(if (action == MusicAction.PAUSE_RUN) PAUSE else RESUME,
-                        expectedRunId = s.runId, mediaGeneration = music.generation))
-                }
-                else -> {
-                    if (!music.command(action)) {
-                        musicPolicy.detach()
-                        musicError = "Music control unavailable · Run controls still work"
-                    } else {
-                        musicError = null
-                        val generation = music.generation; val serial = ++musicSerial
-                        scope.launch { delay(2000); messages.send(Message.MusicTimeout(generation, serial)) }
-                    }
-                }
-            }
-        }
+    private fun clearFinishedRun() {
+        coaching.cancel(); cues.cancel()
+        controller = null; input = null; lastSaved = null; interrupted = false
+        cloudOwner = null; finishAwards = emptyList()
     }
 
     private fun promote(mode: RunMode) {
@@ -390,13 +365,16 @@ class TrackingService : Service() {
     private fun releaseWakeLock() { if (wakeLock.isHeld) wakeLock.release() }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
-        sensors.stop(); releaseWakeLock(); music.close(); cues.close(); coaching.cancel(); scope.cancel(); messages.close()
+        sensors.stop(); releaseWakeLock(); cues.close(); coaching.cancel(); scope.cancel(); messages.close()
         view.value = view.value.copy(ready = false, busy = false)
         super.onDestroy()
     }
 
     companion object {
+        // Instrumentation replaces only sensor IO; the real serial service and storage still run.
+        internal var sensorFactory: (Context) -> SensorAdapters = { SensorAdapters(it) }
         const val OPEN = "open"
+        const val ENTER = "enter"
         const val NEW = "new"
         const val START = "start"
         const val PAUSE = "pause"
@@ -413,7 +391,7 @@ class TrackingService : Service() {
             val current = view.value
             // Reject known stale controls before requesting a foreground-service start.
             // Android requires foreground promotion even when that command would be a no-op.
-            if (current.ready && ((runId != null && runId != current.snapshot?.runId) ||
+            if (current.ready && ((action != ENTER && runId != null && runId != current.snapshot?.runId) ||
                     (action == RESUME && current.snapshot?.state != RunState.PAUSED))) return
             view.value = view.value.copy(busy = true)
             val intent = Intent(context, TrackingService::class.java).setAction(action)

@@ -13,6 +13,40 @@ import org.junit.Assert.*
 import java.io.File
 
 class PhotoRenderTest {
+    @Test fun routeHasNoRectangleAndDoesNotJoinSeparateSegments() {
+        val run=RunController("route-photo",RunSettings(RunMode.OUTDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
+        run.start();run.finish()
+        val source=Bitmap.createBitmap(1000,1000,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.WHITE)}
+        val flags=listOf(false,false,false,true)
+        val separated=listOf(RoutePoint(1,"route-photo",1,0,40.0,-74.0,5f),RoutePoint(2,"route-photo",2,20000,40.01,-73.99,5f))
+        val plain=renderPhoto(source,run.snapshot(),emptyList(),flags)
+        val gap=renderPhoto(source,run.snapshot(),separated,flags)
+        assertArrayEquals(plain,gap)
+        assertArrayEquals(plain,renderPhoto(source,run.snapshot(),separated.map {it.copy(segmentId=1)},flags))
+        val joined=renderPhoto(source,run.snapshot(),separated.mapIndexed {i,p->p.copy(segmentId=1,monotonicMs=i*1000L)},flags)
+        assertFalse(plain.contentEquals(joined))
+        val bitmap=BitmapFactory.decodeByteArray(joined,0,joined.size)
+        assertTrue(Color.red(bitmap.getPixel(560,500))>230)
+        bitmap.recycle();source.recycle()
+    }
+
+    @Test fun weatherToggleChangesOnlyNewRenderingAcrossPhotoShapes() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val directory=File(context.getExternalFilesDir(null),"milestone-5-1").apply {mkdirs()}
+        val run=RunController("weather-photo",RunSettings(RunMode.OUTDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
+        run.start();run.finish()
+        val weather=PhotoWeather.parse(weatherFixture())!!
+        val route=listOf(RoutePoint(1,"weather-photo",1,0,40.0,-74.0,5f),RoutePoint(2,"weather-photo",1,1000,40.01,-73.99,5f))
+        for((w,h) in listOf(600 to 1000,1000 to 600,1000 to 1000)) {
+            val source=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.BLUE)}
+            val off=renderPhoto(source,run.snapshot(),route,listOf(true,true,true,true,false),weather)
+            assertArrayEquals(off,renderPhoto(source,run.snapshot(),route,listOf(true,true,true,true,true),null))
+            val on=renderPhoto(source,run.snapshot(),route,listOf(true,true,true,true,true),weather)
+            assertFalse(off.contentEquals(on));assertTrue(on.size<=1_000_000)
+            assertArrayEquals(on,renderPhoto(source,run.snapshot(),route,listOf(true,true,true,true,true),weather))
+            File(directory,"weather-$w-$h.jpg").writeBytes(on);source.recycle()
+        }
+    }
     @Test fun largeImageIsBoundedAndOverlayChangesOnlyWhenSelected() {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val input=Bitmap.createBitmap(3200,2400,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.BLUE)}

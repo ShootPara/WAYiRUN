@@ -7,6 +7,57 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class SyncMigrationTest {
+    @Test fun photoRetryMigrationPreservesBytesRevisionWeatherAndPendingState() {
+        val name="photo-retry-migration-test"
+        helper.createDatabase(name,8).apply {
+            execSQL("INSERT INTO runs VALUES ('run','local','FINISHED',NULL,'checkpoint','UTC',0,1000,0,'alice')")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',0,0,NULL,'saved-weather')")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,9,true,RunDatabase.MIGRATION_8_9).apply {
+            query("SELECT hex(jpeg),revision,synced,weather,syncError,lastAttemptMs FROM run_photos").use {
+                assertTrue(it.moveToFirst());assertEquals("FFD8FFD9",it.getString(0));assertEquals("revision",it.getString(1))
+                assertEquals(0,it.getInt(2));assertEquals("saved-weather",it.getString(3));assertTrue(it.isNull(4));assertEquals(0L,it.getLong(5))
+            }
+            close()
+        }
+    }
+    @Test fun weatherMigrationPreservesLegacyPhotoWithoutRetroactiveWeather() {
+        val name="weather-migration-test"
+        helper.createDatabase(name,7).apply {
+            execSQL("INSERT INTO runs VALUES ('run','local','FINISHED',NULL,'checkpoint','UTC',0,1000,0,'alice')")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',0,1,NULL)")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,8,true,RunDatabase.MIGRATION_7_8).apply {
+            query("SELECT hex(jpeg),revision,synced,weather FROM run_photos").use {
+                assertTrue(it.moveToFirst());assertEquals("FFD8FFD9",it.getString(0));assertEquals("revision",it.getString(1))
+                assertEquals(1,it.getInt(2));assertTrue(it.isNull(3))
+            }
+            execSQL("PRAGMA foreign_keys=ON")
+            execSQL("DELETE FROM runs WHERE id='run'")
+            query("SELECT COUNT(*) FROM run_photos").use {it.moveToFirst();assertEquals(0,it.getInt(0))}
+            close()
+        }
+    }
+    @Test fun publicationMigrationKeepsPhotoBytesAndRetiresLegacyKeepVisibility() {
+        val name="publication-migration-test"
+        helper.createDatabase(name,6).apply {
+            execSQL("INSERT INTO runs VALUES ('run','local','FINISHED',NULL,'checkpoint','UTC',0,1000,0,'alice')")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',1,0,'https://old-link')")
+            execSQL("INSERT INTO run_sync VALUES ('run','alice','operation','UPLOAD','PENDING',1,10,NULL)")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,7,true,RunDatabase.MIGRATION_6_7).apply {
+            query("SELECT hex(jpeg),public,publicUrl,synced,revision FROM run_photos").use {
+                assertTrue(it.moveToFirst());assertEquals("FFD8FFD9",it.getString(0));assertEquals(0,it.getInt(1))
+                assertTrue(it.isNull(2));assertEquals(0,it.getInt(3));assertEquals("revision",it.getString(4))
+            }
+            query("SELECT COUNT(*) FROM run_publications").use {it.moveToFirst();assertEquals(0,it.getInt(0))}
+            query("SELECT ownerId,status FROM run_sync").use {it.moveToFirst();assertEquals("alice",it.getString(0));assertEquals("PENDING",it.getString(1))}
+            close()
+        }
+    }
     @Test fun healthMigrationPreservesPhotosAndQueues() {
         val name="health-migration-test"
         helper.createDatabase(name,5).apply {

@@ -45,8 +45,8 @@ test("a route cannot return to an earlier segment in archive order", () => {
   assert.throws(()=>prepareRoute("OUTDOOR",[segment(1,0,10),segment(2,20,30)],
     [point(1,2,21),point(2,1,1)]));
 });
-test("polar coordinates remain unchanged and report map projection limits", () => {
+test("polar coordinates remain unchanged and render without map projection limits", () => {
   const p=point(1,1,1,89);
   const route=prepareRoute("OUTDOOR",[segment(1,0,10)],[p]);
-  assert.equal(p.latitude,89);assert.deepEqual(route.parts,[]);assert.match(route.note,/latitude/);
+  assert.equal(p.latitude,89);assert.equal(route.parts.length,1);assert.equal(route.pointCount,1);
 });

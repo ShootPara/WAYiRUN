@@ -12,6 +12,40 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RunDatabaseTest {
+    @Test fun legacyAndDualSelectionsSurviveArchiveWithoutCheckpointRewrites() = runBlocking {
+        val selections = listOf(null, AnnouncementSelection(),
+            AnnouncementSelection(timeEnabled = false, distanceEnabled = true),
+            AnnouncementSelection(distanceEnabled = true), AnnouncementSelection(timeEnabled = false))
+        for (selection in selections) for (enabled in listOf(false, true)) {
+            val run = RunController(java.util.UUID.randomUUID().toString(), RunSettings(RunMode.INDOOR,
+                RunUnits.KILOMETERS, 0, RunGoal.None, null, announcementsEnabled = enabled,
+                announcementSelection = selection), clock)
+            run.start(); time += 1_000; run.finish(); save(run)
+            val archive = db.runs().archive(run.snapshot().runId)!!
+            val bytes = archive.encode()
+            val restored = RunArchive.decode(bytes)
+            assertEquals(archive.run.checkpoint, restored.run.checkpoint)
+            assertEquals(run.snapshot().settings, restored.run.decode().snapshot.settings)
+            assertArrayEquals(bytes, restored.encode())
+        }
+    }
+
+    @Test fun announcementChoiceAndProgressSurviveStoredCheckpointRecovery() = runBlocking {
+        val run = RunController("announcements", RunSettings(RunMode.INDOOR, RunUnits.MILES, 0,
+            RunGoal.None, null, true, AnnouncementInterval.TEN_MINUTES), clock)
+        run.start(); time = 600_000
+        assertEquals(1, run.tick().events.count { it.type == RunEventType.ANNOUNCEMENT })
+        save(run)
+        val saved = repo.active()!!.decode()
+        assertTrue(saved.snapshot.settings.announcementsEnabled)
+        assertEquals(AnnouncementInterval.TEN_MINUTES, saved.snapshot.settings.announcementInterval)
+        time = 10
+        val recovered = RunController.recover(saved, clock)
+        assertTrue(recovered.resume().events.none { it.type == RunEventType.ANNOUNCEMENT })
+        time += 600_000
+        assertEquals(1, recovered.tick().events.count { it.type == RunEventType.ANNOUNCEMENT })
+    }
+
     @Test fun photoQueueFollowsOwnerAndNeverAcknowledgesAReplacementAsSynced() = runBlocking {
         val r=run("photo");time=1000;r.finish()
         repo.save(r.checkpoint(),"test-owner","UTC",0,false,cloudOwnerId="alice")

@@ -4,6 +4,7 @@ export interface AuthEnv {
   DB: D1Database; GOOGLE_WEB_CLIENT_ID?: string; GOOGLE_ANDROID_CLIENT_ID?: string;
   AUTH_RATE_LIMIT?: RateLimit; AUTH_TOTAL_LIMIT?: RateLimit;
   RUN_RATE_LIMIT?: RateLimit; RUN_TOTAL_LIMIT?: RateLimit;
+  LOCATION_LOOKUP_URL?: string;
 }
 export const SESSION_SECONDS = 90 * 24 * 60 * 60;
 const CHALLENGE_SECONDS = 300;

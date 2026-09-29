@@ -9,13 +9,16 @@ import com.example.runningapp.account.AccountView
 import com.example.runningapp.storage.RunDatabase
 
 @Composable
-fun SyncPanel(account: AccountView, enabled: Boolean, onImport: (String) -> Unit, onRetry: () -> Unit) {
+fun SyncPanel(account: AccountView, enabled: Boolean, onImport: (String) -> Unit, onRetry: () -> Unit,
+    daoOverride: com.example.runningapp.storage.RunDao? = null) {
     val context = LocalContext.current
-    val dao = remember { RunDatabase.get(context).runs() }
+    val dao = daoOverride ?: remember { RunDatabase.get(context).runs() }
     val local by remember { dao.localCount() }.collectAsState(initial = 0)
     val owner = account.session?.ownerId
     val operations by remember(owner) { dao.syncStatus(owner.orEmpty()) }.collectAsState(initial = emptyList())
     val pull by remember(owner) { dao.pullStatus(owner.orEmpty()) }.collectAsState(initial = null)
+    val photosPending by remember(owner) { dao.pendingPhotoCountFlow(owner.orEmpty()) }.collectAsState(initial = 0)
+    val photoError by remember(owner) { dao.photoErrorFlow(owner.orEmpty()) }.collectAsState(initial = null)
     var confirm by remember(owner) { mutableStateOf(false) }
     Text("Cloud sync", style = MaterialTheme.typography.titleLarge)
     if (owner == null) {
@@ -23,7 +26,11 @@ fun SyncPanel(account: AccountView, enabled: Boolean, onImport: (String) -> Unit
         return
     }
     val pending = operations.count { it.status in listOf("PENDING", "AUTH", "BLOCKED") }
-    Text("${operations.count { it.status == "SYNCED" }} synced · $pending pending")
+    Text("Runs: ${operations.count { it.status == "SYNCED" }} synced · $pending pending")
+    if (photosPending > 0) {
+        Text("Photos waiting to upload: $photosPending")
+        photoError?.let { Text(com.example.runningapp.photos.photoSyncMessage(it)) }
+    }
     pull?.error?.let { Text(it) }
     if (pull?.status == "PENDING") Text(if (pull!!.nextAttemptMs > System.currentTimeMillis() && pull!!.error == null)
         "Cloud runs checked. Restore checks continue automatically." else "Checking this account's cloud runs for restore.")

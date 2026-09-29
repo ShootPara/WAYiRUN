@@ -14,10 +14,18 @@ import com.example.runningapp.domain.RunEvent
 import com.example.runningapp.domain.RunUnits
 import java.util.Locale
 
-/** State/goal cues only. Speech and fallback both respect the user's media volume. */
+/** State, goal and interval cues. Speech and fallback respect the user's media volume. */
 class RunCues(context: Context, onIdle: () -> Unit = {}) {
     private val output = AndroidCueOutput(context)
-    private val queue = RunCueQueue(output, onIdle)
+    private val queue = RunCueQueue(output, object : CueScheduler {
+        private val handler = Handler(Looper.getMainLooper())
+        override fun nowMs() = android.os.SystemClock.elapsedRealtime()
+        override fun schedule(delayMs: Long, action: () -> Unit): () -> Unit {
+            val callback = Runnable { action() }
+            handler.postDelayed(callback, delayMs)
+            return { handler.removeCallbacks(callback) }
+        }
+    }, onIdle)
     init { output.onFocusLost = { queue.cancel() } }
     val isPlaying: Boolean get() = queue.isPlaying
     fun play(events: List<RunEvent>, units: RunUnits) = queue.play(events, units)

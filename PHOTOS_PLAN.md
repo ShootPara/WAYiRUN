@@ -1,5 +1,9 @@
 # 1 End-of-run photos
 
+Historical implementation contract for TASKS 9.5. September 22 decisions in REQUIREMENTS.md Sections 10-11 and ISSUES_AND_QUIBBLES_IMPLEMENTATION_PLAN.md supersede the publication, route, and overlay behavior below. Keep no longer implies publication; new runs default private, any sharing attempt publishes, and photo visibility/unsharing are independent. Public runs need no photo. Legacy contracts below explain the existing migration input, not the target behavior.
+
+September 28: PHOTO_SYNC_REPAIR.md supersedes the historical one-pending-photo queue description below. The matching backend/schema are deployed. Android Room v9 preserves images while adding failure status and fair bounded batches of five eligible run IDs, loading only one JPEG at a time. Current handoff evidence and the deployed-compatibility gate are in that repair record.
+
 ## 1.1 Authorized scope
 
 Implement TASKS 9.5: optional camera/picker/skip, selectable time/distance/pace and actual GPS route, preview/retake/keep, save/share, Cloudflare storage and individual public pages. Existing runs and authentication remain intact. No commit, production deployment, or real-user publication during verification.

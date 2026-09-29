@@ -1,8 +1,6 @@
 package com.example.runningapp
 
 import android.Manifest
-import android.app.NotificationManager
-import android.content.ComponentName
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Build
@@ -22,6 +20,7 @@ import com.example.runningapp.ui.WayirunApp
 
 class MainActivity : ComponentActivity() {
     private val accountModel by lazy { ViewModelProvider(this)[AccountViewModel::class.java] }
+    private val entry by lazy { ViewModelProvider(this)[RunEntryState::class.java] }
     private var startupPending by mutableStateOf(true)
     private var requesting = false
     private var settingsError by mutableStateOf<String?>(null)
@@ -37,17 +36,20 @@ class MainActivity : ComponentActivity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         startupPending = savedInstanceState?.getBoolean("startupPending") ?: true
         requesting = savedInstanceState?.getBoolean("requesting") ?: false
+        entry.externalRunId = entry.externalRunId ?: savedInstanceState?.getString("externalRunId")
         enableEdgeToEdge()
         // Keep Android's existing launcher splash. There is no in-app setup overlay.
         setContent {
             val account by accountModel.state.collectAsState()
             val tracking by TrackingService.view.collectAsState()
-            WayirunApp(onPermissions = { requestPermissions() }, accountView = account,
-                onSignIn = { accountModel.signIn(this) }, onSignOut = { accountModel.signOut() },
-                onImport = { accountModel.importRuns(it) }, onRetrySync = { accountModel.retrySync() },
-                onAppPermissions = { openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())) },
-                onMusicAccess = { openMusicSettings() }, settingsError = settingsError) {
-                TrackingService.send(this, TrackingService.START, it)
+            CompositionLocalProvider(com.example.runningapp.photos.LocalExternalRunAction provides { runId -> entry.externalRunId = runId }) {
+                WayirunApp(onPermissions = { requestPermissions() }, accountView = account,
+                    onSignIn = { accountModel.signIn(this) }, onSignOut = { accountModel.signOut() },
+                    onImport = { accountModel.importRuns(it) }, onRetrySync = { accountModel.retrySync() },
+                    onAppPermissions = { openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())) },
+                    settingsError = settingsError) {
+                    TrackingService.send(this, TrackingService.START, it)
+                }
             }
             LaunchedEffect(startupPending, tracking.ready) {
                 if (startupPending && tracking.ready) {
@@ -63,13 +65,21 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         com.example.runningapp.health.HealthScheduler.enqueue(this)
-        // Refresh tracking after settings/permission changes, without presenting any UI.
-        TrackingService.send(this, TrackingService.OPEN)
+        val appEntry = entry.needsEntry || entry.externalRunId != null || entry.recreationRunId != null
+        val returnRunId = entry.resumed()
+        TrackingService.send(this, if (appEntry) TrackingService.ENTER else TrackingService.OPEN, runId = returnRunId)
+    }
+
+    override fun onStop() {
+        entry.stopped(isChangingConfigurations,
+            TrackingService.view.value.snapshot?.takeIf { it.state == RunState.FINISHED }?.runId)
+        super.onStop()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("startupPending", startupPending)
         outState.putBoolean("requesting", requesting)
+        outState.putString("externalRunId", entry.externalRunId)
         super.onSaveInstanceState(outState)
     }
 
@@ -91,13 +101,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun openMusicSettings() {
-        val detail = if (Build.VERSION.SDK_INT >= 30) Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-                ComponentName(this, MusicAccessService::class.java).flattenToString()) else null
-        if (detail == null || !openSettings(detail)) openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-    }
-
     private fun openSettings(intent: Intent): Boolean = try {
         startActivity(intent)
         settingsError = null
@@ -106,7 +109,7 @@ class MainActivity : ComponentActivity() {
         settingsError = "This phone could not open that settings page. Your run can still start."
         false
     } catch (_: SecurityException) {
-        settingsError = "Android blocked this settings page. Tracking still works without music linking."
+        settingsError = "Android blocked this settings page. You can manage permissions in Android settings."
         false
     }
 }

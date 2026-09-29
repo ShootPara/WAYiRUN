@@ -14,14 +14,26 @@ import org.junit.Test
 
 class SettingsExperienceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun settingsRetainPlaylistAndPermissionsWithoutMusicControlSetup() {
+        compose.setContent { WayirunApp(viewOverride = TrackingView(ready = true)) {} }
+        compose.onNodeWithTag("settings-gear").performClick()
+        compose.onNodeWithTag("playlist-link").performScrollTo().assertExists()
+        compose.onNodeWithText("Request missing permissions").performScrollTo().assertExists()
+        compose.onNodeWithText("App permissions", substring = false).assertExists()
+        compose.onNodeWithText("Weather data by Open-Meteo.com").performScrollTo().assertHasClickAction()
+        compose.onNodeWithText("CC BY 4.0", substring = true).performScrollTo().assertHasClickAction()
+        compose.onNodeWithText("YouTube Music control access").assertDoesNotExist()
+        compose.onNodeWithText("Optional music controls", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Music controls off", substring = true).assertDoesNotExist()
+    }
     @Test fun gearClosesAndEveryEditedSettingSurvivesCompositionReopenWithoutSaving() {
         val prefs = ApplicationProvider.getApplicationContext<Context>().getSharedPreferences("local-settings", Context.MODE_PRIVATE)
         val visible = mutableStateOf(true)
         compose.setContent { if (visible.value) WayirunApp(viewOverride = TrackingView(ready = true)) {} }
         compose.onNodeWithTag("settings-screen").assertDoesNotExist()
         compose.onNodeWithTag("playlist-link").assertDoesNotExist()
-        compose.onNodeWithText("Indoor").performScrollTo().performClick()
-        compose.onNodeWithText("Time").performScrollTo().performClick()
+        compose.onNodeWithTag("run-mode-Indoor").performScrollTo().performClick()
+        compose.onNodeWithTag("run-goal-Time").performScrollTo().performClick()
         compose.onNodeWithTag("goal-target").performScrollTo().performTextReplacement("25")
         compose.onNodeWithTag("settings-gear").performClick()
         compose.onNodeWithText("Miles").performScrollTo().performClick()
@@ -48,7 +60,7 @@ class SettingsExperienceTest {
         compose.runOnIdle { visible.value = true }
         compose.onNodeWithTag("settings-screen").assertDoesNotExist()
         compose.onNodeWithTag("goal-target").assertTextContains("25")
-        compose.onNodeWithText("Indoor").assertIsSelected()
+        compose.onNodeWithTag("run-mode-Indoor").assertIsSelected()
         compose.onNodeWithTag("open-playlist").assertIsEnabled()
         compose.onNodeWithTag("settings-gear").performClick()
         compose.onNodeWithTag("playlist-link").assertTextContains("PLpersist", substring = true)

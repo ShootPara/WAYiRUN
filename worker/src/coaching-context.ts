@@ -1,4 +1,5 @@
 import { hash } from "./auth.js";
+import { classifyRunQuality } from "./run-quality.js";
 
 type ObjectValue = Record<string, unknown>;
 type RunRow = { run_id: string; operation_id: string; manifest_json: string; manifest_hash: string; chunk_count: number };
@@ -107,7 +108,8 @@ export async function prepareCoachingContext(db: D1Database, owner: string, runI
       AND NOT EXISTS (SELECT 1 FROM run_deletions d WHERE d.owner_id=r.owner_id AND d.run_id=r.run_id)
       ORDER BY json_extract(manifest_json,'$.summary.endedUtcMs') DESC, run_id DESC LIMIT 1`)
       .bind(owner, ended, ended, runId).first<RunRow>();
-    const input = JSON.stringify({ current: await readArchive(db, owner, current),
+    const currentArchive = await readArchive(db, owner, current);
+    const input = JSON.stringify({ current: { ...currentArchive, quality: classifyRunQuality(currentArchive) },
       previous: previous ? await readArchive(db, owner, previous) : null });
     const bytes = new TextEncoder().encode(input).byteLength;
     if (bytes > MAX_CONTEXT_BYTES) throw new CoachingDataError("context_too_large");

@@ -35,3 +35,11 @@ Backend tests use local D1 and synthetic provider responses. They cover simultan
 GET /api/coaching-history/{runId} and its cookie-authenticated /web-api/coaching-history/{runId} bridge return a read-only owner-scoped snapshot. A completed run with no job returns coaching:null; missing, deleted or foreign runs return 404. The endpoint never generates, retries or expires jobs. Session/run/job state is rechecked after audio assembly. It exposes only the explicit result fields, never key revisions, session hashes or credentials.
 
 Run details display retained recap text safely as text and offer manual replay of verified WAV bytes. Navigation and sign-out pause playback and revoke its Blob URL. Incomplete speech can still display its retained recap. Missing coaching does not prevent viewing the run. CSV version 2 includes metadata and all saved audio; see EXPORT_DELETION_PLAN.md 1.6. No new OpenAI call or charge occurs for replay or export.
+
+## 1.7 Current-run quality evidence
+
+Milestone 9 is complete. Verified current archives gain a derived quality object in coaching input only, with version, label, reasons and metrics. Stored archives and existing job results remain unchanged. The previous archive remains complete and is not the classification subject. The augmented input follows the same size/count and single-attempt job flow; suspicious recordings still receive requested coaching.
+
+Test/incomplete thresholds are strictly under 90 seconds or 0.05 miles. Vehicle flags require 25 seconds of contiguous fast measured pace or GPS movement; gaps over 10 seconds and segment/source changes reset evidence. Isolated implausible GPS jumps are separate evidence and take label precedence. See ../MILESTONE_9_TEST_HANDOFF.md for numeric boundaries and Phase 2 checks. Provider instructions require plain, tentative acknowledgment, avoid suspicious performance praise and preserve supportive tone. No classification endpoint, schema migration or paid retry is introduced.
+
+Verification passed TypeScript compilation, the local deployment dry-run and all 118 Worker tests. Provider calls were synthetic stubs; real generated tone and thresholds remain acceptance with user recordings.

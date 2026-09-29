@@ -39,6 +39,10 @@ async function runtime(t, configured = true, rateLimit = 1000) {
   const coaching=readFileSync(new URL("../migrations/0006_coaching_jobs.sql",import.meta.url),"utf8"),trigger=coaching.indexOf("CREATE TRIGGER");
   await db.batch(coaching.slice(0,trigger).split(";").map(s=>s.trim()).filter(Boolean).map(s=>db.prepare(s)));
   await db.prepare(coaching.slice(trigger)).run();
+  for(const name of ["0007_run_photos.sql","0008_run_locations.sql","0009_public_runs.sql","0010_run_weather.sql","0011_photo_weather.sql"]){
+    const sql=readFileSync(new URL(`../migrations/${name}`,import.meta.url),"utf8").replace(/^--.*$/gm,"");
+    await db.batch(sql.split(";").map(x=>x.trim()).filter(Boolean).map(x=>db.prepare(x)));
+  }
   return { mf, db };
 }
 function call(mf, path, method = "GET", body, headers = {}) {
@@ -60,6 +64,22 @@ async function login(mf, subject, patch = {}) {
 }
 const bearer = value => ({ Authorization: `Bearer ${value}` });
 
+test("browser publication mutation requires cookie, same-origin CSRF and expected revision",async t=>{
+ const {mf,db}=await runtime(t),access=await login(mf,"publication-alice");
+ const owner=(await (await call(mf,"/api/account","GET",undefined,bearer(access))).json()).account.id;
+ const id="12345678-1234-1234-1234-123456789abc",path=`/web-api/publications/${id}`;
+ await db.prepare("INSERT INTO run_uploads VALUES (?,?,?,'{}','hash',1,1,10000,2)").bind(owner,id,id).run();
+ const cookie={Cookie:`__Host-wayirun=${access}`},origin="https://wayirun-dev.unopenedparachute.workers.dev";
+ const body={operationId:"12345678-1234-1234-1234-123456789abd",expectedRevision:0,action:"share"};
+ assert.equal((await call(mf,path,"PUT",body,cookie)).status,403);
+ assert.equal((await call(mf,path,"PUT",body,{...cookie,Origin:"https://evil.test","X-WAYIRUN-Request":"1"})).status,403);
+ assert.equal((await call(mf,path,"PUT",body,{...cookie,Origin:origin,"X-WAYIRUN-Request":"1",...bearer(access)})).status,403);
+ const result=await call(mf,path,"PUT",body,{...cookie,Origin:origin,"X-WAYIRUN-Request":"1"});
+ assert.equal(result.status,200);assert.equal((await result.json()).publication.shared,true);
+ assert.equal((await call(mf,path,"POST",body,{...cookie,Origin:origin,"X-WAYIRUN-Request":"1"})).status,405);
+ assert.equal((await call(mf,path,"PUT",{...body,expectedRevision:1,owner},{...cookie,Origin:origin,"X-WAYIRUN-Request":"1"})).status,400);
+});
+
 test("browser coaching history is private and read-only, includes retained text and excludes credentials",async t=>{
  const {mf,db}=await runtime(t),access=await login(mf,"coaching-alice"),other=await login(mf,"coaching-bob");
  const owner=(await (await call(mf,"/api/account","GET",undefined,bearer(access))).json()).account.id;
@@ -78,18 +98,19 @@ test("browser coaching history is private and read-only, includes retained text 
  assert.equal((await call(mf,path)).status,401);
 });
 
-test("map assets are served locally with correct types and only the tile image host allowed", async t => {
+test("route assets are local and CSP no longer permits map tiles", async t => {
   const {mf}=await runtime(t);
-  for(const path of ["/export.js","/route.js","/map.js","/leaflet.js","/leaflet.css"]){
+  for(const path of ["/export.js","/route.js","/map.js"]){
     const response=await call(mf,path);assert.equal(response.status,200);
     assert.match(response.headers.get("Content-Type"),path.endsWith(".css")?/text\/css/:/text\/javascript/);
     const csp=response.headers.get("Content-Security-Policy");
-    assert.match(csp,/img-src[^;]*https:\/\/tile.openstreetmap.org/);
+    assert.ok(!csp.includes("tile.openstreetmap.org"));
     assert.ok(!csp.includes("unsafe-inline"));
     assert.ok((await response.text()).length>100);
     assert.equal((await call(mf,path,"POST")).status,405);
     assert.equal(await (await call(mf,path,"HEAD")).text(),"");
   }
+  for(const path of ["/leaflet.js","/leaflet.css"])assert.equal((await call(mf,path)).status,404);
 });
 
 test("browser shell supplies a fresh style nonce for Google's widget and an origin referrer", async t => {

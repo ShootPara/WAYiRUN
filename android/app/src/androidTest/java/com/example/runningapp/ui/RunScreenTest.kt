@@ -16,7 +16,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RunScreenTest {
-    @Test fun keptPhotoHasSelectedPrivacyAndSaveShareActions() {
+    @Test fun keptPhotoStaysPrivateAndHasSaveShareActions() {
         val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val dao=com.example.runningapp.storage.RunDatabase.get(context).runs()
         val id=java.util.UUID.randomUUID().toString()
@@ -30,11 +30,11 @@ class RunScreenTest {
             compose.setContent { WayirunApp(TrackingView(r.snapshot(),ready=true),{_,_->}) {} }
             compose.onNodeWithText("Take / choose a run photo").performScrollTo().performClick()
             compose.waitUntil(15000) {compose.onAllNodesWithText("Keep Photo").fetchSemanticsNodes().isNotEmpty()}
-            compose.onAllNodes(isToggleable()).onLast().performScrollTo().assertIsOn().performClick().assertIsOff()
+            compose.onNodeWithText("Make this run public").assertDoesNotExist()
             compose.onNodeWithText("Keep Photo").performScrollTo().performClick()
             compose.waitUntil(15000) {compose.onAllNodesWithText("Save photo").fetchSemanticsNodes().isNotEmpty()}
             compose.onNodeWithText("Share photo").assertExists()
-            kotlinx.coroutines.runBlocking {val saved=dao.photo(id)!!;assertFalse(saved.public);assertTrue(saved.jpeg.size>100);assertFalse(saved.synced)}
+            kotlinx.coroutines.runBlocking {val saved=dao.photo(id)!!;assertFalse(saved.public);assertTrue(saved.jpeg.size>100);assertFalse(saved.synced);assertNull(dao.publication(id)?.wantShared)}
             assertFalse(draft.exists())
         } finally {kotlinx.coroutines.runBlocking {dao.discard(id,"photo-ui")};draft.delete()}
     }

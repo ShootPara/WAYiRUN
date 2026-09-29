@@ -49,6 +49,15 @@ test("durable job is owner scoped, single attempt, with chunked audio and curren
  await db.prepare("DELETE FROM run_uploads WHERE owner_id='alice' AND run_id=?").bind(id).run();
  assert.equal((await db.prepare("SELECT count(*) AS n FROM coaching_audio").first()).n,0);assert.equal((await call(id,{method:"GET"})).status,404);
 });
+
+test("suspicious run still completes the existing coaching job with identical classified input",async t=>{
+ const {add,call,provider}=await runtime(t),id=await add(),inputs=[];
+ provider.countInput=async (key,input)=>{inputs.push(input);return 100;};
+ provider.text=async (key,input)=>{inputs.push(input);return "This may have been a test recording.";};
+ assert.equal((await (await call(id)).json()).state,"ready");
+ assert.equal(inputs.length,2);assert.equal(inputs[0],inputs[1]);
+ assert.equal(JSON.parse(inputs[0]).current.quality.label,"likely_test");
+});
 test("simultaneous POSTs reserve once, repeated operation IDs cannot create a second run job",async t=>{
  const {add,call,calls,provider}=await runtime(t),id=await add();let entered,release;
  const ready=new Promise(r=>entered=r),held=new Promise(r=>release=r),original=provider.text;
