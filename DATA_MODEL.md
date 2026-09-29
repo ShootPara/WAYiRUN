@@ -1,156 +1,228 @@
-# Running App — Data Model
+# 1 WAYiRUN data and settings model
 
-Version: 0.2
-Status: Local Room schema implemented for the debug prototype; cloud schema remains a logical design
-FILE: <repository-root>\DATA_MODEL.md (NEW)
+Version: 1.0
+Status: Current feature-development contract
 
-## 1 Scope and conventions
+## 1.1 Classification
 
-[REQUIREMENTS.md](REQUIREMENTS.md) owns user-visible behavior. [ARCHITECTURE.md](ARCHITECTURE.md) owns storage and synchronization choices. This document defines records and invariants; exact SQL, Room entities, indexes, and migrations belong to their implementation milestones.
+Persisted information is classified as follows:
 
-Use opaque stable identifiers. Store distances in meters, durations as integer milliseconds, timestamps in UTC, and the run's original time-zone information separately. Display units do not change stored measurements. Treat missing values as missing, not zero. Reject non-finite or negative distance/duration values. Do not store calculated pace as an independent authoritative measurement.
+- **SOURCE** — retained observation or user/account input that cannot be reconstructed safely from another stored field.
+- **DERIVED** — reproducible from source data and safe to rebuild.
+- **DUPLICATED** — intentionally repeated to support recovery, integrity validation, transport, or efficient reads; copies must agree.
+- **OPERATIONAL** — queue, cursor, retry, receipt, cache, or workflow state rather than product history.
+- **LEGACY** — retained only to read or migrate earlier installations/archives.
 
-## 2 Core local run records
+A field may have more than one classification. Duplication documented here is intentional and must not be removed as generic cleanup.
 
-### 2.1 Run
+## 1.2 Run archive and checkpoint
 
-| Field | Meaning and rule |
-| --- | --- |
-| id | Client-generated stable run identifier, unchanged on retry |
-| owner_id | Account that owns the run; immutable after assignment |
-| state | Running, Paused, or Finished; countdown is pre-run UI state |
-| started_at, ended_at | UTC timestamps; ended_at exists only when finished |
-| time_zone_id, start_offset | Preserve the start-time context; holiday interpretation still needs its product rule |
-| active_duration_ms | Accumulated running time excluding pauses |
-| distance_m | Accepted accumulated distance excluding paused movement |
-| mode | Indoor or Outdoor |
-| display_units | Snapshot of miles or kilometers at start |
-| stride_length_m | Configured stride snapshot; unknown is not replaced by an invented personal value |
-| goal_type, goal_value | None, time in milliseconds, or distance in meters; only the matching value is valid |
-| countdown_seconds | Selected pre-run setting |
-| start_music | Selected pre-run music setting |
-| announcement_selection | Selected supported interval; kilometer mapping remains unresolved |
-| goal_announced | Records whether the goal event has been emitted |
-| ai_requested | Final checkbox value, persisted at finish |
-| measurement_version | Calculation version used to produce the recorded metrics |
-| local_revision, server_revision | Synchronization metadata, not user-visible statistics |
+The cloud-transfer archive format is version 1. Android stores the current recovery checkpoint as JSON inside each Room run row and sends an integrity-validated archive containing the run plus normalized detail rows.
 
-Persist a completed run and its final measurements atomically. A completed run cannot return to Running. At most one local run may be Running or Paused at a time. Do not silently change an active run's measurement settings when account preferences change.
+### 1.2.1 Captured run settings
 
-### 2.2 Active interval
+`RunSettings` contains:
 
-Store `run_id`, sequence, start/end monotonic clock values, start/end UTC timestamps, and accumulated active duration. A monotonic clock value is comparable only within the same device boot. The interval is closed on pause/finish; a new interval begins on resume. A restart must not count an unobserved interval as verified running time.
+| Field | Meaning | Classification |
+| --- | --- | --- |
+| `mode` | Indoor or outdoor | SOURCE |
+| `units` | Miles or kilometers captured at start | SOURCE |
+| `countdownSeconds` | 0 through 10 | SOURCE |
+| `goal` | None, positive distance in meters, or positive duration | SOURCE |
+| `strideLengthMeters` | Positive measured stride or null | SOURCE |
+| `announcementsEnabled` | Master milestone switch | SOURCE |
+| `announcementSelection` | Independent time/distance channel selections | SOURCE |
+| `autoPauseEnabled` | Captured automatic-pause choice | SOURCE |
+| `announcementInterval` | Earlier single-channel capture | LEGACY; used when the newer selection is absent |
 
-### 2.3 Measurement interval
+Changing preferences later does not mutate this capture.
 
-Store `run_id`, sequence, active interval reference, source (`gps` or `steps`), time bounds, accepted distance increment, and cumulative active duration/distance. This links metric changes to exactly one source. Baseline step counters are device-cumulative values; only accepted differences within the active interval count for this run. Counter resets and backward readings invalidate the old baseline rather than producing negative distance.
+### 1.2.2 Run snapshot
 
-### 2.4 Route point
+`RunSnapshot` retains:
 
-Store `run_id`, segment identifier, sequence, measurement timestamp, latitude, longitude, and accuracy when available. Constrain coordinates to valid ranges and enforce uniqueness of sequence per run. Route segment boundaries mark pauses and location gaps; maps must not connect separate segments. Step-only intervals contain no fabricated route points.
+- run ID and state;
+- captured settings;
+- countdown remainder;
+- UTC start/end times;
+- active duration;
+- total distance;
+- average pace in milliseconds per captured unit;
+- goal-reached state;
+- current source-segment ID;
+- measurement-source segments;
+- completed full splits;
+- active intervals;
+- pause reason.
 
-### 2.5 Split
+State, duration, distance, pace, goal state and splits are **DUPLICATED/DERIVED** within the durable checkpoint so recovery never requires replaying all samples. Source segments and active intervals are also stored as normalized Room rows for archive integrity.
 
-Store `run_id`, sequence, start/end cumulative distance, actual split distance, active duration, unit snapshot, and full/partial classification. Full split length follows requirements Section 5.9. Average pace is active duration divided by actual distance, converted for presentation. Do not present a zero-distance pace as zero or infinity. A nonzero final remainder is shown as a Partial row with its actual distance, active duration, and pace, as approved in requirements Section 5.9.
+### 1.2.3 Recovery checkpoint
 
-### 2.6 Controller checkpoint
+`RunCheckpoint` adds the last monotonic and UTC clocks, emitted-event sequence, current measurement baseline and recovery epoch. These are **SOURCE/OPERATIONAL** recovery data. Wall time is metadata; monotonic time drives duration.
 
-Persist enough to restore the known state: run ID, active-duration accumulator, distance accumulator, source baseline, last accepted measurement, split progress, and emitted event identifiers. Commit the state needed to prevent duplicate goals/cues alongside the transition. Do not restore a stale Android media session token as if it were still valid.
+## 1.3 Room database
 
-### 2.7 Proposed time estimation — not in the current schema
+Database: `wayirun-local.db`
+Schema version: 9
+Checked-in schemas: 1 through 9
+Migration chain: explicit 1→2 through 8→9 migrations
 
-The September 14 report proposes time-derived distance and a history-derived pace. This has not changed the accepted missing-source rule or Room v1. Before implementation, agree split eligibility and kilometer-history handling, then plan how to retain estimation provenance and the pace used for a run without treating estimated samples as measured training data. Preserve existing records with a tested migration if schema changes become necessary. Do not retrofit invented distances into saved runs or add route points for estimated intervals. See PHONE_TEST_REVIEW_2026-09-14.md Section 3.1 for unresolved product decisions.
+### 1.3.1 `runs`
 
-## 3 Accounts and credentials
+| Field | Purpose | Classification |
+| --- | --- | --- |
+| `id` | Stable run UUID | SOURCE |
+| `ownerId` | Immutable local acquisition owner | SOURCE |
+| `cloudOwnerId` | Explicit account ownership, null for unimported local run | SOURCE |
+| `state` | READY/RUNNING/PAUSED/FINISHED | DUPLICATED from checkpoint for queries |
+| `activeSlot` | Unique unfinished-run marker; null when finished | OPERATIONAL/DUPLICATED |
+| `checkpoint` | Serialized `RunCheckpoint` | SOURCE plus recovery duplication |
+| `zoneId` | Start/run calendar zone | SOURCE |
+| `startOffsetSeconds` | Start UTC offset | SOURCE |
+| `updatedUtcMs` | Last committed checkpoint time | OPERATIONAL |
+| `interrupted` | Whether recovery requires interrupted presentation | OPERATIONAL |
 
-Phone-summary discard is implemented against Room v1 with no schema change. A transaction checks the selected run's owner and Finished state, then deletes its row; all five child tables cascade. Missing rows are an idempotent success; active runs and owner mismatches are refused. The serialized service validates the confirmation's run ID and clears its controller/checkpoint only after success. Stale media commands cannot revive the discarded run. Unrelated records/preferences survive, and no hidden run record is retained. Future remote deletion synchronization remains Section 5.3's separate concern.
+Completed records are immutable except for associated operational/dependent tables. Import changes cloud ownership deliberately; it does not rewrite the original local acquisition owner.
 
-### 3.1 Account
+### 1.3.2 `route_points`
 
-Store an internal ID, unique verified Google subject, display name, profile image reference, and creation/update timestamps. A profile name or email is never the authorization key. Keep authentication sessions separate from the public profile representation.
+Each outdoor GPS point retains run ID, source segment, monotonic timestamp, latitude, longitude and accuracy meters. These are **SOURCE** observations. IDs are local database identities and are remapped safely during restore.
 
-### 3.2 Preferences
+GPS speed and speed-accuracy evidence used by live auto-pause policy is not retained in route rows. Raw accelerometer and step-detector motion samples are also not retained.
 
-Store owner ID and versioned settings for units, stride length, dark mode, announcement selection, and music configuration once specified. Run snapshots preserve historical settings after preferences change. Do not include secrets in the preferences response or public run page.
+### 1.3.3 `measurements`
 
-### 3.3 AI credential
+Each accepted distance measurement retains run ID, segment, monotonic time, GPS/steps source, delta meters, total meters, active time and the serialized cumulative GPS/step reading.
 
-Server-only record: owner ID, provider (`openai`), ciphertext, nonce, encryption-key version, and update timestamp. A unique constraint allows one current OpenAI credential per account. The encryption key itself is not a database field. Reads to the client report configured/masked status only, never the original key.
+- serialized cumulative reading and timestamps: **SOURCE**;
+- delta, total and active time: **DUPLICATED/DERIVED** integrity and coaching/export evidence.
 
-### 3.4 Authentication session
+Step-counter values are retained only when accepted as distance measurements. Motion-only evidence never adds distance.
 
-Store a hashed session token, owner ID, expiry, and revocation status. Never store raw session tokens in diagnostics. Google token verification and session policy are specified during the account milestone.
+### 1.3.4 `splits`
 
-Worker migration `0002_accounts.sql` now implements accounts, auth_sessions, and login_challenges. Sessions store SHA-256 hashes of 256-bit random tokens, last one hour, and support per-session revocation. Challenge hashes expire after five minutes and are consumed atomically with session insertion. Google subject is unique; profile changes retain the same internal account UUID. Migration 0003 adds owner-scoped immutable run upload manifests and binary chunks; Android run/owner import is not connected yet. Details and activation limits are in `worker/AUTH_CONTRACT.md`.
+Stores run ID, split number, actual meters, duration and partial flag. Splits are **DERIVED/DUPLICATED** from the checkpoint. Full split distance equals one captured unit; a final partial row stores its actual distance.
 
-Android signin-settings1 stores the verified account profile/internal ID and session token/expiry in one AES-GCM encrypted atomic file under noBackupFilesDir; the key stays in Android Keystore. Tampered/unreadable records restore no account. Expiry retains the known local profile while requiring fresh sign-in for authenticated server use. Sign-out removes the phone session and attempts server revocation; offline server sessions expire within one hour. This store never writes the existing local-settings owner or Room run rows. Preference edits (including goal/target and unfinished playlist entry) save as they change; active-run checkpoints retain their original settings snapshots.
+### 1.3.5 `active_intervals` and `source_segments`
 
-## 4 Run attachments and presentation
+These tables store serialized active intervals and measurement-source segments already present in the checkpoint. They are **DUPLICATED** deliberately so archive validation can prove normalized records match recovery state.
 
-### 4.1 Photo
+### 1.3.6 Synchronization tables
 
-Store photo ID, owner/run references, private object key, MIME type, dimensions, selected overlay fields, route-overlay choice, and upload state. Do not persist an entire camera library or upload source photographs merely because the user opened the picker. The selected finished image is the required stored artifact.
+| Table | Stored state | Classification |
+| --- | --- | --- |
+| `run_sync` | Upload/delete operation ID, owner, status, attempts, next retry and error | OPERATIONAL |
+| `sync_pull` | Owner pull phase, cursor, status, attempts, next retry and error | OPERATIONAL |
 
-### 4.2 Publication
+Operation IDs and deletion state provide idempotency and resurrection protection. They are not user run metrics.
 
-Store run ID, owner ID, an opaque public-link token, publication state, referenced confirmed photo, and timestamps. Enforce one publication state per run. Publishing requires completed data and the accepted photo confirmation action. A public projection is explicitly constructed from allowed run fields; it is not serialization of the account or raw database row.
+### 1.3.7 `achievement_cache`
 
-### 4.3 Coaching result
+Stores serialized awards for a local/account scope. It is **DERIVED** from retained owned history and is rebuilt after relevant finish/import/delete operations. Stable award identities remain part of exported history, but the cache is not the source of run facts.
 
-Store coaching ID, owner/run references, request identity, state, result text when available, private audio-object reference, provider/model metadata, and a sanitized failure category. Unchecked AI produces no coaching request. Distinguish failed, pending, succeeded, and unknown-outcome requests so retries cannot silently issue duplicate billable calls.
+### 1.3.8 `run_photos`
 
-### 4.4 Achievement definition and award
+| Field | Purpose | Classification |
+| --- | --- | --- |
+| `runId` | One retained photo per run | SOURCE relationship |
+| `revision` | Immutable photo edit/version identity | SOURCE/OPERATIONAL |
+| `jpeg` | Rendered bounded JPEG | SOURCE artifact |
+| `options` | Selected time/distance/pace/route/weather flags | SOURCE |
+| `weather` | Exact selected cached snapshot JSON | SOURCE enrichment |
+| `synced`, `publicUrl`, `syncError`, `lastAttemptMs` | Upload receipt/retry state | OPERATIONAL |
+| `public` | Earlier keep/public choice | LEGACY; current publication is controlled elsewhere |
 
-A definition contains a stable ID, rule version, condition parameters, display text, and animation reference. An award links owner, achievement/rule version, qualifying run or period, earned time, and reveal state. Define the idempotency key after repeatability and calendar rules are approved. Do not invent achievement thresholds in schema defaults.
+Migration 6→7 explicitly retires earlier visibility semantics without deleting JPEGs.
 
-## 5 Synchronization and deletion
+### 1.3.9 `run_publications`
 
-### 5.1 Pending operation
+Stores the last known server publication state, revision and URL separately from pending desired share/photo intent, intent ID, request body and error. Server observation and local intent are both **OPERATIONAL**. The separation prevents stale acknowledgements from overwriting a newer choice.
 
-Local record: operation ID, owner ID, entity ID/type, operation type, payload version/hash, attempt count, last sanitized error, and next attempt time. Operations include completed-run upload, confirmed-photo upload, publication, and Health Connect export. Each has its own state so a failed photo upload cannot invalidate a saved run.
+Publication defaults private. A retained photo does not itself publish a run.
 
-### 5.2 Server operation receipt
+### 1.3.10 `health_exports`
 
-Store operation ID, authenticated owner, target ID, payload hash, and result/version. Enforce unique operation identity per owner. The same ID and payload returns the same result; reuse with different content fails. Do not trust an owner field supplied by the client.
+Stores stable run-keyed PENDING/DONE/DELETE/DELETED/error state. This is **OPERATIONAL**. The source run remains authoritative; provider records can be recreated or removed using stable client IDs.
 
-Migration 0003 implements the transport receipt in `run_uploads` and exact ordered binary data in `run_chunks`. The manifest hash binds the immutable summary and chunk descriptors to run/operation IDs. A compound foreign key keeps every chunk under the same owner/run; only fully acknowledged archives have a completion timestamp and appear in history. Drafts expire after 24 hours and are cleaned on that owner's next upload reservation; completed receipts do not expire. Android archive encoding/decoding and measurement validation are implemented; sync2 adds authenticated restore validation. See `worker/RUN_STORAGE_CONTRACT.md` for limits and API details.
+## 1.4 Cloud D1 model
 
-### 5.3 Deletion marker and cleanup
+D1 migrations are append-only files 0001 through 0011. Applied migration files must not be edited.
 
-Retain only the minimum owner/run identifier, deletion revision, and timestamp needed to stop stale synchronization from recreating deleted content. Remove run metrics, route points, attachments, and coaching contents. A cleanup job may temporarily hold private object identifiers until removal succeeds. The marker is not hidden run history.
+| Migration / tables | Purpose | Classification |
+| --- | --- | --- |
+| 0001 `service_metadata` | Application/schema readiness | OPERATIONAL |
+| 0002 `accounts`, `login_challenges`, `auth_sessions` | Google identity and hashed sessions | SOURCE identity / OPERATIONAL challenge/session |
+| 0003 `run_uploads`, `run_chunks` | Validated manifest and bounded archive chunks | SOURCE archive plus OPERATIONAL staging/receipt |
+| 0004 `run_deletions` | Owner/run tombstones and stale-upload guard | OPERATIONAL with durable deletion meaning |
+| 0005 `openai_keys` | Encrypted key envelope, revision/action/check time | SOURCE secret envelope / OPERATIONAL metadata |
+| 0006 `coaching_jobs`, `coaching_audio` | Durable generation state, recap and WAV chunks | SOURCE result plus OPERATIONAL job state |
+| 0007 `run_photos` | JPEG, options, revision and legacy public token | SOURCE artifact plus LEGACY token |
+| 0008 `run_locations`, `location_lookup_gate` | Coarse city/region cache and provider throttle | DERIVED cache / OPERATIONAL gate |
+| 0009 `public_runs`, `publication_operations` | Private/public state, photo visibility, stable tokens and idempotency | OPERATIONAL publication state |
+| 0010 `run_weather`, `weather_lookup_gate` | Cached run-start weather and provider retry state | DERIVED cache / OPERATIONAL gate |
+| 0011 `run_photos.weather_json` | Weather snapshot rendered into retained photo | SOURCE artifact metadata |
 
-Immediately prevent public access and reject new uploads/coaching/publication for a deleted run. Synchronize deletion to clients on reconnection. Exact marker retention and treatment of Health Connect copies must be resolved in the deletion milestone. Retry cleanup until objects are removed; D1 and R2 deletion is not one cross-service transaction.
+The completed archive is the detailed cloud run source of truth. D1 JSON summaries and manifests intentionally duplicate bounded fields so ownership, integrity, listing and retrieval can be validated without trusting arbitrary archive content.
 
-### 5.4 Health Connect export state
+## 1.5 Coaching data
 
-Store run ID, owner ID, stable client record ID, destination record IDs where returned, export state, last attempt, and sanitized error category. Duplicate exports of the same run must use the same identity. Permission denial is not run failure.
+Cloud coaching jobs retain current/previous manifest hashes, key revision, state, generated message, safe error code, audio byte count and WAV chunks. The exact verified archives are used to build the provider input but are not copied into a separate permanent context table.
 
-## 6 Relationships and access constraints
+The Android app retains only a small `coaching-attempt` guard with run ID, selected flag and state so reopening cannot repeat a paid attempt. Downloaded audio is a temporary cache file and is removed after playback/teardown. Private web history reads saved cloud recap/audio.
 
-An account owns runs and preferences. A run owns its intervals, measurements, route, splits, photos, coaching, and publication. Awards reference their qualifying runs/periods. Each private server query is scoped by authenticated owner and target identifier. Use owner-consistent foreign-key relationships or equivalent validated constraints so records from different accounts cannot be joined accidentally.
+API key plaintext is not retained. D1 stores only an encrypted envelope and metadata; authentication tokens are stored hashed in D1 and encrypted locally on Android.
 
-The implementation must verify query plans for owner/date history and ordered per-run measurements. Large route payloads need bounded batches with sequence validation. CSV representation must be defined before export code so that “all run data” is not silently reduced to summary rows.
+## 1.6 Settings inventory
 
-## 7 Initial implementation subset
+General preferences use Android SharedPreferences file `local-settings` unless stated otherwise.
 
-The local tracking milestone needs Run, Active interval, Measurement interval, Route point, Split, and Controller checkpoint. Use a development-only local identity while cloud authentication is absent, confined to a debug build with no cloud access. Production builds must not ship an authentication bypass. Do not create all future cloud tables during the local prototype milestone.
+| Displayed setting/action | Key or location | Type / values | Default | Runtime consumer and effect | Status |
+| --- | --- | --- | --- | --- | --- |
+| Indoor / Outdoor | `mode` | `INDOOR` / `OUTDOOR` | `OUTDOOR` | Captured in `RunSettings`; controls GPS registration and Health exercise type | ACTIVE |
+| Goal | `goal` | None / Time / Distance | None | Builds captured `RunGoal` | ACTIVE |
+| Goal target | `goal-target`, `goal-target-Time`, `goal-target-Distance` | Positive decimal minutes or selected units | Blank | Captured positive duration/meters; per-type keys remember prior text | ACTIVE |
+| Distance units | `units` | Miles / Kilometers | Blank until selected | Captured units for goals, split length, pace, display and speech | ACTIVE |
+| Auto-pause | `auto-pause-enabled` | Boolean | true | Captured at start; enables policy and motion observation | ACTIVE; device acceptance pending |
+| Run announcements | `announcements-enabled` | Boolean | true | Master milestone switch; state/goal/completion cues remain | ACTIVE |
+| Time milestones | `announcement-time-enabled` | Boolean | true | Enables active-time milestones | ACTIVE |
+| Time interval | `announcement-time-interval` | `FIVE_MINUTES` / `TEN_MINUTES` | five minutes | Captured threshold | ACTIVE |
+| Distance milestones | `announcement-distance-enabled` | Boolean | false | Enables distance milestones | ACTIVE |
+| Distance interval | `announcement-distance-interval` | `HALF_UNIT` / `ONE_UNIT` | one unit | Captured threshold in selected units | ACTIVE |
+| Countdown | `countdown` | Integer 0–10 seconds | 0 | Captured pre-start countdown | ACTIVE |
+| YouTube playlist | `music-playlist` | Editable string; recognized YouTube Music playlist URL required to open | Blank | Opens external playlist only; never starts a run/player automatically | ACTIVE |
+| Stride unit | `stride-unit` | cm / inches | cm | Converts entry while preserving physical length | ACTIVE |
+| Distance per step | `stride-entry` | Blank or positive decimal | Blank | Captured in meters; indoor and outdoor step fallback distance | ACTIVE |
+| Dark mode | `dark` | Boolean | System dark state on first read | Selects saved light/dark Compose scheme | ACTIVE; not a three-state system selector |
+| Request missing permissions | Android permission state | Action | N/A | Requests applicable location/activity/notification grants | ACTIVE |
+| App permissions | Android Settings | Action | N/A | Opens system permission page | ACTIVE |
+| Tracking notification settings | Android notification channel | Action | N/A | Opens `run-tracking` channel settings | ACTIVE |
+| Google account | Encrypted `SessionStore` | Sign in/out | Signed out | Chooses cloud owner for new runs and private data | ACTIVE |
+| Add existing runs | Room transaction | Explicit action | Never automatic | Assigns eligible local runs to current cloud account | ACTIVE |
+| Retry synchronization | Room queue reset/action | Action | N/A | Resets eligible retries and schedules sync/pull/photo/publication work | ACTIVE |
+| OpenAI API key | D1 `openai_keys` | Add/replace/remove secret | None | Enables selected account coaching with user's credits | ACTIVE |
+| Health Connect | `health-connect/scope` plus OS permissions | Connect/retry/settings actions | Disconnected | Enables account/local-scope export and cleanup | ACTIVE; device acceptance pending |
 
-### 7.1 Implemented Room subset
+## 1.7 Internal and legacy preferences
 
-Schema version 1 is exported under `android/app/schemas/com.example.runningapp.storage.RunDatabase/1.json`. Debug-only tables are `runs`, `active_intervals`, `source_segments`, `measurements`, `route_points`, and `splits`. A unique nullable active-slot column enforces at most one unfinished run. Child rows have run foreign keys. The DAO transaction saves the checkpoint, intervals, source segments, splits, and any new measurement/route point together; it rejects writes to a completed run and changes of local ownership.
+| Key | Purpose | Classification |
+| --- | --- | --- |
+| `local-owner` | Stable anonymous/local acquisition owner | SOURCE internal identity |
+| `announcement-selection-version` | Marks completed preference migration | OPERATIONAL |
+| `announcement-interval` | Earlier single-channel selection read only when new keys are absent | LEGACY |
+| `health-connect/status` | Last user-readable export status | OPERATIONAL |
+| `health-connect/scope` | Connected local/account scope | OPERATIONAL |
+| `coaching-attempt/run`, `selected`, `state` | Prevents repeated finish coaching attempt | OPERATIONAL |
 
-The run checkpoint uses Kotlin serialization and holds the unit/stride/goal snapshot, active totals, full splits, measurement baseline, active intervals and clock epochs, source segments, and event sequence. The run row separately preserves zone/offset and interruption state. Pace is derived. Final partial splits store actual distance and duration. Measurements retain accepted cumulative readings and deltas; route points exist only for accepted GPS samples. No GPS points are fabricated for step-only or missing intervals.
+## 1.8 Code policy values that are not user settings
 
-The locally generated owner identifier has no cloud account meaning and is confined to debug preferences/database records. This original v1 subset did not implement production identity, authentication bypasses, network calls or cloud tables; Sections 7.2 onward describe subsequent additions. Tests use isolated in-memory Room databases. Schema migrations will be required before changing persisted tables in a subsequent milestone; no destructive migration fallback is enabled.
+GPS interval, sensor thresholds, auto-pause evidence windows, route-gap limits, photo bounds/quality, coaching timeouts, fixed voice, notification-channel behavior, sync batch/retry limits, weather rounding/provider, and achievement catalog thresholds are product/implementation policy. Their presence as constants does not imply a missing user-facing setting.
 
-### 7.2 Implemented synchronization subset - Room v2
+## 1.9 Migration and compatibility rules
 
-Migration 1 to 2 preserves every existing row and adds nullable cloudOwnerId to runs. The original ownerId remains immutable acquisition identity; explicit import assigns cloudOwnerId only to completed unassigned runs. New runs capture the known account at start, even when its session has expired. A finished save and its upload operation are one transaction.
-
-run_sync stores runId, ownerId, stable operationId, UPLOAD/DELETE action, PENDING/AUTH/BLOCKED/SYNCED/DELETED status, attempts, nextAttemptMs and a sanitized error. It deliberately has no run foreign key so deletion intent survives removal of measurements. Conditional acknowledgements cannot replace a newer DELETE action. Archives preserve all six run tables with version, size and structural validation; chunks have SHA-256 descriptors and stable ordering.
-
-Cloud migration 0004 retains only owner/run ID/deletion time after removing manifest and chunk data. A database trigger prevents resurrection by stale uploads. Marker retention policy remains future work; sync2 implements download-side reconciliation; no metrics are retained in deletion markers.
-
-### 7.3 Restore progress - Room v3
-
-Additive migration 2 to 3 creates sync_pull keyed by ownerId: phase (DELETIONS/RUNS), cursor, status, attempts, nextAttemptMs and sanitized error. Existing runs and upload/delete operations are unchanged. No token appears in this table. Restored records retain original acquisition/cloud ownership and every archived metric while regenerating local autoincrement child IDs. Restore never upserts a conflicting existing run. Minimal local tombstones are created even when a deleted remote run was never downloaded, preventing stale-list restoration. Partial archives remain outside Room and cannot appear as finished runs.
+- Room schema changes require a checked-in exported schema and explicit migration.
+- D1 changes require a new additive numbered migration; applied migrations are immutable.
+- Archive changes require an explicit version and compatibility plan.
+- Legacy fields must remain until every supported retained record can be read or migrated safely.
+- Derived caches may be rebuilt; source artifacts and deliberate recovery/integrity duplication must not be discarded as cleanup.
+- Schema redesign is outside the feature-baseline reconciliation.
