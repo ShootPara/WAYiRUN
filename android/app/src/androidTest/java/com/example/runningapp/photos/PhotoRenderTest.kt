@@ -13,6 +13,44 @@ import org.junit.Assert.*
 import java.io.File
 
 class PhotoRenderTest {
+    @Test fun wideRouteMovesIntoStatsPanelWithoutChangingHorizontalPositionOrScale() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val directory=File(context.getExternalFilesDir(null),"route-position").apply {mkdirs()}
+        val run=RunController("position-photo",RunSettings(RunMode.OUTDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
+        run.start();run.finish()
+        val route=listOf(0.0 to 0.0,0.0 to .02,.004 to .02,.004 to 0.0,0.0 to 0.0)
+            .mapIndexed { i,(lat,lon)->RoutePoint(i.toLong()+1,"position-photo",1,i*1000L,lat,lon,5f) }
+        for((w,h) in listOf(1200 to 1600,600 to 1000,1000 to 600,1000 to 1000)) {
+            for(weather in listOf(null,PhotoWeather.parse(weatherFixture())!!)) {
+                val source=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.BLUE)}
+                val bytes=renderPhoto(source,run.snapshot(),route,listOf(true,true,true,true,true),weather)
+                val bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+                var minX=w;var maxX=-1;var minY=h;var maxY=-1
+                for(y in 0 until h) for(x in 0 until w) {
+                    val color=bitmap.getPixel(x,y)
+                    if(Color.green(color)>170 && Color.green(color)>Color.red(color)+20 && Color.red(color)>120 && Color.blue(color)<150) {
+                        minX=minOf(minX,x);maxX=maxOf(maxX,x);minY=minOf(minY,y);maxY=maxOf(maxY,y)
+                    }
+                }
+                val textSize=minOf(w/20f,h/16f)
+                val creditHeight=if(weather!=null) minOf(w*.021f,h*.024f)*3.4f else 0f
+                val panel=textSize*1.45f*5+creditHeight
+                val routeTop=if(weather!=null) h*.05f+textSize*3.3f else h*.04f
+                val size=minOf(w*.38f,maxOf(0f,h-panel-h*.04f-routeTop))
+                val routeHeight=size*.004/(.02*kotlin.math.cos(Math.toRadians(.002)))
+                assertTrue("Route was rendered",maxX>=minX)
+                assertEquals((w-size-w*.07f+size/2).toDouble(),(minX+maxX)/2.0,3.0)
+                assertEquals(size.toDouble(),(maxX-minX).toDouble(),10.0)
+                assertEquals(routeHeight,(maxY-minY).toDouble(),10.0)
+                assertEquals((h-panel+(panel-creditHeight)/2).toDouble(),(minY+maxY)/2.0,3.0)
+                assertTrue("Route is below panel top",minY>=h-panel)
+                assertTrue("Route is above attribution/bottom",maxY<h-creditHeight)
+                File(directory,"route-$w-$h-${weather!=null}.jpg").writeBytes(bytes)
+                bitmap.recycle();source.recycle()
+            }
+        }
+    }
+
     @Test fun routeHasNoRectangleAndDoesNotJoinSeparateSegments() {
         val run=RunController("route-photo",RunSettings(RunMode.OUTDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
         run.start();run.finish()

@@ -94,7 +94,7 @@ internal fun renderPhoto(source: Bitmap, s: RunSnapshot, route: List<RoutePoint>
         val routeTop=if(selectedWeather!=null)h*.05f+textSize*3.3f else h*.04f
         val size=min(w*.38f,max(0f,h-panel-h*.04f-routeTop))
         if(size>0 && max(dx,dy)>0) {
-            val scale=size/max(dx,dy);val left=w-size-w*.07f+(size-dx*scale).toFloat()/2;val top=h-panel-size-h*.04f+(size-dy*scale).toFloat()/2
+            val scale=size/max(dx,dy);val left=w-size-w*.07f+(size-dx*scale).toFloat()/2;val top=h-panel+(panel-creditHeight-(dy*scale).toFloat())/2
             paint.style=Paint.Style.STROKE;paint.strokeCap=Paint.Cap.ROUND
             for(i in 1 until route.size) if(route[i].segmentId==route[i-1].segmentId && route[i].monotonicMs-route[i-1].monotonicMs in 1..10000) {
                 for(halo in listOf(true,false)) {
