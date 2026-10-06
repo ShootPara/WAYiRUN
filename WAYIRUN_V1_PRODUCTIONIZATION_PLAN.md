@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestone 1 in progress, checkpoint review pending  
+Status: Controlling execution plan; Milestone 1 complete; Milestone 2 not started  
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -53,9 +53,9 @@ If a gate fails, stop advancement, diagnose within the current milestone, and re
 
 These are planning facts and MUST be rechecked in Milestone 1 before execution:
 
-- Branch/HEAD: `codex/account-sessions` at `cadecf2183af4f114cb9f6a5e1a87380727d317b`, synchronized with `origin/codex/account-sessions`.
+- Canonical branch: `main`; accepted Settings checkpoint `1e00e8e` was integrated without product-content changes by history-preserving merge `897cac5`.
 - Detector/GPS auto-pause and weather reliability are committed in HEAD `cadecf2`; the route-noodle placement correction is committed in ancestor `7c88edb`.
-- The Settings overhaul is currently uncommitted: three modified and two new source/documentation files. The claim that all completed work is committed and pushed is therefore stale.
+- The Settings overhaul and reconciled V1 documentation are committed in accepted checkpoint `1e00e8e` and reachable from canonical `main`.
 - Android namespace/application ID is provisional `com.example.runningapp`; debug adds `.debug`.
 - Android version is `versionCode 1`, `versionName 0.1.0`; debug adds `-dev-photo-sync1`.
 - The functional Android product exists only in `src/debug`; `src/release` is a name-only shell.
@@ -90,7 +90,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | Milestone | Scope | Status | Exit evidence |
 | --- | --- | --- | --- |
 | 0 | Approve controlling plan | COMPLETE | This file created from live repository review |
-| 1 | Reconcile and checkpoint source | IN PROGRESS | Passes 1A/1B reconciled and verified; checkpoint review remains |
+| 1 | Reconcile and checkpoint source | COMPLETE | Accepted checkpoint `1e00e8e` integrated into canonical `main`; repository normalized and verified |
 | 2 | Resolve production decisions and compliance prerequisites | NOT STARTED | Signed-off decision record; no placeholders in identity choices |
 | 3 | Design exact environment/resource map | NOT STARTED | Reviewed development/production mapping and rollback boundaries |
 | 4 | Implement environment-safe Worker configuration | NOT STARTED | Tests prove dev/prod target isolation and origin correctness |
@@ -132,7 +132,9 @@ Milestone 0 is complete. No remote mutation is permitted.
 
 Pass 1A established that the branch and upstream are synchronized at `cadecf2`; detector/GPS and weather work are committed in that HEAD, route-noodle placement is committed in `7c88edb`, and the only dirty implementation scope is the Settings overhaul. Android remains a debug-only functional product with provisional identity and hard-coded development origins. Worker configuration remains development-only, uses D1 plus rate-limit bindings, has migrations `0001` through `0011`, and expects the secret name `COACHING_KEYRING`. Pass 1A Worker verification passed TypeScript compilation, Wrangler dry-run and 156 local tests with zero failures or skips and no remote contact.
 
-Pass 1B repaired only ignored generated Android output by clearing its Windows `ReadOnly` attribute. The required Android gate then passed: 125 unit/debug-unit tests, zero failures/errors/skips, successful debug assembly, and lint with zero errors and 21 warnings. The generated APK is `android/app/build/outputs/apk/debug/WAYiRUN-2026-10-06_09-39-19_EDT.apk`, 40,355,568 bytes, SHA-256 `773482503562053C368A137161C93BDAACFEC638A6A988A485421C449A231F83`. No instrumentation, device action, remote mutation, deployment, schema/runtime change, commit or push occurred. Milestone 1 remains in progress until the accepted dirty scope is reviewed and checkpointed in Git.
+Pass 1B repaired only ignored generated Android output by clearing its Windows `ReadOnly` attribute. The required Android gate then passed: 125 unit/debug-unit tests, zero failures/errors/skips, successful debug assembly, and lint with zero errors and 21 warnings. The generated APK is `android/app/build/outputs/apk/debug/WAYiRUN-2026-10-06_09-39-19_EDT.apk`, 40,355,568 bytes, SHA-256 `773482503562053C368A137161C93BDAACFEC638A6A988A485421C449A231F83`. No instrumentation, device action, remote mutation, deployment, schema/runtime change, commit or push occurred during that pass.
+
+The approved checkpoint was committed as `1e00e8e`. GitHub's canonical/default branch was confirmed as `main`; the checkpoint was integrated without conflicts or product-content changes by normal merge `897cac5`. The old `development` line was explicitly reconciled as superseded rather than merged because its unique Leaflet/OpenStreetMap basemap behavior conflicts with the accepted provider-independent route-noodle design. Canonical `main` was pushed and verified before the accepted feature branches were retired. Milestone 1 is complete; Milestone 2 has not begun.
 
 ## 1.8 Milestone 2 — resolve production decisions and compliance prerequisites
 

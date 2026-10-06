@@ -1,8 +1,8 @@
 # 1 WAYiRUN current state
 
-Status: Feature-development baseline candidate
+Status: Accepted feature-development baseline; V1 productionization Milestone 1 complete
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
-Candidate lineage: `codex/account-sessions`
+Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
 ## 1.1 Baseline boundary
 
@@ -12,9 +12,9 @@ The Cloudflare Worker is configured only for the development environment. Develo
 
 ## 1.2 Branch reconciliation
 
-The current lineage and `origin/development` share commit `5b5e7ed`. The seven commits unique to `origin/development` cover restore/deletion reconciliation, desktop history, Google styling, Leaflet route maps, CSV export, session/transfer limits, and desktop deletion. Current HEAD contains the still-valid restore, history, authentication, export, rate/limit, and deletion behavior plus later tests and features.
+The canonical `main` lineage and the retired `development` lineage share commit `5b5e7ed`. The seven commits unique to the old `development` line cover restore/deletion reconciliation, desktop history, Google styling, Leaflet route maps, CSV export, session/transfer limits, and desktop deletion. Canonical `main` contains the still-valid restore, history, authentication, export, rate/limit, and deletion behavior plus later tests and features.
 
-The only material behavior unique to that older line is its Leaflet/OpenStreetMap basemap implementation. That behavior is explicitly superseded by provider-independent route noodles. No still-valid functionality was identified only on `origin/development`; it must not be merged wholesale.
+The only material behavior unique to that older line is its Leaflet/OpenStreetMap basemap implementation. That behavior is explicitly superseded by provider-independent route noodles. No still-valid functionality was identified only on the retired `development` line, so it was not merged wholesale.
 
 ## 1.3 Delivered Android behavior
 
