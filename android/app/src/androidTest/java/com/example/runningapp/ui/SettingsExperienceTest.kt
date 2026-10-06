@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import com.example.runningapp.domain.*
@@ -17,9 +18,12 @@ class SettingsExperienceTest {
     @Test fun settingsRetainPlaylistAndPermissionsWithoutMusicControlSetup() {
         compose.setContent { WayirunApp(viewOverride = TrackingView(ready = true)) {} }
         compose.onNodeWithTag("settings-gear").performClick()
+        compose.onNodeWithTag("settings-category-connected-services-header").performClick()
         compose.onNodeWithTag("playlist-link").performScrollTo().assertExists()
+        compose.onNodeWithTag("settings-category-account-app-header").performScrollTo().performClick()
         compose.onNodeWithText("Request missing permissions").performScrollTo().assertExists()
         compose.onNodeWithText("App permissions", substring = false).assertExists()
+        compose.onNodeWithTag("settings-category-after-run-header").performScrollTo().performClick()
         compose.onNodeWithText("Weather data by Open-Meteo.com").performScrollTo().assertHasClickAction()
         compose.onNodeWithText("CC BY 4.0", substring = true).performScrollTo().assertHasClickAction()
         compose.onNodeWithText("YouTube Music control access").assertDoesNotExist()
@@ -36,9 +40,12 @@ class SettingsExperienceTest {
         compose.onNodeWithTag("run-goal-Time").performScrollTo().performClick()
         compose.onNodeWithTag("goal-target").performScrollTo().performTextReplacement("25")
         compose.onNodeWithTag("settings-gear").performClick()
+        compose.onNodeWithTag("settings-category-run-display-header").performClick()
         compose.onNodeWithText("Miles").performScrollTo().performClick()
         compose.onNodeWithText("Time").assertDoesNotExist()
+        compose.onNodeWithTag("settings-category-run-tracking-header").performScrollTo().performClick()
         compose.onNodeWithTag("countdown-setting").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(7f) }
+        compose.onNodeWithTag("settings-category-connected-services-header").performScrollTo().performClick()
         compose.onNodeWithTag("playlist-link").performScrollTo().performTextReplacement("https://music.youtube.com/playlist?list=PLpersist")
         compose.onNodeWithTag("stride").performScrollTo().performTextReplacement("73")
         val wasDark = prefs.getBoolean("dark", false)
@@ -63,7 +70,9 @@ class SettingsExperienceTest {
         compose.onNodeWithTag("run-mode-Indoor").assertIsSelected()
         compose.onNodeWithTag("open-playlist").assertIsEnabled()
         compose.onNodeWithTag("settings-gear").performClick()
+        compose.onNodeWithTag("settings-category-connected-services-header").performClick()
         compose.onNodeWithTag("playlist-link").assertTextContains("PLpersist", substring = true)
+        compose.onNodeWithTag("settings-category-run-tracking-header").performScrollTo().performClick()
         compose.onNodeWithTag("stride").assertTextContains("73")
     }
     @Test fun openingSettingsDuringRunNeverSendsPauseOrChangesRunSnapshot() {
@@ -72,9 +81,29 @@ class SettingsExperienceTest {
         var commands = 0
         compose.setContent { WayirunApp(viewOverride = TrackingView(snapshot, ready = true), onCommand = { _, _ -> commands++ }) {} }
         compose.onNodeWithTag("settings-gear").performClick()
+        compose.onNodeWithTag("settings-category-run-display-header").performClick()
         compose.onNodeWithText("Miles").performScrollTo().performClick()
         compose.onNodeWithTag("settings-gear").performClick()
         compose.onNodeWithTag("pause").assertExists()
         compose.runOnIdle { assertEquals(0, commands); assertEquals(RunUnits.KILOMETERS, snapshot.settings.units) }
     }
+
+    @Test fun categoriesStartCollapsedExpandIndependentlyAndDoNotWritePreferences() {
+        val prefs = ApplicationProvider.getApplicationContext<Context>().getSharedPreferences("local-settings", Context.MODE_PRIVATE)
+        compose.setContent { WayirunApp(viewOverride = TrackingView(ready = true)) {} }
+        compose.onNodeWithTag("settings-gear").performClick()
+        compose.waitForIdle()
+        val before = prefs.all.toMap()
+        compose.onNodeWithTag("auto-pause-enabled").assertDoesNotExist()
+        compose.onNodeWithTag("announcements-enabled").assertDoesNotExist()
+        compose.onNodeWithTag("settings-category-run-tracking-header")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed"))
+        compose.onNodeWithTag("settings-category-run-tracking-header").performClick()
+        compose.onNodeWithTag("auto-pause-enabled").assertExists()
+        compose.onNodeWithTag("settings-category-audio-milestones-header").performScrollTo().performClick()
+        compose.onNodeWithTag("announcements-enabled").assertExists()
+        compose.onNodeWithTag("auto-pause-enabled").assertExists()
+        compose.runOnIdle { assertEquals(before, prefs.all.toMap()) }
+    }
+
 }

@@ -4,11 +4,6 @@ package com.example.runningapp.ui
 
 import android.content.Context
 
-import android.content.Intent
-
-import android.provider.Settings
-import androidx.compose.foundation.clickable
-
 import androidx.core.content.edit
 
 import androidx.activity.compose.BackHandler
@@ -169,14 +164,21 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
                     }
 
                     val accountEnabled = !view.busy && view.snapshot?.state !in listOf(RunState.COUNTDOWN, RunState.RUNNING, RunState.PAUSED)
-                    AccountPanel(accountView, accountEnabled, onSignIn, onSignOut)
-                    SyncPanel(accountView, accountEnabled, onImport, onRetrySync)
-                    CoachingKeyPanel(accountView, accountEnabled)
-                    com.example.runningapp.health.HealthPanel(accountEnabled)
-
-                    Setup(view.busy, preferences, dark, { dark = it; preferences.edit { putBoolean("dark", it) } },
-
-                        onPermissions, onStart, true, onAppPermissions, settingsError)
+                    SettingsScreen(
+                        busy = view.busy,
+                        prefs = preferences,
+                        dark = dark,
+                        onDark = { dark = it; preferences.edit { putBoolean("dark", it) } },
+                        accountView = accountView,
+                        accountEnabled = accountEnabled,
+                        onSignIn = onSignIn,
+                        onSignOut = onSignOut,
+                        onImport = onImport,
+                        onRetrySync = onRetrySync,
+                        onPermissions = onPermissions,
+                        onAppPermissions = onAppPermissions,
+                        settingsError = settingsError,
+                    )
 
                 } else {
 
@@ -198,11 +200,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 
                             AccountPanel(accountView, !view.busy, onSignIn, onSignOut, showActions = false)
 
-                            Setup(view.busy, preferences, dark, {
-
-                            dark = it; preferences.edit { putBoolean("dark", it) }
-
-                        }, onPermissions, onStart, online = online)
+                            Setup(view.busy, preferences, dark, onStart, online = online)
 
                         }
 
@@ -248,9 +246,7 @@ private fun Setup(
 
     busy: Boolean, prefs: android.content.SharedPreferences, dark: Boolean,
 
-    onDark: (Boolean) -> Unit, onPermissions: () -> Unit, onStart: (RunSettings) -> Unit,
-
-    showSettings: Boolean = false, onAppPermissions: () -> Unit = {}, settingsError: String? = null, online: Boolean = false,
+    onStart: (RunSettings) -> Unit, online: Boolean = false,
 
 ) {
 
@@ -276,8 +272,6 @@ private fun Setup(
 
     val playlistContext = LocalContext.current
 
-    if (!showSettings) {
-
     RunSetupChoices(listOf("Outdoor" to "🌳", "Indoor" to "🏠"),
         if (mode == "OUTDOOR") "Outdoor" else "Indoor", "run-mode") {
 
@@ -299,95 +293,6 @@ private fun Setup(
 
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
 
-    }
-
-    if (showSettings) {
-
-    Text("Distance units", style = MaterialTheme.typography.titleMedium)
-
-    Choices(listOf("Miles", "Kilometers"), units) { units = it; prefs.edit { putString("units", units) } }
-
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Auto-pause", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-        Switch(autoPauseEnabled, { enabled ->
-            autoPauseEnabled = enabled; prefs.edit { putBoolean("auto-pause-enabled", enabled) }
-        }, Modifier.testTag("auto-pause-enabled"))
-    }
-
-    AnnouncementSettings(announcementsEnabled, announcementSelection, units == "Kilometers", { enabled ->
-        announcementsEnabled = enabled; prefs.edit { putBoolean("announcements-enabled", enabled) }
-    }, { selection ->
-        announcementSelection = selection; AnnouncementPreferences.write(prefs, selection)
-    })
-
-    Column {
-
-        Text("Countdown · ${countdown.roundToInt()} seconds", style = MaterialTheme.typography.titleMedium)
-
-        Slider(countdown, { countdown = it; prefs.edit { putInt("countdown", it.roundToInt()) } }, valueRange = 0f..10f, steps = 9,
-
-            modifier = Modifier.testTag("countdown-setting"))
-
-    }
-
-    PlaylistSetup(playlist, busy, { link ->
-
-        playlist = link; prefs.edit { putString("music-playlist", link) }
-
-    }, { link -> openPlaylist(playlistContext, link) })
-
-        val settingsContext = LocalContext.current
-
-        TextButton(onClick = onPermissions) { Text("Request missing permissions") }
-
-        TextButton(onClick = onAppPermissions) { Text("App permissions") }
-
-        settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-
-        TextButton(onClick = {
-
-            settingsContext.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-
-                .putExtra(Settings.EXTRA_APP_PACKAGE, settingsContext.packageName)
-
-                .putExtra(Settings.EXTRA_CHANNEL_ID, ensureTrackingChannel(settingsContext)))
-
-        }) { Text("Tracking notification settings") }
-
-        Choices(listOf("cm", "inches"), strideUnit) { next ->
-
-            val value = stride.toDoubleOrNull()
-
-            if (value != null && value.isFinite()) stride = String.format(Locale.US, "%.3f", if (next == strideUnit) value else if (next == "cm") value * 2.54 else value / 2.54)
-
-            strideUnit = next
-
-            prefs.edit { putString("stride-entry", stride); putString("stride-unit", strideUnit) }
-
-        }
-
-        OutlinedTextField(stride, { stride = it; prefs.edit { putString("stride-entry", stride) } }, modifier = Modifier.fillMaxWidth().testTag("stride"),
-
-            label = { Text("Distance per step ($strideUnit)") }, singleLine = true,
-
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-
-        Text("Enter your measured distance per step. Leave blank to use GPS or time only.", style = MaterialTheme.typography.bodyLarge)
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-
-            Switch(dark, onDark, modifier = Modifier.testTag("dark-setting")); Spacer(Modifier.width(12.dp)); Text("Dark mode")
-
-        }
-
-        val weatherLinks = androidx.compose.ui.platform.LocalUriHandler.current
-        Text("Weather data by Open-Meteo.com", style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.clickable { weatherLinks.openUri("https://open-meteo.com/") })
-        Text("CC BY 4.0 · Rounded hourly model estimate; emoji representation.", style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.clickable { weatherLinks.openUri("https://creativecommons.org/licenses/by/4.0/") })
-
-    }
-
     val strideValue = stride.toDoubleOrNull()
 
     val strideValid = stride.isBlank() || (strideValue != null && strideValue.isFinite() && strideValue > 0)
@@ -401,8 +306,6 @@ private fun Setup(
         (goal != "Time" || targetValue * 60_000 in 1.0..Long.MAX_VALUE.toDouble()))
 
     if (!strideValid) Text("Enter a positive stride length, or leave it blank.", color = MaterialTheme.colorScheme.error)
-
-    if (showSettings) return
 
     if (units.isEmpty() || !strideValid) Text("Open the gear to finish your run settings.")
 

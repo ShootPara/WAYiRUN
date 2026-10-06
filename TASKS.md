@@ -8,6 +8,8 @@ FILE: <repository-root>\TASKS.md (NEW)
 
 Current through September 22: the baseline includes tracking, audio, account sync/restore/deletion, desktop history/export, coaching/history, achievements, photos/public pages, and Health Connect. The user authorized `ISSUES_AND_QUIBBLES_IMPLEMENTATION_PLAN.md` version 0.2. Its milestone IDs are the current execution sequence; Sections 3-20 below retain historical milestone IDs and evidence. Historical map, linked-music, default-public-photo, and stop/next instructions are superseded where they conflict with current REQUIREMENTS.md and the accepted issue plan. The release variant remains a shell; device acceptance remains distinct from automated checks.
 
+October 6 current-status notice: later issue-plan Milestones 13 and 14 were completed after the earlier sequential notes below. The acceleration-based auto-pause candidate and its “Next: Milestone 13” direction are historical and superseded by the detector/GPS implementation in `REQUIREMENTS.md` 1.8 and commit `cadecf2`. V1 productionization is now governed by `WAYIRUN_V1_PRODUCTIONIZATION_PLAN.md`; historical milestone sections remain evidence only.
+
 ### 1.1 Current issue-plan milestones
 
 | Issue-plan milestone | Scope | Status |
