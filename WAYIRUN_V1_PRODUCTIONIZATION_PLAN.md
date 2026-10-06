@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 and 2 complete; Milestone 3 not started
+Status: Controlling execution plan; Milestones 1 through 3 complete; Milestone 4 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -92,7 +92,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 0 | Approve controlling plan | COMPLETE | This file created from live repository review |
 | 1 | Reconcile and checkpoint source | COMPLETE | Accepted checkpoint `1e00e8e` integrated into canonical `main`; repository normalized and verified |
 | 2 | Resolve production decisions and compliance prerequisites | COMPLETE | `V1_MILESTONE_2_DECISION_RECORD.md`; owner identity/domain/distribution choices and technical policies recorded |
-| 3 | Design exact environment/resource map | NOT STARTED | Reviewed development/production mapping and rollback boundaries |
+| 3 | Design exact environment/resource map | COMPLETE | `V1_ENVIRONMENT_RESOURCE_MAP.md`; exact boundaries approved and `slopcopy.com` ownership verified read-only |
 | 4 | Implement environment-safe Worker configuration | NOT STARTED | Tests prove dev/prod target isolation and origin correctness |
 | 5 | Promote the functional Android app into release | NOT STARTED | Release compiles with production-bound configuration and no debug shell |
 | 6 | Establish production signing | NOT STARTED | Recoverable key custody and verified signing fingerprint |
@@ -155,7 +155,7 @@ An approved decision record exists. No permanent resource is created with a gues
 
 `V1_MILESTONE_2_DECISION_RECORD.md` records the owner-approved package `com.unopenedparachute.wayirun`, production origin `https://wayirun.slopcopy.com`, Google Play canonical distribution with one signing/package identity, and public identity `UnopenedParachute` / `unopenedparachute@gmail.com`. It also fixes separate production OAuth and Cloudflare resources, privacy/account-deletion/Health Connect obligations, minimal redacted telemetry, data-class retention policy, compatible `COACHING_KEYRING` continuity, and an immutable-backup/rehearsal/reconciliation cutover policy that treats existing phone and development data as irreplaceable until production acceptance passes.
 
-No permanent identity, key, OAuth client, DNS route, Worker, D1 database, secret, deployment, migration, build, or device action occurred. Milestone 2 is complete; Milestone 3 has not started.
+No permanent identity, key, OAuth client, DNS route, Worker, D1 database, secret, deployment, migration, build, or device action occurred. Milestone 2 completed before Milestone 3 began.
 
 ## 1.9 Milestone 3 — design the exact environment and resource map
 
@@ -184,6 +184,12 @@ Define rollback boundaries:
 ### 1.9.2 Exit
 
 The resource map, cost/limit assumptions, maintenance boundary, and rollback rules are approved before implementation.
+
+### 1.9.3 Completion evidence — October 6, 2026
+
+`V1_ENVIRONMENT_RESOURCE_MAP.md` records the verified development inventory and exact production names, paths, Custom Domain configuration, fail-closed deployment guards, Android variant boundary, OAuth/D1 placeholders, data-migration classification, phone-local reconciliation gate, encrypted two-copy backup policy, retention periods, V1 Open-Meteo/Nominatim posture and pre-write/post-write rollback rules.
+
+Authenticated read-only Cloudflare verification confirmed `slopcopy.com` is an active, unpaused full zone in account `6bf560a8b86852196c9898023e3b8d6b`. No production resource, DNS record, Custom Domain, OAuth client, key, secret, deployment, migration, Android configuration, build or device action occurred. Milestone 3 is complete; Milestone 4 has not started.
 
 ## 1.10 Milestone 4 — implement environment-safe Worker configuration
 
