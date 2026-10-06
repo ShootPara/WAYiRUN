@@ -296,3 +296,7 @@ Milestone 3 is complete. Milestone 4 is not started.
 ## 1.13 Android coaching durability prerequisite
 
 Before the Milestone 4 write freeze, the development Android client gained an additive Room 9→10 `coaching_requests` queue. Selected cloud coaching is persisted with one stable operation ID before its POST, survives process/network interruption, resumes through the existing WorkManager recovery path, and is acknowledged only after a validated Worker receipt. Run deletion cascades the request; fallback playback does not clear it. Existing phone data is preserved by the explicit migration and remains subject to the later phone-local/cloud reconciliation gate. This prerequisite creates no production resource and does not begin Milestone 4.
+
+## 1.14 Milestone 4 implemented configuration boundary
+
+`worker/src/environment.ts` is the fail-closed runtime authority for the two approved environment/origin pairs and provider variables. `worker/src/write-policy.ts` classifies mutations before dispatch and provides the bounded `WRITE_MODE=frozen` maintenance response. `worker/wrangler.production.jsonc` fixes the approved account, Worker name, Custom Domain, D1 name/binding, rate-limit binding names and provider URLs; its production D1 UUID, namespace IDs and OAuth client IDs remain explicit unresolved placeholders. `deploy-prod.mjs` and its guard accept no caller target, while `verify-prod-config.mjs` proves placeholder rejection and performs an ignored synthetic production dry-run without remote contact. Milestone 4 is complete; Milestone 5 is not started.

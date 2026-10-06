@@ -21,7 +21,6 @@ const assets: Record<string, [string, string]> = {
 };
 export const browserAssetPaths = ["/", ...Object.keys(assets)];
 
-export const WEB_ORIGIN = "https://wayirun-dev.unopenedparachute.workers.dev";
 const sessionName = "__Host-wayirun";
 const nonceName = "__Host-wayirun-login";
 const opaque = /^[0-9a-f]{64}$/;
@@ -57,9 +56,10 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
     return new Response(request.method === "HEAD" ? null : body, { headers: { "Content-Type": `${type}; charset=utf-8` } });
   }
   // Fixed deployment origin, no wildcard CORS, no bearer or caller-selected owner at this boundary.
-  if (url.origin !== WEB_ORIGIN || request.headers.has("Authorization") ||
+  const origin=env.PUBLIC_ORIGIN!;
+  if (url.origin !== origin || request.headers.has("Authorization") ||
       request.headers.get("Sec-Fetch-Site") === "cross-site" ||
-      (request.headers.has("Origin") && request.headers.get("Origin") !== WEB_ORIGIN)) return reply({ error: "origin_not_allowed" }, 403);
+      (request.headers.has("Origin") && request.headers.get("Origin") !== origin)) return reply({ error: "origin_not_allowed" }, 403);
   const authPaths: Record<string, string> = { "/web-api/challenge": "/api/auth/challenge", "/web-api/google": "/api/auth/google",
     "/web-api/account": "/api/account", "/web-api/logout": "/api/auth/logout" };
   const auth = authPaths[path];
@@ -72,7 +72,7 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
   const publishing = publication && request.method === "PUT";
   const mutating = publishing || deleting || ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
   if (request.method !== (publishing ? "PUT" : deleting ? "DELETE" : mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
-  if (mutating && (request.headers.get("Origin") !== WEB_ORIGIN || request.headers.get("X-WAYIRUN-Request") !== "1")) return reply({ error: "csrf_rejected" }, 403);
+  if (mutating && (request.headers.get("Origin") !== origin || request.headers.get("X-WAYIRUN-Request") !== "1")) return reply({ error: "csrf_rejected" }, 403);
   if (deleting && request.body) {
     const reader = request.body.getReader();
     try {
@@ -99,7 +99,7 @@ async function route(request: Request, env: AuthEnv, nonce: string): Promise<Res
     if (!token) return reply({ error: "unauthorized" }, 401);
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const forwarded = new Request(`${WEB_ORIGIN}${auth ?? path.replace("/web-api/", "/api/")}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) });
+  const forwarded = new Request(`${origin}${auth ?? path.replace("/web-api/", "/api/")}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) });
   const response = auth ? await handleAuth(forwarded, env) : publication ? await handlePublication(forwarded,env) : photo ? await handlePhotos(forwarded,env) : coaching ? await handleCoachingHistory(forwarded, env) : await handleRuns(forwarded, env);
   if (path === "/web-api/account" && response.ok) {
     const token = cookie(request, sessionName)!;

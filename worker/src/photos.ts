@@ -62,7 +62,7 @@ export async function handlePhotos(request:Request,env:AuthEnv):Promise<Response
   if(!await exists())return reply({error:"not_found"},404);
   if(expected && (!row || row.revision!==expected.revision || row.options!==expected.options || row.weather_json!==expected.weather || !equalBytes(new Uint8Array(row.jpeg),expected.jpeg)))return reply({error:"revision_conflict"},409);
   if(match[2])return row?image(row):reply({error:"not_found"},404);
-  return reply({photo:row?{revision:row.revision,options:JSON.parse(row.options),bytes:new Uint8Array(row.jpeg).length,sha256:await digest(row),updatedAt:row.updated_at,publicUrl:publicationUrl(await readPublication(env,owner,id)),...(row.weather_json?{weather:JSON.parse(row.weather_json)}:{})}:null});
+  return reply({photo:row?{revision:row.revision,options:JSON.parse(row.options),bytes:new Uint8Array(row.jpeg).length,sha256:await digest(row),updatedAt:row.updated_at,publicUrl:publicationUrl(await readPublication(env,owner,id),env.PUBLIC_ORIGIN),...(row.weather_json?{weather:JSON.parse(row.weather_json)}:{})}:null});
  }catch{return reply({error:"photo_unavailable"},503);}
 }
 function equalBytes(a:Uint8Array,b:Uint8Array){return a.length===b.length&&a.every((v,i)=>v===b[i]);}

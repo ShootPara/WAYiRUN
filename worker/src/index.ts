@@ -7,12 +7,16 @@ import { handleAuth, type AuthEnv } from "./auth.js";
 import { handleAccountKey } from "./account-key.js";
 import { handleCoaching } from "./coaching-jobs.js";
 import { handleCoachingHistory } from "./coaching-history.js";
+import { resolveEnvironment } from "./environment.js";
+import { enforceWritePolicy } from "./write-policy.js";
 
 export interface Env extends AuthEnv {
   DB: D1Database;
   APP_ENV: string;
   GOOGLE_WEB_CLIENT_ID?: string;
   COACHING_KEYRING?: string;
+  PUBLIC_ORIGIN: string; GOOGLE_ANDROID_CLIENT_ID: string; LOCATION_LOOKUP_URL: string;
+  WEATHER_FORECAST_URL: string; WEATHER_ARCHIVE_URL: string; WRITE_MODE: string;
 }
 
 function json(body: unknown, status = 200, head = false, extra: Record<string, string> = {}): Response {
@@ -29,9 +33,12 @@ function json(body: unknown, status = 200, head = false, extra: Record<string, s
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    let runtime;
+    try { runtime=resolveEnvironment(env as unknown as Record<string,unknown>); }
+    catch { return json({error:"environment_not_configured"},503,request.method==="HEAD"); }
     const path = new URL(request.url).pathname;
     const head = request.method === "HEAD";
-    if (env.APP_ENV !== "development") return json({ error: "environment_not_configured" }, 503, head);
+    const frozen=enforceWritePolicy(request,runtime.writeMode);if(frozen)return frozen;
 
     if(path.startsWith("/api/photos/")) return handlePhotos(request,env);
     if(path.startsWith("/api/weather/")) return handleWeather(request,env);

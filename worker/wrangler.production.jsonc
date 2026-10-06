@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wayirun-prod",
+  "account_id": "6bf560a8b86852196c9898023e3b8d6b",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-17",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "wayirun.slopcopy.com", "custom_domain": true }],
+  "rules": [{ "type": "Text", "globs": ["**/*.html", "**/*.browserjs", "**/*.css"], "fallthrough": true }],
+  "observability": { "enabled": false },
+  "vars": {
+    "APP_ENV": "production",
+    "PUBLIC_ORIGIN": "https://wayirun.slopcopy.com",
+    "WRITE_MODE": "normal",
+    "LOCATION_LOOKUP_URL": "https://nominatim.openstreetmap.org/reverse",
+    "WEATHER_FORECAST_URL": "https://api.open-meteo.com/v1/forecast",
+    "WEATHER_ARCHIVE_URL": "https://archive-api.open-meteo.com/v1/archive",
+    "GOOGLE_WEB_CLIENT_ID": "__PRODUCTION_GOOGLE_WEB_CLIENT_ID__",
+    "GOOGLE_ANDROID_CLIENT_ID": "__PRODUCTION_GOOGLE_ANDROID_CLIENT_ID__"
+  },
+  "ratelimits": [
+    { "name": "RUN_RATE_LIMIT", "namespace_id": "__PRODUCTION_RUN_RATE_LIMIT_ID__", "simple": { "limit": 300, "period": 60 } },
+    { "name": "RUN_TOTAL_LIMIT", "namespace_id": "__PRODUCTION_RUN_TOTAL_LIMIT_ID__", "simple": { "limit": 3000, "period": 60 } },
+    { "name": "AUTH_RATE_LIMIT", "namespace_id": "__PRODUCTION_AUTH_RATE_LIMIT_ID__", "simple": { "limit": 30, "period": 60 } },
+    { "name": "AUTH_TOTAL_LIMIT", "namespace_id": "__PRODUCTION_AUTH_TOTAL_LIMIT_ID__", "simple": { "limit": 300, "period": 60 } }
+  ],
+  "d1_databases": [{ "binding": "DB", "database_name": "wayirun-prod-db", "database_id": "__PRODUCTION_D1_UUID__", "migrations_dir": "migrations" }]
+}

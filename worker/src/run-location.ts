@@ -1,4 +1,5 @@
 import type { AuthEnv } from "./auth.js";
+import {environmentOrigins} from "./environment.js";
 
 type LocationRow = { city: string | null; region: string | null; source: string | null; retry_after: number };
 const attribution = { label: "Location data: OpenStreetMap contributors", url: "https://www.openstreetmap.org/copyright" };
@@ -36,7 +37,7 @@ export async function resolveRunLocation(env: AuthEnv, owner: string, runId: str
     const abort = new AbortController(), timeout = setTimeout(() => abort.abort(), 3000);
     try {
       const response = await fetcher(url.toString(), { signal: abort.signal, redirect: "error",
-        headers: { Accept: "application/json", "User-Agent": "WAYiRUN/1.0 (+https://wayirun-dev.unopenedparachute.workers.dev)" } });
+        headers: { Accept: "application/json", "User-Agent": `WAYiRUN/1.0 (+${env.PUBLIC_ORIGIN??environmentOrigins.development})` } });
       if (response.ok && response.body) {
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = []; let size = 0;

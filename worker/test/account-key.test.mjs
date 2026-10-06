@@ -12,7 +12,7 @@ async function runtime(t,options={}) {
  let checks=0,provider=async()=>Response.json({data:[]});
  const mf=new Miniflare(convertV4MiniflareOptions({name:"keys-test",modules:workerModules(),
    scriptPath:fileURLToPath(new URL("../build/deploy/index.js",import.meta.url)),compatibilityDate:"2026-02-17",
-   bindings:{APP_ENV:"development",GOOGLE_WEB_CLIENT_ID:"test.apps.googleusercontent.com",...(options.noSecret?{}:{COACHING_KEYRING:options.secret??keyring})},
+   bindings:{APP_ENV:"development",PUBLIC_ORIGIN:"https://wayirun-dev.unopenedparachute.workers.dev",WRITE_MODE:"normal",GOOGLE_WEB_CLIENT_ID:"test.apps.googleusercontent.com",GOOGLE_ANDROID_CLIENT_ID:"test-android.apps.googleusercontent.com",LOCATION_LOOKUP_URL:"https://nominatim.openstreetmap.org/reverse",WEATHER_FORECAST_URL:"https://api.open-meteo.com/v1/forecast",WEATHER_ARCHIVE_URL:"https://archive-api.open-meteo.com/v1/archive",...(options.noSecret?{}:{COACHING_KEYRING:options.secret??keyring})},
    ratelimits:{AUTH_RATE_LIMIT:{namespace_id:"1",simple:{limit:1000,period:60}},AUTH_TOTAL_LIMIT:{namespace_id:"2",simple:{limit:2000,period:60}}},
    d1Databases:["DB"],outboundService:async request=>{
      checks++;assert.equal(request.url,"https://api.openai.com/v1/models");assert.equal(request.method,"GET");

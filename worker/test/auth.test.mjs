@@ -15,7 +15,7 @@ async function runtime(t, configured = true, rateLimit = 1000) {
     name: "auth-test", modules: workerModules(),
     scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
     compatibilityDate: "2026-02-17",
-    bindings: { APP_ENV: "development", ...(configured ? { GOOGLE_WEB_CLIENT_ID: audience, GOOGLE_ANDROID_CLIENT_ID: "test-android.apps.googleusercontent.com" } : {}) },
+    bindings: { APP_ENV: "development",PUBLIC_ORIGIN:"https://wayirun-dev.unopenedparachute.workers.dev",WRITE_MODE:"normal",LOCATION_LOOKUP_URL:"https://nominatim.openstreetmap.org/reverse",WEATHER_FORECAST_URL:"https://api.open-meteo.com/v1/forecast",WEATHER_ARCHIVE_URL:"https://archive-api.open-meteo.com/v1/archive", ...(configured ? { GOOGLE_WEB_CLIENT_ID: audience, GOOGLE_ANDROID_CLIENT_ID: "test-android.apps.googleusercontent.com" } : {}) },
     ratelimits: {
       AUTH_RATE_LIMIT: { namespace_id: "1", simple: { limit: rateLimit, period: 60 } },
       AUTH_TOTAL_LIMIT: { namespace_id: "2", simple: { limit: 2000, period: 60 } },

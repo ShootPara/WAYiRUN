@@ -188,6 +188,7 @@ test("native Workers fetch accepts the request and never follows provider redire
   {type:"ESModule",path:"weather-runtime/entry.js",contents:`import {fetchWeather} from './run-weather.js';
    export default {async fetch(){return Response.json(await fetchWeather(${JSON.stringify(query)},fetch,${now}));}};`},
   {type:"ESModule",path:"weather-runtime/run-weather.js",contents:readFileSync(new URL("../build/run-weather.js",import.meta.url),"utf8")},
+  {type:"ESModule",path:"weather-runtime/environment.js",contents:readFileSync(new URL("../build/environment.js",import.meta.url),"utf8")},
   // This helper-level harness does not invoke the handler's auth/archive dependencies.
   {type:"ESModule",path:"weather-runtime/auth.js",contents:"const unused=()=>{throw Error('not used')}; export {unused as accessGuard,unused as sessionAccount,unused as reply};"},
   {type:"ESModule",path:"weather-runtime/coaching-context.js",contents:"export const readVerifiedRun=()=>{throw Error('not used')}; export class CoachingDataError extends Error {}"},

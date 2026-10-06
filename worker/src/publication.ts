@@ -1,7 +1,7 @@
 import {accessGuard,sessionAccount,reply,smallJson,type AuthEnv} from "./auth.js";
+import {environmentOrigins} from "./environment.js";
 
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
-const origin = "https://wayirun-dev.unopenedparachute.workers.dev";
 export type Publication = {owner_id:string;run_id:string;public_token:string;short_token:string|null;shared:number;photo_visible:number;revision:number};
 const token = (bytes:number) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)),v=>v.toString(16).padStart(2,"0")).join("");
 const available = `EXISTS(SELECT 1 FROM run_uploads r WHERE r.owner_id=public_runs.owner_id AND r.run_id=public_runs.run_id AND r.completed_at IS NOT NULL)
@@ -10,11 +10,11 @@ const available = `EXISTS(SELECT 1 FROM run_uploads r WHERE r.owner_id=public_ru
 export async function readPublication(env:AuthEnv,owner:string,id:string) {
  return env.DB.prepare(`SELECT * FROM public_runs WHERE owner_id=? AND run_id=? AND ${available}`).bind(owner,id).first<Publication>();
 }
-export function publicationUrl(row:Publication|null) {
+export function publicationUrl(row:Publication|null,origin:string=environmentOrigins.development) {
  return row?.shared ? `${origin}/${row.short_token ? "r/"+row.short_token : "p/"+row.public_token}` : null;
 }
-function view(row:Publication) {
- return {shared:!!row.shared,photoVisible:!!row.photo_visible,revision:row.revision,publicUrl:publicationUrl(row)};
+function view(row:Publication,origin:string) {
+ return {shared:!!row.shared,photoVisible:!!row.photo_visible,revision:row.revision,publicUrl:publicationUrl(row,origin)};
 }
 async function ensure(env:AuthEnv,owner:string,id:string) {
  for(let attempt=0;attempt<5;attempt++) {
@@ -86,13 +86,13 @@ export async function handlePublication(request:Request,env:AuthEnv):Promise<Res
     const applied=await receipt();
     const latest=await readPublication(env,owner,id);
     if(!latest)return reply({error:"not_found"},404);
-    if(!applied || applied.request_json!==body)return reply({error:"revision_conflict",publication:view(latest)},409);
+    if(!applied || applied.request_json!==body)return reply({error:"revision_conflict",publication:view(latest,env.PUBLIC_ORIGIN??environmentOrigins.development)},409);
    }
   }
   const latest=await readPublication(env,owner,id);
   if(!latest)return reply({error:"not_found"},404);
   if(!await sessionAccount(request,env))return reply({error:"unauthorized"},401);
-  return reply({publication:view(latest)});
+  return reply({publication:view(latest,env.PUBLIC_ORIGIN??environmentOrigins.development)});
  }catch{return reply({error:"publication_unavailable"},503);}
 }
 

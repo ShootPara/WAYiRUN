@@ -1,0 +1,11 @@
+import{mkdirSync,readFileSync,writeFileSync}from"node:fs";import{spawnSync}from"node:child_process";import{fileURLToPath}from"node:url";import{assertProductionTarget}from"./deploy-prod-guard.mjs";
+const root=fileURLToPath(new URL("../",import.meta.url)),real=JSON.parse(readFileSync(new URL("../wrangler.production.jsonc",import.meta.url),"utf8"));
+let rejected=false;try{assertProductionTarget(real);}catch{rejected=true;}if(!rejected)throw Error("Checked-in production placeholders were unexpectedly accepted.");
+const fixture=structuredClone(real);fixture.d1_databases[0].database_id="11111111-2222-4333-8444-555555555555";
+fixture.main="../src/index.ts";
+fixture.vars.GOOGLE_WEB_CLIENT_ID="100000000001-prodweb.apps.googleusercontent.com";fixture.vars.GOOGLE_ANDROID_CLIENT_ID="100000000001-prodandroid.apps.googleusercontent.com";
+fixture.ratelimits.forEach((rate,index)=>rate.namespace_id=String(900000001+index));assertProductionTarget(fixture);
+mkdirSync(new URL("../build/",import.meta.url),{recursive:true});const path=fileURLToPath(new URL("../build/wrangler.production.synthetic.jsonc",import.meta.url));writeFileSync(path,JSON.stringify(fixture,null,2));
+const wrangler=fileURLToPath(new URL("../node_modules/wrangler/bin/wrangler.js",import.meta.url));
+const result=spawnSync(process.execPath,[wrangler,"deploy","--dry-run","--outdir","build/deploy-prod-verify","--config",path],{cwd:root,stdio:"inherit",env:{...process.env,CI:"true"}});
+if(result.error)throw result.error;if(result.status!==0)process.exit(result.status??1);console.log("Production placeholder rejection, synthetic guard, and local dry-run passed.");

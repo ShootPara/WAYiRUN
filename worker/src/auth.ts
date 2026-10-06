@@ -5,6 +5,7 @@ export interface AuthEnv {
   AUTH_RATE_LIMIT?: RateLimit; AUTH_TOTAL_LIMIT?: RateLimit;
   RUN_RATE_LIMIT?: RateLimit; RUN_TOTAL_LIMIT?: RateLimit;
   LOCATION_LOOKUP_URL?: string;
+  PUBLIC_ORIGIN?: string; WEATHER_FORECAST_URL?: string; WEATHER_ARCHIVE_URL?: string; WRITE_MODE?: string;
 }
 export const SESSION_SECONDS = 90 * 24 * 60 * 60;
 const CHALLENGE_SECONDS = 300;

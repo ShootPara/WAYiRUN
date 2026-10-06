@@ -15,7 +15,7 @@ async function runtime(t, environment = "development") {
   const mf = new Miniflare(convertV4MiniflareOptions({
     name: "test-worker",
     modules: workerModules(), scriptPath: fileURLToPath(new URL("../build/deploy/index.js", import.meta.url)),
-    compatibilityDate: "2026-02-17", bindings: { APP_ENV: environment }, d1Databases: ["DB"],
+    compatibilityDate: "2026-02-17", bindings: { APP_ENV: environment, PUBLIC_ORIGIN:"https://wayirun-dev.unopenedparachute.workers.dev",WRITE_MODE:"normal",GOOGLE_WEB_CLIENT_ID:"test-web.apps.googleusercontent.com",GOOGLE_ANDROID_CLIENT_ID:"test-android.apps.googleusercontent.com",LOCATION_LOOKUP_URL:"https://nominatim.openstreetmap.org/reverse",WEATHER_FORECAST_URL:"https://api.open-meteo.com/v1/forecast",WEATHER_ARCHIVE_URL:"https://archive-api.open-meteo.com/v1/archive" }, d1Databases: ["DB"],
   }));
   t.after(() => mf.dispose());
   return mf;
@@ -56,7 +56,7 @@ test("private API stays closed for all methods, even with purported credentials"
     });
     assert.equal(response.status, 503);
     assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
-    if (method !== "HEAD") assert.deepEqual(await response.json(), { error: "authentication_not_configured" });
+    if (method !== "HEAD") assert.deepEqual(await response.json(), { error: "authentication_unavailable" });
   }
 });
 

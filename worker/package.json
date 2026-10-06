@@ -13,7 +13,10 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "build:deploy": "wrangler deploy --dry-run --outdir build/deploy",
     "deploy:dev": "npm test && node scripts/deploy-dev.mjs && npm run smoke:dev",
-    "smoke:dev": "node scripts/smoke-dev.mjs"
+    "smoke:dev": "node scripts/smoke-dev.mjs",
+    "deploy:prod": "node scripts/deploy-prod.mjs",
+    "smoke:prod": "node scripts/smoke-prod.mjs",
+    "verify:prod-config": "node scripts/verify-prod-config.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260914.1",

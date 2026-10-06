@@ -1,5 +1,6 @@
 import { accessGuard, sessionAccount, reply, type AuthEnv } from "./auth.js";
 import { readVerifiedRun, CoachingDataError } from "./coaching-context.js";
+import {providerDefaults} from "./environment.js";
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const PROVIDER_DEADLINE_MS = 8000, FAILURE_COOLDOWN_MS = 30000;
@@ -32,9 +33,9 @@ export function weatherQuery(archive: Record<string, unknown>, now: number): Wea
     observedUtcMs: Math.floor(started / HOUR) * HOUR, endpoint: now - started < 7 * DAY ? "forecast" : "archive" };
 }
 
-export function weatherUrl(query: WeatherQuery): string {
+export function weatherUrl(query: WeatherQuery, forecast:string=providerDefaults.forecast, archive:string=providerDefaults.archive): string {
   const date = new Date(query.observedUtcMs).toISOString().slice(0, 10);
-  const url = new URL(query.endpoint === "forecast" ? "https://api.open-meteo.com/v1/forecast" : "https://archive-api.open-meteo.com/v1/archive");
+  const url = new URL(query.endpoint === "forecast" ? forecast : archive);
   url.search = new URLSearchParams({ latitude: String(query.latitude), longitude: String(query.longitude),
     start_date: date, end_date: date, hourly: "temperature_2m,weather_code", temperature_unit: "celsius",
     timezone: "GMT", timeformat: "unixtime" }).toString();
@@ -70,7 +71,7 @@ export function parseWeather(value: unknown, query: WeatherQuery, now: number): 
 }
 
 /** Bounded categories only: never return provider bodies, URLs or exception messages. */
-export async function fetchWeather(query: WeatherQuery, fetcher: typeof fetch, now: number): Promise<WeatherFetchResult> {
+export async function fetchWeather(query: WeatherQuery, fetcher: typeof fetch, now: number, forecast?:string, archive?:string): Promise<WeatherFetchResult> {
   const failed = (reason: WeatherFailure, retryAfter = now + FAILURE_COOLDOWN_MS): WeatherFetchResult =>
     ({ weather: null, reason, retryAfter });
   const abort = new AbortController();
@@ -84,7 +85,7 @@ export async function fetchWeather(query: WeatherQuery, fetcher: typeof fetch, n
     }, PROVIDER_DEADLINE_MS);
   });
   const lookup = async (): Promise<WeatherFetchResult> => { try {
-    const response = await fetcher(weatherUrl(query), { signal: abort.signal, redirect: "manual", headers: { Accept: "application/json" } });
+    const response = await fetcher(weatherUrl(query,forecast,archive), { signal: abort.signal, redirect: "manual", headers: { Accept: "application/json" } });
     if (abort.signal.aborted) { await response.body?.cancel(); return failed("provider_timeout"); }
     if (!response.ok || !response.body) {
       await response.body?.cancel();
@@ -172,7 +173,7 @@ export async function handleWeather(request: Request, env: AuthEnv, fetcher: typ
     }
     if ((await sessionAccount(request, env))?.account.id !== owner) return reply({ error: "unauthorized" }, 401);
     if (!await exists()) return reply({ error: "not_found" }, 404);
-    const result = await fetchWeather(query, fetcher, now), weather = result.weather;
+    const result = await fetchWeather(query, fetcher, now,env.WEATHER_FORECAST_URL,env.WEATHER_ARCHIVE_URL), weather = result.weather;
     if (result.reason === "provider_throttled" && result.retryAfter !== null) {
       await env.DB.prepare("UPDATE weather_lookup_gate SET next_at=MAX(next_at,?) WHERE id=1").bind(result.retryAfter).run();
     }

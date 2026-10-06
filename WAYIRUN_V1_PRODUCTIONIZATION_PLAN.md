@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 3 complete; Milestone 4 not started
+Status: Controlling execution plan; Milestones 1 through 4 complete; Milestone 5 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -93,7 +93,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 1 | Reconcile and checkpoint source | COMPLETE | Accepted checkpoint `1e00e8e` integrated into canonical `main`; repository normalized and verified |
 | 2 | Resolve production decisions and compliance prerequisites | COMPLETE | `V1_MILESTONE_2_DECISION_RECORD.md`; owner identity/domain/distribution choices and technical policies recorded |
 | 3 | Design exact environment/resource map | COMPLETE | `V1_ENVIRONMENT_RESOURCE_MAP.md`; exact boundaries approved and `slopcopy.com` ownership verified read-only |
-| 4 | Implement environment-safe Worker configuration | NOT STARTED | Tests prove dev/prod target isolation and origin correctness |
+| 4 | Implement environment-safe Worker configuration | COMPLETE | Fail-closed runtime/freeze configuration, isolated guarded production config, and 165 passing Worker tests |
 | 5 | Promote the functional Android app into release | NOT STARTED | Release compiles with production-bound configuration and no debug shell |
 | 6 | Establish production signing | NOT STARTED | Recoverable key custody and verified signing fingerprint |
 | 7 | Configure production Google OAuth | NOT STARTED | Verified production clients and real sign-in preconditions |
@@ -213,6 +213,14 @@ Verification passed for debug compilation/assembly, lint and all 125 JVM tests. 
 ### 1.10.2 Verification
 
 Run Worker TypeScript compilation, full local tests, deployment dry-runs for both exact configs, and guard tests proving that dev cannot deploy to prod and prod cannot deploy to dev. Do not deploy remotely in this milestone.
+
+### 1.10.3 Completion evidence — October 6, 2026
+
+The Worker now resolves only immutable `development` and `production` runtime pairings, centralizes canonical origins and provider endpoints, and rejects missing, placeholder, mismatched or cross-environment values. A centralized pre-handler write policy blocks native and browser mutations—including mutating GET routes—when `WRITE_MODE=frozen`, while health, readiness and proven read-only routes remain available. Frozen responses are stable 503 JSON with `Retry-After: 60` and `Cache-Control: no-store`; Miniflare verification proves blocked requests leave seeded D1 state unchanged.
+
+`wrangler.production.jsonc` records the approved Worker, Custom Domain, D1 name/binding, provider URLs and four rate-limit bindings while deliberately retaining unresolved production D1, namespace and OAuth placeholders. Separate production deploy and smoke entry points are hard-bound to that config/origin. The production guard rejects placeholders, development overlap, alternate accounts/workers/routes/bindings and caller overrides; the development guard retains its exact existing resource identity and now rejects production values explicitly.
+
+TypeScript compilation, development and synthetic-production Wrangler dry-runs, the production-config verifier, all 165 Worker/browser tests, and the nine focused environment/deployment-guard/write-freeze tests passed with zero failures or skips. No production resource, remote D1 operation, DNS action, Custom Domain creation, deployment, Android change, data migration, commit or push occurred. Milestone 4 is complete; Milestone 5 is not started.
 
 ## 1.11 Milestone 5 — promote the functional Android app into release
 
