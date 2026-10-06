@@ -74,6 +74,16 @@ class RunDatabaseTest {
         assertTrue(repo.discard("award","test-owner"))
         assertEquals("[]",db.runs().achievementCache("alice")!!.awards)
     }
+    @Test fun coachingIntentKeepsOneStableOperationAndCascadesWithRun() = runBlocking {
+        val r=run("coach");r.finish()
+        repo.save(r.checkpoint(),"test-owner","UTC",0,false,cloudOwnerId="alice")
+        val first=db.runs().queueCoaching("coach","alice")
+        val second=db.runs().queueCoaching("coach","alice")
+        assertEquals(first.operationId,second.operationId)
+        assertEquals("PENDING",second.status)
+        assertTrue(repo.discard("coach","test-owner"))
+        assertNull(db.runs().coachingRequest("coach"))
+    }
     private lateinit var db: RunDatabase
     private lateinit var repo: RunRepository
     private var time = 0L

@@ -7,6 +7,42 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class SyncMigrationTest {
+    @Test fun coachingMigrationPreservesEveryVersionNineRecordAndPreferences() {
+        val name="coaching-migration-test"
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("coaching-attempt",0).edit().putString("run","run").putBoolean("selected",true).putString("state","requested").commit()
+        helper.createDatabase(name,9).apply {
+            execSQL("INSERT INTO runs VALUES ('run','local','FINISHED',NULL,'checkpoint','UTC',0,1000,0,'alice')")
+            execSQL("INSERT INTO route_points VALUES (1,'run',7,100,45.1,-75.2,3.5)")
+            execSQL("INSERT INTO measurements VALUES (1,'run',7,100,'GPS',2.5,12.5,90,'reading')")
+            execSQL("INSERT INTO splits VALUES ('run',1,1000,300000,0)")
+            execSQL("INSERT INTO active_intervals VALUES ('run',1,'interval')")
+            execSQL("INSERT INTO source_segments VALUES ('run',7,'segment')")
+            execSQL("INSERT INTO run_sync VALUES ('run','alice','upload','UPLOAD','SYNCED',1,0,NULL)")
+            execSQL("INSERT INTO sync_pull VALUES ('alice','RUNS','cursor','PENDING',2,50,'offline')")
+            execSQL("INSERT INTO achievement_cache VALUES ('alice','awards')")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',0,1,NULL,'weather',NULL,0)")
+            execSQL("INSERT INTO health_exports VALUES ('run','DONE',NULL)")
+            execSQL("INSERT INTO run_publications VALUES ('run','alice',1,1,0,3,'https://public',NULL,NULL,'intent','request',NULL)")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,10,true,RunDatabase.MIGRATION_9_10).apply {
+            for(table in listOf("runs","route_points","measurements","splits","active_intervals","source_segments","run_sync","sync_pull","achievement_cache","run_photos","health_exports","run_publications"))
+                query("SELECT COUNT(*) FROM $table").use { it.moveToFirst();assertEquals(table,1,it.getInt(0)) }
+            query("SELECT ownerId,checkpoint,updatedUtcMs FROM runs").use { it.moveToFirst();assertEquals("local",it.getString(0));assertEquals("checkpoint",it.getString(1));assertEquals(1000,it.getInt(2)) }
+            query("SELECT latitude,longitude,accuracyMeters FROM route_points").use { it.moveToFirst();assertEquals(45.1,it.getDouble(0),0.0);assertEquals(-75.2,it.getDouble(1),0.0);assertEquals(3.5,it.getDouble(2),0.0) }
+            query("SELECT reading FROM measurements").use { it.moveToFirst();assertEquals("reading",it.getString(0)) }
+            query("SELECT revision,weather,synced FROM run_photos").use { it.moveToFirst();assertEquals("revision",it.getString(0));assertEquals("weather",it.getString(1));assertEquals(1,it.getInt(2)) }
+            query("SELECT intentId,revision,shared FROM run_publications").use { it.moveToFirst();assertEquals("intent",it.getString(0));assertEquals(3,it.getInt(1));assertEquals(1,it.getInt(2)) }
+            query("SELECT operationId,status FROM run_sync").use { it.moveToFirst();assertEquals("upload",it.getString(0));assertEquals("SYNCED",it.getString(1)) }
+            query("SELECT COUNT(*) FROM coaching_requests").use { it.moveToFirst();assertEquals(0,it.getInt(0)) }
+            close()
+        }
+        context.getSharedPreferences("coaching-attempt",0).also {
+            assertEquals("run",it.getString("run",null));assertTrue(it.getBoolean("selected",false));assertEquals("requested",it.getString("state",null))
+            it.edit().clear().commit()
+        }
+    }
     @Test fun photoRetryMigrationPreservesBytesRevisionWeatherAndPendingState() {
         val name="photo-retry-migration-test"
         helper.createDatabase(name,8).apply {

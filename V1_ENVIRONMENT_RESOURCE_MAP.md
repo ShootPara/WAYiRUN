@@ -292,3 +292,7 @@ These placeholders do not block this design milestone. Their named milestones mu
 - [x] No resource, DNS, identity, secret, deployment, migration, Android configuration or signing material created or changed.
 
 Milestone 3 is complete. Milestone 4 is not started.
+
+## 1.13 Android coaching durability prerequisite
+
+Before the Milestone 4 write freeze, the development Android client gained an additive Room 9→10 `coaching_requests` queue. Selected cloud coaching is persisted with one stable operation ID before its POST, survives process/network interruption, resumes through the existing WorkManager recovery path, and is acknowledged only after a validated Worker receipt. Run deletion cascades the request; fallback playback does not clear it. Existing phone data is preserved by the explicit migration and remains subject to the later phone-local/cloud reconciliation gate. This prerequisite creates no production resource and does not begin Milestone 4.

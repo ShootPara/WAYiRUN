@@ -277,7 +277,9 @@ class TrackingService : Service() {
                         dao.rebuildAchievements(cloudOwner,owner).filter { it.runId==s.runId }
                     }.getOrDefault(emptyList())
                     // Coaching setup failure must never turn a committed finish into a storage error.
-                    runCatching { coaching.start(s.runId, cloudOwner, message.action == FINISH) }
+                    val selected = message.action == FINISH
+                    if (selected && cloudOwner != null) runCatching { RunDatabase.get(this).runs().queueCoaching(s.runId, requireNotNull(cloudOwner)) }
+                    runCatching { coaching.start(s.runId, cloudOwner, selected) }
                 }
             }
         }

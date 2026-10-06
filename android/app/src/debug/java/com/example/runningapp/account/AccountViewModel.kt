@@ -54,7 +54,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                 val previous = mutable.value.session
                 withContext(Dispatchers.IO) { store.write(fresh) }
                 mutable.value = AccountView(session = issued)
-                runCatching { RunDatabase.get(getApplication()).runs().let { it.retry(fresh.ownerId); it.retryPull(fresh.ownerId) } }
+                runCatching { RunDatabase.get(getApplication()).runs().let { it.retry(fresh.ownerId); it.retryPull(fresh.ownerId); it.retryCoaching(fresh.ownerId) } }
                 SyncScheduler.enqueue(getApplication())
                 TrackingService.send(getApplication(), TrackingService.OPEN)
                 // Replace only the account session; local runs retain their existing owner and contents.
@@ -117,7 +117,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     fun retrySync() {
         val owner = mutable.value.session?.ownerId ?: return
         viewModelScope.launch {
-            try { RunDatabase.get(getApplication()).runs().let { it.retry(owner); it.retryPull(owner) }; SyncScheduler.enqueue(getApplication()) }
+            try { RunDatabase.get(getApplication()).runs().let { it.retry(owner); it.retryPull(owner); it.retryCoaching(owner) }; SyncScheduler.enqueue(getApplication()) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { mutable.value = mutable.value.copy(message = "Couldn't schedule synchronization. Your runs are safe on this phone.") }
         }

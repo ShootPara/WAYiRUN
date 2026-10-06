@@ -191,6 +191,12 @@ The resource map, cost/limit assumptions, maintenance boundary, and rollback rul
 
 Authenticated read-only Cloudflare verification confirmed `slopcopy.com` is an active, unpaused full zone in account `6bf560a8b86852196c9898023e3b8d6b`. No production resource, DNS record, Custom Domain, OAuth client, key, secret, deployment, migration, Android configuration, build or device action occurred. Milestone 3 is complete; Milestone 4 has not started.
 
+### 1.9.1 Pre-Milestone 4 coaching durability prerequisite — COMPLETE
+
+The Android client now records selected cloud coaching as a durable, owner-scoped Room request before any coaching POST. Room migration 9→10 is additive: it creates `coaching_requests` with a run foreign key and cascade deletion while preserving all existing run, sync, photo and related data. Each request owns one stable operation ID; transport failures and 408/429/5xx responses retain it for bounded backoff and WorkManager recovery, 401 waits for renewed authentication, and only a validated server receipt marks it acknowledged. A local fallback neither acknowledges nor deletes the server request. Explicit sync retry and sign-in resume blocked/auth requests. The existing Worker `(owner_id, run_id)` and `(owner_id, operation_id)` constraints remain the server-side idempotency authority, so no Worker change was required.
+
+Verification passed for debug compilation/assembly, lint and all 125 JVM tests. Thirteen bounded instrumentation tests passed on the explicitly selected `Pixel_7` emulator with zero failures or skips; they cover complete version-9 fixture preservation, schema validation, cascade cleanup, account isolation, repository recreation, fallback independence, acknowledgement convergence, stable operation reuse and 503/429/timeout/offline recovery. No physical phone, personal run data, production resource, Worker, remote database, paid OpenAI request, deployment, commit or push was used. This prerequisite does not start or complete Milestone 4.
+
 ## 1.10 Milestone 4 — implement environment-safe Worker configuration
 
 ### 1.10.1 Work

@@ -71,6 +71,15 @@ data class SyncOperation(
     val nextAttemptMs: Long = 0, val error: String? = null,
 )
 
+@Entity(tableName = "coaching_requests", foreignKeys = [ForeignKey(
+    entity = StoredRun::class, parentColumns = ["id"], childColumns = ["runId"], onDelete = ForeignKey.CASCADE,
+)], indices = [Index("ownerId", "status"), Index(value = ["operationId"], unique = true)])
+data class CoachingRequest(
+    @PrimaryKey val runId: String, val ownerId: String, val operationId: String,
+    val status: String = "PENDING", val attempts: Int = 0, val nextAttemptMs: Long = 0,
+    val error: String? = null, val serverState: String? = null, val acknowledgedAtMs: Long? = null,
+)
+
 @Entity(tableName = "sync_pull")
 data class PullState(@PrimaryKey val ownerId: String, val phase: String = "DELETIONS", val cursor: String? = null,
     val status: String = "PENDING", val attempts: Int = 0, val nextAttemptMs: Long = 0, val error: String? = null)
@@ -242,6 +251,23 @@ abstract class RunDao {
     abstract suspend fun mark(id: String, owner: String, action: String, status: String, attempts: Int, next: Long, error: String?): Int
     @Query("UPDATE run_sync SET status = 'PENDING', attempts = 0, nextAttemptMs = 0, error = NULL WHERE ownerId = :owner AND status IN ('AUTH', 'BLOCKED')")
     abstract suspend fun retry(owner: String)
+    @Query("SELECT * FROM coaching_requests WHERE runId=:id")
+    abstract suspend fun coachingRequest(id: String): CoachingRequest?
+    @Query("SELECT c.* FROM coaching_requests c JOIN runs r ON r.id=c.runId JOIN run_sync s ON s.runId=c.runId WHERE c.ownerId=:owner AND c.status='PENDING' AND c.nextAttemptMs<=:now AND r.cloudOwnerId=:owner AND r.state='FINISHED' AND s.ownerId=:owner AND s.action='UPLOAD' AND s.status='SYNCED' ORDER BY c.nextAttemptMs,c.runId LIMIT 10")
+    abstract suspend fun pendingCoaching(owner: String, now: Long): List<CoachingRequest>
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun addCoachingRequest(value: CoachingRequest): Long
+    @Query("UPDATE coaching_requests SET status=:status,attempts=:attempts,nextAttemptMs=:next,error=:error,serverState=:serverState,acknowledgedAtMs=:acknowledgedAt WHERE runId=:id AND ownerId=:owner AND operationId=:operationId AND status='PENDING'")
+    abstract suspend fun markCoaching(id: String, owner: String, operationId: String, status: String, attempts: Int, next: Long, error: String?, serverState: String?, acknowledgedAt: Long?): Int
+    @Query("UPDATE coaching_requests SET status='PENDING',attempts=0,nextAttemptMs=0,error=NULL WHERE ownerId=:owner AND status IN ('AUTH','BLOCKED')")
+    abstract suspend fun retryCoaching(owner: String)
+    @Transaction
+    open suspend fun queueCoaching(id: String, owner: String): CoachingRequest {
+        val run = requireNotNull(get(id))
+        require(run.state == "FINISHED" && run.cloudOwnerId == owner && operation(id)?.action != "DELETE")
+        addCoachingRequest(CoachingRequest(id, owner, UUID.randomUUID().toString()))
+        return requireNotNull(coachingRequest(id)).also { require(it.ownerId == owner) }
+    }
     @Transaction
     open suspend fun importLocal(owner: String): Int {
         check(active() == null) { "Finish the active run before importing" }
@@ -330,11 +356,18 @@ abstract class RunDao {
 
 @Database(
     entities = [StoredRun::class, RoutePoint::class, StoredMeasurement::class, StoredSplit::class,
-        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class, RunPublication::class], version = 9, exportSchema = true,
+        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, CoachingRequest::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class, RunPublication::class], version = 10, exportSchema = true,
 )
 abstract class RunDatabase : RoomDatabase() {
     abstract fun runs(): RunDao
     companion object {
+        val MIGRATION_9_10 = object : Migration(9,10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS coaching_requests (runId TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, operationId TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL, nextAttemptMs INTEGER NOT NULL, error TEXT, serverState TEXT, acknowledgedAtMs INTEGER, FOREIGN KEY(runId) REFERENCES runs(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_coaching_requests_ownerId_status ON coaching_requests(ownerId,status)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_coaching_requests_operationId ON coaching_requests(operationId)")
+            }
+        }
         val MIGRATION_8_9 = object : Migration(8,9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE run_photos ADD COLUMN syncError TEXT")
@@ -383,7 +416,7 @@ abstract class RunDatabase : RoomDatabase() {
         @Volatile private var instance: RunDatabase? = null
         fun get(context: Context): RunDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, RunDatabase::class.java, "wayirun-local.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { instance = it }
         }
     }
 }

@@ -9,9 +9,14 @@ import javax.net.ssl.HttpsURLConnection
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** No automatic POST retries. Cancellation disconnects the request; the server keeps its receipt. */
-class CoachingNetwork {
-    suspend fun generate(session: AccountSession, runId: String, operationId: String): JSONObject =
+interface CoachingApi {
+    suspend fun generate(session: AccountSession, runId: String, operationId: String): JSONObject
+}
+class CoachingHttpException(val status: Int) : java.io.IOException("Coaching request failed ($status)")
+
+/** Retry policy lives in the durable queue; this transport performs one HTTP attempt. */
+class CoachingNetwork : CoachingApi {
+    override suspend fun generate(session: AccountSession, runId: String, operationId: String): JSONObject =
         JSONObject(request(session, runId, false, JSONObject().put("operationId", operationId).toString()).toString(Charsets.UTF_8))
     suspend fun status(session: AccountSession, runId: String): JSONObject =
         JSONObject(request(session, runId, false, null).toString(Charsets.UTF_8))
@@ -33,7 +38,8 @@ class CoachingNetwork {
                     connection.doOutput = true; connection.setRequestProperty("Content-Type", "application/json")
                     connection.outputStream.use { output -> output.write(it.toByteArray(Charsets.UTF_8)) }
                 }
-                check(connection.responseCode == 200)
+                val responseCode = connection.responseCode
+                if (responseCode != 200) throw CoachingHttpException(responseCode)
                 check(connection.contentType?.startsWith(if (audio) "audio/wav" else "application/json") == true)
                 val result = java.io.ByteArrayOutputStream()
                 connection.inputStream.use { input ->
@@ -46,8 +52,8 @@ class CoachingNetwork {
                 }
                 check(result.size() > 0)
                 if (continuation.isActive) continuation.resume(result.toByteArray())
-            } catch (_: Exception) {
-                if (continuation.isActive) continuation.resumeWithException(java.io.IOException("Coaching unavailable"))
+            } catch (error: Exception) {
+                if (continuation.isActive) continuation.resumeWithException(if (error is CoachingHttpException) error else java.io.IOException("Coaching unavailable", error))
             } finally { connection.disconnect() }
         }
     }

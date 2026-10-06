@@ -8,7 +8,6 @@ import com.example.runningapp.sync.SyncScheduler
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import java.io.File
-import java.util.UUID
 
 data class CoachingView(val busy: Boolean = false, val visible: Boolean = false, val label: String = "")
 
@@ -63,7 +62,8 @@ class PostRunCoaching(private val context: Context, private val scope: Coroutine
                         guard()
                         val api = CoachingNetwork()
                         preferences.edit().putString("state", "requested").commit().also { check(it) }
-                        var result = api.generate(requireNotNull(session), runId, UUID.randomUUID().toString())
+                        var result = CoachingRequestSync(dao, api, { SessionStore(context).read() }).submit(runId, requireNotNull(session))
+                            ?: throw java.io.IOException("Coaching queued for retry")
                         while (result.optString("state") in listOf("preparing", "text_pending", "speech_pending")) {
                             delay(1500); guard(); result = api.status(session, runId)
                         }

@@ -22,7 +22,9 @@ class SyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWork
                 com.example.runningapp.health.HealthScheduler.enqueue(applicationContext)
                 val publicationMore = com.example.runningapp.sharing.PublicationSync(dao, api, { store.read() }).runOnce()
                 val photoMore = com.example.runningapp.photos.PhotoSync(applicationContext).runOnce()
-                if (photoMore || publicationMore) SyncScheduler.continueLater(applicationContext, 60000)
+                val coachingMore = com.example.runningapp.coaching.CoachingRequestSync(dao,
+                    com.example.runningapp.coaching.CoachingNetwork(), { store.read() }).runOnce()
+                if (photoMore || publicationMore || coachingMore) SyncScheduler.continueLater(applicationContext, 60000)
                 if (more || pullMore) {
                     val owner = store.read()?.ownerId
                     val next = owner?.let { id ->
