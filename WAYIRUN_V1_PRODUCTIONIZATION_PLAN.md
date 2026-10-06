@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestone 1 complete; Milestone 2 not started
+Status: Controlling execution plan; Milestones 1 and 2 complete; Milestone 3 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -91,7 +91,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | --- | --- | --- | --- |
 | 0 | Approve controlling plan | COMPLETE | This file created from live repository review |
 | 1 | Reconcile and checkpoint source | COMPLETE | Accepted checkpoint `1e00e8e` integrated into canonical `main`; repository normalized and verified |
-| 2 | Resolve production decisions and compliance prerequisites | NOT STARTED | Signed-off decision record; no placeholders in identity choices |
+| 2 | Resolve production decisions and compliance prerequisites | COMPLETE | `V1_MILESTONE_2_DECISION_RECORD.md`; owner identity/domain/distribution choices and technical policies recorded |
 | 3 | Design exact environment/resource map | NOT STARTED | Reviewed development/production mapping and rollback boundaries |
 | 4 | Implement environment-safe Worker configuration | NOT STARTED | Tests prove dev/prod target isolation and origin correctness |
 | 5 | Promote the functional Android app into release | NOT STARTED | Release compiles with production-bound configuration and no debug shell |
@@ -134,7 +134,7 @@ Pass 1A established that the branch and upstream are synchronized at `cadecf2`; 
 
 Pass 1B repaired only ignored generated Android output by clearing its Windows `ReadOnly` attribute. The required Android gate then passed: 125 unit/debug-unit tests, zero failures/errors/skips, successful debug assembly, and lint with zero errors and 21 warnings. The generated APK is `android/app/build/outputs/apk/debug/WAYiRUN-2026-10-06_09-39-19_EDT.apk`, 40,355,568 bytes, SHA-256 `773482503562053C368A137161C93BDAACFEC638A6A988A485421C449A231F83`. No instrumentation, device action, remote mutation, deployment, schema/runtime change, commit or push occurred during that pass.
 
-The approved checkpoint was committed as `1e00e8e`. GitHub's canonical/default branch was confirmed as `main`; the checkpoint was integrated without conflicts or product-content changes by normal merge `897cac5`. The old `development` line was explicitly reconciled as superseded rather than merged because its unique Leaflet/OpenStreetMap basemap behavior conflicts with the accepted provider-independent route-noodle design. Canonical `main` was pushed and verified before the accepted feature branches were retired. Milestone 1 is complete; Milestone 2 has not begun.
+The approved checkpoint was committed as `1e00e8e`. GitHub's canonical/default branch was confirmed as `main`; the checkpoint was integrated without conflicts or product-content changes by normal merge `897cac5`. The old `development` line was explicitly reconciled as superseded rather than merged because its unique Leaflet/OpenStreetMap basemap behavior conflicts with the accepted provider-independent route-noodle design. Canonical `main` was pushed and verified before the accepted feature branches were retired. Milestone 1 completed before Milestone 2 began.
 
 ## 1.8 Milestone 2 — resolve production decisions and compliance prerequisites
 
@@ -150,6 +150,12 @@ The approved checkpoint was committed as `1e00e8e`. GitHub's canonical/default b
 ### 1.8.2 Exit
 
 An approved decision record exists. No permanent resource is created with a guessed name, domain, package ID, credential owner, or legal URL.
+
+### 1.8.3 Completion evidence — October 6, 2026
+
+`V1_MILESTONE_2_DECISION_RECORD.md` records the owner-approved package `com.unopenedparachute.wayirun`, production origin `https://wayirun.slopcopy.com`, Google Play canonical distribution with one signing/package identity, and public identity `UnopenedParachute` / `unopenedparachute@gmail.com`. It also fixes separate production OAuth and Cloudflare resources, privacy/account-deletion/Health Connect obligations, minimal redacted telemetry, data-class retention policy, compatible `COACHING_KEYRING` continuity, and an immutable-backup/rehearsal/reconciliation cutover policy that treats existing phone and development data as irreplaceable until production acceptance passes.
+
+No permanent identity, key, OAuth client, DNS route, Worker, D1 database, secret, deployment, migration, build, or device action occurred. Milestone 2 is complete; Milestone 3 has not started.
 
 ## 1.9 Milestone 3 — design the exact environment and resource map
 
