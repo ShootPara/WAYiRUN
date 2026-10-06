@@ -7,9 +7,9 @@ Rule: bugs, unverified behavior, deliberate deferrals, and release work are sepa
 
 ### 1.1.1 Indoor automatic-pause physical regression acceptance
 
-The user previously observed an indoor run auto-pause while moving. Code now rejects step-counter silence as stationary evidence and requires fresh accelerometer coverage, but the correction has not passed carried-phone and screen-off acceptance. Until that acceptance passes, treat the reported behavior as an open bug with an implemented candidate correction—not as a request to redesign auto-pause.
+The user observed false indoor pauses in the original counter-based implementation and subsequently reported that the acceleration-based correction never pauses on the phone. The approved replacement uses armed step-detector silence indoors and concurrent detector/GPS evidence outdoors (REQUIREMENTS.md 1.8). The physical bug remains OPEN until carried-phone and screen-off acceptance passes. Historical acceleration handoffs describe a superseded candidate correction, not the current contract.
 
-Acceptance: a carried-phone indoor run does not auto-pause while continuously moving; reliable stillness and resumed movement trigger approximately the accepted five-/two-second transitions; manual pause never auto-resumes.
+Acceptance: a carried-phone run does not auto-pause while continuously moving; detector silence after arming and qualifying outdoor GPS trigger the accepted stop/resume rules; manual pause never auto-resumes. Record detector delivery latency and the existing exclusion of late counter batches at closed segments. Synthetic/emulator passes do not close this bug.
 
 ## 1.2 Implemented but unverified behavior
 

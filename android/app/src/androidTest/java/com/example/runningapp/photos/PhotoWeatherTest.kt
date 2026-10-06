@@ -53,6 +53,38 @@ class PhotoWeatherTest {
         assertNull(PhotoWeather.parse(weatherFixture().replace("https://open-meteo.com/","https://wrong.test/")))
         assertNull(PhotoWeather.parse(weatherFixture().replace("40.8","40.81234")))
         assertNull(PhotoWeather.parse(weatherFixture().replace("\"weatherCode\":2","\"weatherCode\":4")))
+        val thunderstorm=PhotoWeather.parse(weatherFixture().replace("\"weatherCode\":2","\"weatherCode\":97")
+            .replace("\\u26c5","\\u26c8\\ufe0f"))!!
+        assertEquals(97,thunderstorm.snapshot.weatherCode);assertEquals("⛈️",thunderstorm.snapshot.emoji)
+    }
+
+    @Test fun failureStateAcceptsOnlyBoundedCategoriesAndRetryTimes() {
+        val now=1_000_000L
+        for(reason in listOf("provider_unavailable","provider_timeout","provider_invalid_response","provider_throttled","retry_later")) {
+            val result=parsePhotoWeatherResponse(JSONObject().put("reason",reason).put("retryAfter",now+30000),now)
+            assertEquals(reason,result.reason);assertEquals(now+30000,result.retryAfter)
+            assertFalse(result.canRetry(now));assertFalse(result.canRetry(now+29999));assertTrue(result.canRetry(now+30000))
+            assertTrue(result.message(now).contains("Retry in 30s"))
+        }
+        val invalid=parsePhotoWeatherResponse(JSONObject().put("reason","secret URL or body").put("retryAfter","99999999999999"),now)
+        assertEquals("provider_unavailable",invalid.reason);assertEquals(0L,invalid.retryAfter)
+        assertFalse(invalid.message(now).contains("secret"))
+        assertEquals(now+86400000,parsePhotoWeatherResponse(JSONObject().put("retryAfter",Long.MAX_VALUE),now).retryAfter)
+        for(value in listOf(-1,1.5)) assertEquals(0L,parsePhotoWeatherResponse(JSONObject().put("retryAfter",value),now).retryAfter)
+        assertFalse(PhotoWeatherResult(waitingForSync=true).canRetry(now))
+        assertFalse(parsePhotoWeatherResponse(JSONObject().put("reason","no_recorded_weather_location_or_time"),now).canRetry(now))
+        val success=parsePhotoWeatherResponse(JSONObject().put("weather",JSONObject(weatherFixture())).put("retryAfter",now+30000),now)
+        assertNotNull(success.weather);assertEquals(0L,success.retryAfter);assertFalse(success.canRetry(now))
+    }
+
+    @Test fun lookupPreservesFailureEligibilityThenAcceptsSuccessfulRetry() = runBlocking {
+        val id=run();val api=WeatherFakeApi();val retryAt=System.currentTimeMillis()+30000
+        api.respond={JSONObject().put("weather",JSONObject.NULL).put("reason","provider_timeout").put("retryAfter",retryAt)}
+        val failed=lookupPhotoWeather(id,dao,{account},api)
+        assertEquals("provider_timeout",failed.reason);assertEquals(retryAt,failed.retryAfter)
+        assertFalse(failed.canRetry(retryAt-1));assertTrue(failed.canRetry(retryAt))
+        api.respond={JSONObject().put("weather",JSONObject(weatherFixture()))}
+        assertNotNull(lookupPhotoWeather(id,dao,{account},api).weather);assertEquals(2,api.calls)
     }
 
     @Test fun disabledOrUnavailableWeatherCannotLeakIntoUpload() {

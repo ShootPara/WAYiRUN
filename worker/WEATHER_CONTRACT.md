@@ -2,7 +2,7 @@
 
 ## 1.1 Milestone and status
 
-Issue-plan Milestones 5.0 and 5.1 are locally complete. Compilation, Cloudflare deployment dry-run and all 146 Worker tests passed September 28, along with Android build/lint, Room schema 8, focused emulator and visual/browser gates. Migrations 0010 and 0011 are local source only, not applied remotely. The weather lookup endpoint never mutates publication or photos.
+This contract includes the October 5 weather-reliability repair, verified locally and deployed to the development Worker as version `5b3b8fc8-f10a-47b0-8cd7-ae0a38c03dd7`. Historical Milestones 5.0/5.1 used synthetic provider responses and did not establish live retrieval. The repaired guarded canary completed a real Open-Meteo lookup, returned the identical cached snapshot on a second request, and removed all disposable records. Migrations 0010 and 0011 were applied during the September 28 photo repair; this repair adds no migration. The weather lookup endpoint never mutates publication or photos.
 
 ## 1.2 Provider decision
 
@@ -25,7 +25,7 @@ Success or ordinary provider unavailability is HTTP 200:
 {"weather":null,"reason":"provider_unavailable","retryAfter":1790529000000}
 ```
 
-When available, `weather` is the version-1 snapshot below; `reason` and `retryAfter` are null. `retryAfter` is an absolute UTC epoch millisecond timestamp, not seconds/duration. Reasons: `no_recorded_weather_location_or_time`, `retry_later`, `provider_unavailable`. Missing/foreign/unsynced/deleted run: 404; expired/revoked/missing session: 401; rate limits: 429; invalid archive or internal/configuration failure: 503 with no diagnostics. All responses are no-store. Android must treat any failure as optional weather unavailable, not a photo failure.
+When available, `weather` is the version-1 snapshot below; `reason` and `retryAfter` are null. `retryAfter` is an absolute UTC epoch millisecond timestamp, not seconds/duration. Reasons: `no_recorded_weather_location_or_time`, `retry_later`, `provider_unavailable` (network/HTTP failure), `provider_timeout`, `provider_invalid_response` (malformed, oversized or invalid weather), and `provider_throttled`. These fixed categories never contain provider bodies, URLs, coordinates, exception messages or credentials and are not added to stored snapshots. Cached failures return `retry_later`; no diagnostic column is added. Missing/foreign/unsynced/deleted run: 404; expired/revoked/missing session: 401; rate limits: 429; invalid archive or internal/configuration failure: 503 with no diagnostics. All responses are no-store. Android must treat any failure as optional weather unavailable, not a photo failure.
 
 Snapshot fields:
 
@@ -44,15 +44,19 @@ Use the first recorded route point of an OUTDOOR archive, not the viewer's locat
 
 ## 1.4 Bounds, cache and lifecycle
 
-The provider URL is hardcoded HTTPS, with redirects rejected. The whole lookup, including body consumption, has a three-second deadline and 32 KiB response cap. Request two hourly variables for one location and one day. Do not log URLs, coordinates, archives or provider bodies.
+The provider URL is hardcoded HTTPS. Workers-compatible `redirect: "manual"` returns redirects for rejection by the non-success status check; no redirect destination is followed. The whole lookup, including body consumption, has an eight-second deadline and 32 KiB response cap. Request two hourly variables for one location and one day. Known condition codes include 97, represented with the existing thunderstorm emoji on Worker and Android. Do not log URLs, coordinates, archives or provider bodies.
 
 Migration 0010 adds owner/run-scoped run_weather with cascading deletion and a separate database-wide ten-second request gate. This caps this deployment at approximately 8,640 requests/day, 360/hour and six/minute. Multiple independent deployments or other users of a shared outbound IP are not coordinated by this gate; review combined usage before rollout.
 
-Successful snapshots do not expire or refresh on viewing. Provider failures retry no sooner than one hour; an in-flight reservation or busy global gate returns a 30-second retry hint. No automatic background retry loop. Per-attempt tokens prevent late results overwriting newer results. Session and tombstone checks occur before provider access, atomically on result persistence, and before delivery. A logout may leave an empty reservation until retry, but cannot persist/deliver the in-flight snapshot. Deletion removes rows via foreign keys; tombstones block writes even before cleanup.
+Successful snapshots do not expire or refresh on viewing. Ordinary provider failures use a thirty-second cooldown measured from the lookup request time. HTTP 429 and HTTP 503 with Retry-After honor a bounded provider hint (seconds or HTTP date), with a thirty-second minimum and one-day maximum; this also extends the shared gate without shortening another throttle. Existing one-hour negative-cache entries expire naturally, without data cleanup.
+
+An in-flight reservation lasts thirty seconds. Concurrent same-run callers receive the existing eligibility time rather than extending it. A caller that reserves a run but loses the global gate releases only its own reservation to the gate's actual next-at time, instead of stranding it for thirty seconds. Another caller can still consume a future slot; eligibility is permission to attempt, not a guaranteed slot. No automatic provider retry loop. Per-attempt tokens prevent late results overwriting newer results. Session and tombstone checks occur before provider access, atomically on result persistence, and before delivery. A logout may leave an empty reservation until retry, but cannot persist/deliver the in-flight snapshot. Deletion removes rows via foreign keys; tombstones block writes even before cleanup.
 
 ## 1.5 Milestone 5.1 integration guardrails
 
 Request only from the open editor for a synced run. Keep/Save/Share must never await lookup. Hold one returned snapshot through editor recreation; preserve it with the exact kept photo revision and render preview/JPEG from the same values. Ignore responses after Keep, editor exit, account change or replacement. Weather off means no rendered weather; old kept photos stay unchanged. Unsynced/offline remains unavailable, with bounded retry after sync while the editor remains open.
+
+Android allowlists failure categories, accepts only finite nonnegative integral retry timestamps and bounds future hints to one day. The editor retains retry eligibility across recreation, displays a short countdown and disables Retry until eligible. Expiry enables the button without fetching automatically; a tap starts a new lookup. Local network/HTTP failures use a short cooldown, HTTP 429 respects bounded Retry-After, and sign-in/missing-run/no-location states provide concise explanations. Weather waiting, failure, and cooldown never disable Keep or Save.
 
 Extend the photo option/header/metadata contract and persistence together in 5.1, accepting legacy four-option uploads. Validate incoming snapshots against the owned run's stored snapshot rather than trusting arbitrary client attribution/coordinates. Public metadata may include stable weather summary/provenance but must omit latitude/longitude and private owner/run archive details. Exports either deliberately include stable fields or document omission. No fetching on public views, image loads, photo sync or publication.
 
@@ -68,4 +72,4 @@ Private photo metadata and CSV photo records include the complete selected snaps
 
 ## 1.7 Verification boundary
 
-See MILESTONE_5_0_TEST_HANDOFF.md for completed lookup evidence and MILESTONE_5_1_TEST_HANDOFF.md for the pending photo integration gate. Provider tests use synthetic coordinates/responses. No live personal-location request, phone install, deployment, remote migration, commit or push is part of this work. Real provider availability and physical rendering remain separate acceptance.
+The earlier milestone handoffs record historical synthetic evidence only. The repair's regression executes native Workers fetch with controlled outbound responses, including redirect rejection; Node-injected fetch assertions alone are insufficient. October 5 verification passed all 156 Worker tests and deployment dry-run, all 118 Android unit tests, build/lint with zero errors, and 19 focused emulator weather/editor/render tests. All 27 development smoke checks passed after deployment. The guarded live canary returned Open-Meteo weather in 1,154 ms, reused the exact persisted snapshot in 217 ms, and verified zero disposable records remained. Existing one-hour negative-cache rows were not changed and expire naturally. Physical-phone acceptance remains separate.

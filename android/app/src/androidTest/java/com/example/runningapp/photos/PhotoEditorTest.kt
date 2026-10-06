@@ -52,10 +52,10 @@ class PhotoEditorTest {
         compose.runOnIdle {visible.value=false};compose.waitForIdle()
         draft.delete();db.close()
     }
-    private fun show(api: WeatherFakeApi, restoration: StateRestorationTester?=null) {
+    private fun show(api: WeatherFakeApi, restoration: StateRestorationTester?=null, keepOpen: Boolean=false) {
         val content: @androidx.compose.runtime.Composable () -> Unit = {
             MaterialTheme(colorScheme=if(androidx.compose.foundation.isSystemInDarkTheme()) androidx.compose.material3.darkColorScheme() else androidx.compose.material3.lightColorScheme()) {
-                if(visible.value)PhotoDialog(snapshot,{visible.value=false},dao,api,{account},{visible.value=false})
+                if(visible.value)PhotoDialog(snapshot,{visible.value=false},dao,api,{account},{if(!keepOpen)visible.value=false})
             }
         }
         if(restoration!=null)restoration.setContent(content) else compose.setContent(content)
@@ -140,5 +140,40 @@ class PhotoEditorTest {
         gate.complete(JSONObject().put("weather",JSONObject(weatherFixture())))
         compose.waitForIdle();assertFalse(visible.value);assertFalse(draft.exists())
         assertNull(runBlocking {dao.photo(snapshot.runId)})
+    }
+
+    @Test fun retryIsDisabledDuringCooldownThenPerformsNewLookup() {
+        val api=WeatherFakeApi().apply {respond={
+            if(calls==1) JSONObject().put("weather",JSONObject.NULL).put("reason","provider_timeout")
+                .put("retryAfter",System.currentTimeMillis()+10000)
+            else JSONObject().put("weather",JSONObject(weatherFixture()))
+        }}
+        val restoration=StateRestorationTester(compose)
+        show(api,restoration);ready()
+        compose.waitUntil(15000) {compose.onAllNodesWithText("Weather request timed out.",substring=true).fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithText("Retry weather").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Keep Photo").performScrollTo().assertIsEnabled()
+        restoration.emulateSavedInstanceStateRestore();ready()
+        assertEquals(1,api.calls)
+        compose.waitUntil(20000) {compose.onAllNodesWithText("Retry weather").fetchSemanticsNodes().any {!it.config.contains(SemanticsProperties.Disabled)}}
+        assertEquals(1,api.calls) // Eligibility does not start an automatic provider loop.
+        compose.onNodeWithText("Retry weather").performScrollTo().performClick()
+        compose.waitUntil(15000) {compose.onAllNodesWithTag("photo-overlay-Weather").fetchSemanticsNodes().any {!it.config.contains(SemanticsProperties.Disabled)}}
+        assertEquals(2,api.calls);ready()
+        compose.onNodeWithText("Keep Photo").performScrollTo().performClick()
+        assertNotNull(saved().weather)
+    }
+
+    @Test fun failedWeatherCooldownDoesNotBlockKeepOrSave() {
+        val api=WeatherFakeApi().apply {respond={JSONObject().put("weather",JSONObject.NULL)
+            .put("reason","retry_later").put("retryAfter",System.currentTimeMillis()+3600000)}}
+        show(api,keepOpen=true);ready()
+        compose.waitUntil(15000) {compose.onAllNodesWithText("Weather unavailable. Retry in",substring=true).fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithText("Retry weather").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Keep Photo").performScrollTo().assertIsEnabled().performClick()
+        val photo=saved();assertNull(photo.weather);assertFalse(JSONObject(photo.options).getBoolean("weather"))
+        compose.waitUntil(15000) {compose.onAllNodesWithText("Save photo").fetchSemanticsNodes().isNotEmpty()}
+        compose.onNodeWithText("Save photo").performScrollTo().assertIsEnabled()
+        assertEquals(1,api.calls)
     }
 }

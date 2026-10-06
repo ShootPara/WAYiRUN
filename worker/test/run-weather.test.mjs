@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {randomBytes,randomUUID,createHash} from "node:crypto";
 import {Miniflare,convertV4MiniflareOptions} from "miniflare";
-import {handleWeather,weatherQuery,weatherUrl,parseWeather} from "../build/run-weather.js";
+import {handleWeather,weatherQuery,weatherUrl,parseWeather,fetchWeather} from "../build/run-weather.js";
 
 const now=Date.parse("2026-09-27T16:10:00Z"),start=Date.parse("2026-09-27T15:35:00Z"),hour=Date.parse("2026-09-27T15:00:00Z");
 const sha=value=>createHash("sha256").update(value).digest("hex");
@@ -67,7 +67,7 @@ test("parser selects exact historical hour, validates units and preserves bounde
  const query=weatherQuery(archiveInput(),now),result=parseWeather(payload(),query,now);
  assert.equal(result.temperatureC,20);assert.equal(result.temperatureF,68);assert.equal(result.weatherCode,2);assert.ok(result.emoji);
  assert.equal(result.source,"open-meteo");assert.equal(result.attribution.licenseUrl,"https://creativecommons.org/licenses/by/4.0/");
- for(const code of [0,1,2,3,45,48,51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99])assert.ok(parseWeather(payload(hour,0,code),query,now));
+ for(const code of [0,1,2,3,45,48,51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,97,99])assert.ok(parseWeather(payload(hour,0,code),query,now));
  for(const value of [payload(hour-3600000),payload(hour,null),payload(hour,"20"),payload(hour,Infinity),payload(hour,71),payload(hour,20,4),
   {...payload(),utc_offset_seconds:3600},{...payload(),hourly_units:{time:"iso8601",temperature_2m:"\u00b0F"}},
   {...payload(),hourly:{time:[hour/1000,hour/1000],temperature_2m:[20,20],weather_code:[2,2]}}])assert.equal(parseWeather(value,query,now),null);
@@ -82,7 +82,7 @@ test("endpoint authenticates owner and rejects browser headers, arbitrary querie
 
 test("successful lookup is stable, private, bounded and independent of publication/photos",async t=>{
  const r=await runtime(t),id=await r.add();let calls=0;
- const fetcher=async(url,options)=>{calls++;assert.equal(options.redirect,"error");assert.ok(options.signal);assert.equal(new URL(url).searchParams.get("longitude"),"-74");return Response.json({...payload(),latitude:40.78123,untrusted:"discard"});};
+ const fetcher=async(url,options)=>{calls++;assert.equal(options.redirect,"manual");assert.ok(options.signal);assert.equal(new URL(url).searchParams.get("longitude"),"-74");return Response.json({...payload(),latitude:40.78123,untrusted:"discard"});};
  const response=await r.call(id,{fetcher});assert.equal(response.status,200);assert.equal(response.headers.get("Cache-Control"),"no-store");
  const first=await response.json();assert.equal(first.weather.temperatureF,68);assert.equal(first.reason,null);
  assert.ok(!JSON.stringify(first).includes("40.78123"));assert.ok(!JSON.stringify(first).includes("untrusted"));
@@ -115,9 +115,11 @@ test("historical runs request their recorded date and never fall back to today's
 
 test("failure retries are bounded and missing-hour responses do not produce fabricated weather",async t=>{
  const r=await runtime(t),id=await r.add();let calls=0;const fetcher=async()=>{calls++;return Response.json(payload(hour-3600000));};
- assert.equal((await (await r.call(id,{fetcher})).json()).reason,"provider_unavailable");
- assert.equal((await (await r.call(id,{fetcher,time:now+3500000})).json()).reason,"retry_later");assert.equal(calls,1);
- await r.call(id,{fetcher,time:now+3600000});assert.equal(calls,2);
+ const first=await (await r.call(id,{fetcher})).json();
+ assert.equal(first.reason,"provider_invalid_response");assert.equal(first.retryAfter,now+30000);
+ assert.equal((await (await r.call(id,{fetcher,time:now+29999})).json()).reason,"retry_later");assert.equal(calls,1);
+ const success=await (await r.call(id,{fetcher:async()=>{calls++;return Response.json(payload());},time:first.retryAfter})).json();
+ assert.ok(success.weather);assert.equal(success.reason,null);assert.equal(calls,2);
 });
 
 test("provider status, malformed and oversized responses leave the optional flow available",async t=>{
@@ -129,16 +131,17 @@ test("provider status, malformed and oversized responses leave the optional flow
 });
 
 test("provider timeout aborts lookup and returns unavailable",async t=>{
- const r=await runtime(t),id=await r.add();let aborted=false;
+ const r=await runtime(t),id=await r.add();let aborted=false;const started=performance.now();
  const response=await r.call(id,{fetcher:async(_url,{signal})=>new Promise((_resolve,reject)=>{
   signal.addEventListener("abort",()=>{aborted=true;reject(new DOMException("timeout","AbortError"));},{once:true});
- })});assert.equal(aborted,true);assert.equal(response.status,200);assert.equal((await response.json()).weather,null);
+ })});assert.equal(aborted,true);assert.equal(response.status,200);assert.equal((await response.json()).reason,"provider_timeout");
+ assert.ok(performance.now()-started>=7900,"must not retain the old three-second deadline");
 });
 
 test("deadline also cancels a stalled response body",async t=>{
  const r=await runtime(t),id=await r.add();let cancelled=false;
  const response=await r.call(id,{fetcher:async()=>new Response(new ReadableStream({cancel(){cancelled=true;}}))});
- assert.equal(response.status,200);assert.equal((await response.json()).weather,null);assert.equal(cancelled,true);
+ assert.equal(response.status,200);assert.equal((await response.json()).reason,"provider_timeout");assert.equal(cancelled,true);
 });
 
 test("a stale attempt cannot overwrite a newer successful snapshot",async t=>{
@@ -176,4 +179,106 @@ test("account deletion cascades in-flight weather reservations",async t=>{
  const r=await runtime(t),id=await r.add();const response=await r.call(id,{fetcher:async()=>{
   await r.DB.prepare("DELETE FROM accounts WHERE id='alice'").run();return Response.json(payload());
  }});assert.equal(response.status,401);assert.equal((await r.DB.prepare("SELECT COUNT(*) n FROM run_weather").first()).n,0);
+});
+
+test("native Workers fetch accepts the request and never follows provider redirects",async t=>{
+ let mode="success",calls=0;
+ const query=weatherQuery(archiveInput(),now);
+ const mf=new Miniflare(convertV4MiniflareOptions({compatibilityDate:"2026-02-17",modules:[
+  {type:"ESModule",path:"weather-runtime/entry.js",contents:`import {fetchWeather} from './run-weather.js';
+   export default {async fetch(){return Response.json(await fetchWeather(${JSON.stringify(query)},fetch,${now}));}};`},
+  {type:"ESModule",path:"weather-runtime/run-weather.js",contents:readFileSync(new URL("../build/run-weather.js",import.meta.url),"utf8")},
+  // This helper-level harness does not invoke the handler's auth/archive dependencies.
+  {type:"ESModule",path:"weather-runtime/auth.js",contents:"const unused=()=>{throw Error('not used')}; export {unused as accessGuard,unused as sessionAccount,unused as reply};"},
+  {type:"ESModule",path:"weather-runtime/coaching-context.js",contents:"export const readVerifiedRun=()=>{throw Error('not used')}; export class CoachingDataError extends Error {}"},
+ ],outboundService:async request=>{
+  calls++;assert.equal(new URL(request.url).host,"api.open-meteo.com");
+  return mode==="success"?Response.json(payload()):new Response(null,{status:302,headers:{Location:"https://redirect-destination.invalid/"}});
+ }}));t.after(()=>mf.dispose());
+ const success=await (await mf.dispatchFetch("https://test/")).json();assert.ok(success.weather);assert.equal(calls,1);
+ mode="redirect";
+ const rejected=await (await mf.dispatchFetch("https://test/")).json();
+ assert.equal(rejected.weather,null);assert.equal(rejected.reason,"provider_unavailable");assert.equal(calls,2);
+});
+
+test("realistic full-day forecast and archive responses preserve exact-hour selection including code 97",async()=>{
+ for(const [endpoint,day] of [["forecast","2026-10-05"],["archive","2026-09-27"]]) {
+  const midnight=Date.parse(day+"T00:00:00Z"),observedUtcMs=midnight+18*3600000;
+  const query={latitude:40.8,longitude:-74,observedUtcMs,endpoint};
+  const value={latitude:40.795395,longitude:-74.00056,generationtime_ms:.329,utc_offset_seconds:0,
+   timezone:"GMT",timezone_abbreviation:"GMT",elevation:60,
+   hourly_units:{time:"unixtime",temperature_2m:"°C",weather_code:"wmo code"},
+   hourly:{time:Array.from({length:24},(_,i)=>midnight/1000+i*3600),
+    temperature_2m:Array.from({length:24},(_,i)=>i===18?17.8:14.1),weather_code:Array.from({length:24},(_,i)=>i===18?97:3)}};
+  const result=await fetchWeather(query,async()=>Response.json(value),observedUtcMs+3600000);
+  assert.equal(result.weather.temperatureC,17.8);assert.equal(result.weather.temperatureF,64);
+  assert.equal(result.weather.weatherCode,97);assert.equal(result.weather.emoji,"⛈️");assert.equal(result.weather.observedUtcMs,observedUtcMs);
+ }
+});
+
+test("provider deadline fires at eight seconds, not before",async t=>{
+ t.mock.timers.enable({apis:["setTimeout"]});let aborted=false,settled=false;
+ const pending=fetchWeather(weatherQuery(archiveInput(),now),async(_url,{signal})=>new Promise((_resolve,reject)=>{
+  signal.addEventListener("abort",()=>{aborted=true;reject(Error("timeout"));});
+ }),now).then(value=>{settled=true;return value;});
+ t.mock.timers.tick(7999);await Promise.resolve();assert.equal(settled,false);assert.equal(aborted,false);
+ t.mock.timers.tick(1);assert.equal((await pending).reason,"provider_timeout");assert.equal(aborted,true);
+});
+
+test("failure categories are bounded and provider Retry-After is respected",async()=>{
+ const query=weatherQuery(archiveInput(),now);
+ for(const [fetcher,reason] of [
+  [async()=>{throw Error("secret provider diagnostics");},"provider_unavailable"],
+  [async()=>new Response("private body",{status:503}),"provider_unavailable"],
+  [async()=>new Response("not JSON"),"provider_invalid_response"],
+  [async()=>new Response("x".repeat(32769)),"provider_invalid_response"],
+ ]) {
+  assert.deepEqual(await fetchWeather(query,fetcher,now),{weather:null,reason,retryAfter:now+30000});
+ }
+ for(const hint of ["120",new Date(now+120000).toUTCString()]) {
+  assert.deepEqual(await fetchWeather(query,async()=>new Response(null,{status:429,headers:{"Retry-After":hint}}),now),
+   {weather:null,reason:"provider_throttled",retryAfter:now+120000});
+ }
+ assert.equal((await fetchWeather(query,async()=>new Response(null,{status:429,headers:{"Retry-After":"999999999"}}),now)).retryAfter,now+86400000);
+});
+
+test("busy global gate releases a run to actual gate eligibility, not thirty seconds",async t=>{
+ const r=await runtime(t),a=await r.add(),b=await r.add();let calls=0;
+ const fetcher=async()=>{calls++;return Response.json(payload());};
+ await r.call(a,{fetcher});
+ const blocked=await (await r.call(b,{fetcher,time:now+1})).json();assert.equal(blocked.reason,"retry_later");
+ assert.equal(blocked.retryAfter,now+10000);
+ assert.equal((await r.DB.prepare("SELECT retry_after FROM run_weather WHERE run_id=?").bind(b).first()).retry_after,now+10000);
+ await r.call(b,{fetcher,time:now+9999});assert.equal(calls,1);
+ assert.ok((await (await r.call(b,{fetcher,time:now+10000})).json()).weather);assert.equal(calls,2);
+});
+
+test("same-run in-flight requests share reservation without extending retry eligibility",async t=>{
+ const r=await runtime(t),id=await r.add();let release,entered;
+ const enteredPromise=new Promise(resolve=>{entered=resolve;});const gate=new Promise(resolve=>{release=resolve;});let calls=0;
+ const first=r.call(id,{fetcher:async()=>{calls++;entered();await gate;return Response.json(payload());}});
+ await enteredPromise;
+ try {
+  const second=await (await r.call(id,{time:now+500,fetcher:async()=>{calls++;return Response.json(payload());}})).json();
+  assert.equal(second.reason,"retry_later");assert.equal(second.retryAfter,now+30000);assert.equal(calls,1);
+ } finally {release();}
+ assert.ok((await (await first).json()).weather);
+});
+
+test("old one-hour failure entries expire naturally without rewrites",async t=>{
+ const r=await runtime(t),id=await r.add();
+ await r.DB.prepare("INSERT INTO run_weather VALUES ('alice',?,NULL,?,'old')").bind(id,now+3600000).run();
+ let calls=0;const fetcher=async()=>{calls++;return Response.json(payload());};
+ const result=await (await r.call(id,{fetcher})).json();assert.equal(result.retryAfter,now+3600000);assert.equal(calls,0);
+ assert.ok((await (await r.call(id,{fetcher,time:now+3600000})).json()).weather);assert.equal(calls,1);
+});
+
+test("provider throttling delays other runs without extending their reservation beyond the hint",async t=>{
+ const r=await runtime(t),a=await r.add(),b=await r.add();let calls=0;
+ const limited=await (await r.call(a,{fetcher:async()=>{calls++;return new Response(null,{status:429,headers:{"Retry-After":"120"}});}})).json();
+ assert.equal(limited.reason,"provider_throttled");assert.equal(limited.retryAfter,now+120000);
+ const fetcher=async()=>{calls++;return Response.json(payload());};
+ const blocked=await (await r.call(b,{fetcher,time:now+10000})).json();
+ assert.equal(blocked.retryAfter,now+120000);assert.equal(calls,1);
+ assert.ok((await (await r.call(b,{fetcher,time:now+120000})).json()).weather);assert.equal(calls,2);
 });

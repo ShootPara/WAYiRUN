@@ -141,7 +141,11 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
     var weatherJson by rememberSaveable { mutableStateOf<String?>(null) }
     var weatherRetry by remember { mutableIntStateOf(0) }
     var weatherLoading by remember { mutableStateOf(false) }
-    var weatherMessage by remember { mutableStateOf("Weather unavailable.") }
+    var weatherReason by rememberSaveable { mutableStateOf("provider_unavailable") }
+    var weatherRetryAfter by rememberSaveable { mutableLongStateOf(0L) }
+    var weatherWaitingForSync by remember { mutableStateOf(false) }
+    var weatherNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val weatherFailure = PhotoWeatherResult(waitingForSync=weatherWaitingForSync,reason=weatherReason,retryAfter=weatherRetryAfter)
     var route by remember { mutableStateOf<List<RoutePoint>>(emptyList()) }
     var flags by rememberSaveable { mutableStateOf(listOf(true,true,true,false,true)) }
     val weather=remember(weatherJson) { PhotoWeather.parse(weatherJson) }
@@ -197,6 +201,7 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
     }
     LaunchedEffect(source!=null,editorId,weatherRetry,acceptingWeather,route.isNotEmpty()) {
         if(source==null || !acceptingWeather || weather!=null || s.settings.mode!=com.example.runningapp.domain.RunMode.OUTDOOR || route.isEmpty()) return@LaunchedEffect
+        if(System.currentTimeMillis()<weatherRetryAfter) return@LaunchedEffect
         val requestEditor=editorId
         try {
             while(acceptingWeather && editorId==requestEditor && photoSessionIdentity(readSession())==identity) {
@@ -204,11 +209,19 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
                 val result=lookupPhotoWeather(s.runId,dao,readSession,api)
                 if(!acceptingWeather || editorId!=requestEditor || photoSessionIdentity(readSession())!=identity) return@LaunchedEffect
                 weatherLoading=false
-                if(result.waitingForSync) {weatherMessage="Weather available after sync.";kotlinx.coroutines.delay(3000);continue}
-                weatherJson=result.weather?.json;weatherMessage="Weather unavailable."
+                weatherWaitingForSync=result.waitingForSync
+                if(result.waitingForSync) {kotlinx.coroutines.delay(3000);continue}
+                weatherJson=result.weather?.json;weatherReason=result.reason;weatherRetryAfter=result.retryAfter
                 break
             }
         } finally {weatherLoading=false}
+    }
+    LaunchedEffect(weatherRetryAfter) {
+        weatherNow=System.currentTimeMillis()
+        while(weatherNow<weatherRetryAfter) {
+            kotlinx.coroutines.delay(minOf(1000L,weatherRetryAfter-weatherNow))
+            weatherNow=System.currentTimeMillis()
+        }
     }
     LaunchedEffect(source,recipe,route,editorId) {
         val image=source ?: return@LaunchedEffect
@@ -247,9 +260,11 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
                     Row { Checkbox(flags[i] && (i!=4 || weather!=null),onCheckedChange={ value -> flags=flags.mapIndexed { j,v -> if(i==j)value else v } },enabled=!controlsBusy && (i!=3 || route.size>1) && (i!=4 || weather!=null),modifier=Modifier.testTag("photo-overlay-$label"));Text(label,Modifier.padding(top=12.dp)) }
                 }
                 if(weather==null) {
-                    Text(if(weatherLoading) "Getting weather…" else weatherMessage,style=MaterialTheme.typography.bodySmall)
+                    Text(if(weatherLoading) "Getting weather…" else weatherFailure.message(weatherNow),style=MaterialTheme.typography.bodySmall)
                     if(s.settings.mode==com.example.runningapp.domain.RunMode.OUTDOOR && route.isNotEmpty())
-                        TextButton(enabled=!weatherLoading && !controlsBusy,onClick={weatherRetry++}) {Text("Retry weather")}
+                        TextButton(enabled=!weatherLoading && !controlsBusy && weatherFailure.canRetry(weatherNow),onClick={
+                            if(weatherFailure.canRetry(System.currentTimeMillis())) weatherRetry++
+                        }) {Text("Retry weather")}
                 }
                 Button(enabled=!controlsBusy && prepared?.let {it.source===source && it.editorId==editorId && it.recipe==recipe}==true,onClick={
                     val ready=prepared ?: return@Button

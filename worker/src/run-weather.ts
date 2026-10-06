@@ -2,6 +2,9 @@ import { accessGuard, sessionAccount, reply, type AuthEnv } from "./auth.js";
 import { readVerifiedRun, CoachingDataError } from "./coaching-context.js";
 
 const HOUR = 3600000, DAY = 24 * HOUR;
+const PROVIDER_DEADLINE_MS = 8000, FAILURE_COOLDOWN_MS = 30000;
+type WeatherFailure = "provider_unavailable" | "provider_timeout" | "provider_invalid_response" | "provider_throttled";
+type WeatherFetchResult = { weather: WeatherSnapshot | null; reason: WeatherFailure | null; retryAfter: number | null };
 const attribution = {
   label: "Weather data by Open-Meteo.com", url: "https://open-meteo.com/",
   licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
@@ -45,7 +48,7 @@ function weatherEmoji(code: number): string | null {
   if ([45, 48].includes(code)) return "\ud83c\udf2b\ufe0f";
   if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "\ud83c\udf27\ufe0f";
   if ([71, 73, 75, 77, 85, 86].includes(code)) return "\ud83c\udf28\ufe0f";
-  if ([95, 96, 99].includes(code)) return "\u26c8\ufe0f";
+  if ([95, 96, 97, 99].includes(code)) return "\u26c8\ufe0f";
   return null;
 }
 
@@ -66,35 +69,53 @@ export function parseWeather(value: unknown, query: WeatherQuery, now: number): 
     retrievedUtcMs: now, attribution };
 }
 
-async function fetchWeather(query: WeatherQuery, fetcher: typeof fetch, now: number): Promise<WeatherSnapshot | null> {
+/** Bounded categories only: never return provider bodies, URLs or exception messages. */
+export async function fetchWeather(query: WeatherQuery, fetcher: typeof fetch, now: number): Promise<WeatherFetchResult> {
+  const failed = (reason: WeatherFailure, retryAfter = now + FAILURE_COOLDOWN_MS): WeatherFetchResult =>
+    ({ weather: null, reason, retryAfter });
   const abort = new AbortController();
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let timeout: ReturnType<typeof setTimeout>;
-  const deadline = new Promise<null>(resolve => {
+  const deadline = new Promise<WeatherFetchResult>(resolve => {
     timeout = setTimeout(() => {
       abort.abort();
       void reader?.cancel().catch(() => {});
-      resolve(null);
-    }, 3000);
+      resolve(failed("provider_timeout"));
+    }, PROVIDER_DEADLINE_MS);
   });
-  const lookup = async (): Promise<WeatherSnapshot | null> => { try {
-    const response = await fetcher(weatherUrl(query), { signal: abort.signal, redirect: "error", headers: { Accept: "application/json" } });
-    if (abort.signal.aborted || !response.ok || !response.body) { await response.body?.cancel(); return null; }
+  const lookup = async (): Promise<WeatherFetchResult> => { try {
+    const response = await fetcher(weatherUrl(query), { signal: abort.signal, redirect: "manual", headers: { Accept: "application/json" } });
+    if (abort.signal.aborted) { await response.body?.cancel(); return failed("provider_timeout"); }
+    if (!response.ok || !response.body) {
+      await response.body?.cancel();
+      // Manual redirects remain failures. Only legitimate throttling/service-unavailable
+      // responses can lengthen the short cooldown, capped at one day.
+      const hint = response.headers.get("Retry-After");
+      if (response.status === 429 || (response.status === 503 && hint)) {
+        const parsed = hint && /^\d+$/.test(hint) ? now + Number(hint) * 1000 : Date.parse(hint ?? "");
+        const retryAfter = Number.isFinite(parsed) ? Math.min(now + DAY, Math.max(now + FAILURE_COOLDOWN_MS, parsed)) : now + FAILURE_COOLDOWN_MS;
+        return failed("provider_throttled", retryAfter);
+      }
+      return failed("provider_unavailable");
+    }
     reader = response.body.getReader();
     const chunks: Uint8Array[] = []; let size = 0;
     try {
       while (true) {
         const { value, done } = await reader.read(); if (done) break;
         size += value.length;
-        if (size > 32768) { await reader.cancel(); return null; }
+        if (size > 32768) { await reader.cancel(); return failed("provider_invalid_response"); }
         chunks.push(value);
       }
     } finally { reader.releaseLock(); reader = undefined; }
-    if (abort.signal.aborted) return null;
+    if (abort.signal.aborted) return failed("provider_timeout");
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-    return parseWeather(JSON.parse(new TextDecoder().decode(bytes)), query, now);
-  } catch { return null; } };
+    try {
+      const weather = parseWeather(JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)), query, now);
+      return weather ? { weather, reason: null, retryAfter: null } : failed("provider_invalid_response");
+    } catch { return failed("provider_invalid_response"); }
+  } catch { return failed(abort.signal.aborted ? "provider_timeout" : "provider_unavailable"); } };
   try { return await Promise.race([lookup(), deadline]); }
   finally { clearTimeout(timeout!); }
 }
@@ -130,23 +151,40 @@ export async function handleWeather(request: Request, env: AuthEnv, fetcher: typ
       ON CONFLICT(owner_id,run_id) DO UPDATE SET retry_after=excluded.retry_after,attempt=excluded.attempt
       WHERE run_weather.snapshot_json IS NULL AND run_weather.retry_after<=? RETURNING attempt`)
       .bind(owner, id, now + 30000, attempt, owner, id, owner, id, now).first();
-    if (!reserved) return await deliver(null, "retry_later", now + 30000);
+    if (!reserved) {
+      const current = await env.DB.prepare("SELECT snapshot_json,retry_after FROM run_weather WHERE owner_id=? AND run_id=?")
+        .bind(owner, id).first<WeatherRow>();
+      return current?.snapshot_json ? await deliver(JSON.parse(current.snapshot_json) as WeatherSnapshot, null)
+        : await deliver(null, "retry_later", current?.retry_after ?? now + FAILURE_COOLDOWN_MS);
+    }
     // Ten-second global spacing stays below the free service's daily/hourly/minute limits.
     const gate = await env.DB.prepare("UPDATE weather_lookup_gate SET next_at=? WHERE id=1 AND next_at<=? RETURNING id")
       .bind(now + 10000, now).first();
-    if (!gate) return await deliver(null, "retry_later", now + 30000);
+    if (!gate) {
+      const pending = await env.DB.prepare("SELECT next_at FROM weather_lookup_gate WHERE id=1").first<{ next_at: number }>();
+      if (!pending) throw new Error("weather_gate_unavailable");
+      const retryAfter = Math.max(now, pending.next_at);
+      // Release only our reservation to the gate's actual eligibility time. A newer
+      // attempt or successful snapshot must never be changed by this loser.
+      await env.DB.prepare(`UPDATE run_weather SET retry_after=? WHERE owner_id=? AND run_id=?
+        AND attempt=? AND snapshot_json IS NULL`).bind(retryAfter, owner, id, attempt).run();
+      return await deliver(null, "retry_later", retryAfter);
+    }
     if ((await sessionAccount(request, env))?.account.id !== owner) return reply({ error: "unauthorized" }, 401);
     if (!await exists()) return reply({ error: "not_found" }, 404);
-    const weather = await fetchWeather(query, fetcher, now);
+    const result = await fetchWeather(query, fetcher, now), weather = result.weather;
+    if (result.reason === "provider_throttled" && result.retryAfter !== null) {
+      await env.DB.prepare("UPDATE weather_lookup_gate SET next_at=MAX(next_at,?) WHERE id=1").bind(result.retryAfter).run();
+    }
     // Atomic persistence checks: a revoked session or deletion wins over the provider response.
     const stored = await env.DB.prepare(`UPDATE run_weather SET snapshot_json=?,retry_after=?
       WHERE owner_id=? AND run_id=? AND attempt=? AND snapshot_json IS NULL
       AND EXISTS(SELECT 1 FROM auth_sessions WHERE token_hash=? AND owner_id=? AND revoked_at IS NULL AND expires_at>?)
       AND EXISTS(SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL)
       AND NOT EXISTS(SELECT 1 FROM run_deletions WHERE owner_id=? AND run_id=?) RETURNING run_id`)
-      .bind(weather ? JSON.stringify(weather) : null, now + HOUR, owner, id, attempt, session.tokenHash, owner,
+      .bind(weather ? JSON.stringify(weather) : null, result.retryAfter ?? now, owner, id, attempt, session.tokenHash, owner,
         Math.floor(Date.now() / 1000), owner, id, owner, id).first();
-    return await deliver(stored ? weather : null, stored && weather ? null : "provider_unavailable", weather && stored ? null : now + HOUR);
+    return await deliver(stored ? weather : null, stored ? result.reason : "retry_later", stored ? result.retryAfter : now + FAILURE_COOLDOWN_MS);
   } catch (error) {
     if (error instanceof CoachingDataError && error.code === "run_unavailable") return reply({ error: "not_found" }, 404);
     return reply({ error: "weather_unavailable" }, 503);

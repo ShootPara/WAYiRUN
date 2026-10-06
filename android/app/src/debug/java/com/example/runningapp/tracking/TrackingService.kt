@@ -40,8 +40,7 @@ class TrackingService : Service() {
         data object AudioIdle : Message
         data class Gps(val generation: Long, val fix: GpsFix) : Message
         data class Steps(val generation: Long, val time: Long, val count: Long) : Message
-        data class StepDetected(val generation: Long, val time: Long) : Message
-        data class Motion(val generation: Long, val window: MotionWindow) : Message
+        data class StepDetected(val generation: Long, val time: Long, val received: Long) : Message
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val messages = Channel<Message>(Channel.UNLIMITED)
@@ -247,8 +246,8 @@ class TrackingService : Service() {
             Message.AudioIdle -> Unit
             is Message.Gps -> if (message.generation == sensors.generation) result = input?.gps(message.fix)
             is Message.Steps -> if (message.generation == sensors.generation) result = input?.steps(message.time, message.count)
-            is Message.StepDetected -> if (message.generation == sensors.generation) input?.detectedStep(message.time)
-            is Message.Motion -> if (message.generation == sensors.generation) input?.acceleration(message.window)
+            is Message.StepDetected -> if (message.generation == sensors.generation)
+                result = input?.detectedStep(message.time, message.received)?.takeIf { it.update.events.isNotEmpty() }
         }
         syncSensors()
         val c = controller
@@ -296,15 +295,15 @@ class TrackingService : Service() {
             sensors.stop(); listening = false
             input?.reset()
             input?.stepsUsable = false
+            input?.detectorUsable = false
             controller?.clearSource()
         }
         if (observe && !listening) {
             input?.stepsUsable = sensors.start(s.settings.mode, s.settings.strideLengthMeters,
                 { generation, fix -> messages.trySend(Message.Gps(generation, fix)) },
                 { generation, time, count -> messages.trySend(Message.Steps(generation, time, count)) })
-            if (s.settings.autoPauseEnabled) sensors.startMotion(
-                { generation, time -> messages.trySend(Message.StepDetected(generation, time)) },
-                { generation, window -> messages.trySend(Message.Motion(generation, window)) })
+            input?.detectorUsable = s.settings.autoPauseEnabled && sensors.startMotion(
+                { generation, time, received -> messages.trySend(Message.StepDetected(generation, time, received)) })
             listening = true
             permissionSignature = capabilities()
         }
@@ -312,13 +311,17 @@ class TrackingService : Service() {
             if (listening) sensors.stop()
             listening = false
             input?.stepsUsable = false
+            input?.detectorUsable = false
             releaseWakeLock()
         } else {
             // Automatic pauses retain observation and the timer; manual pauses release both.
             // The timeout bounds battery use if the consumer stalls.
             wakeLock.acquire(10 * 60 * 1_000L)
         }
-        if (input != null && !activityAllowed()) input!!.stepsUsable = false
+        if (input != null && !activityAllowed()) {
+            input!!.stepsUsable = false
+            input!!.detectorUsable = false
+        }
     }
 
     private fun capabilities() = "${activityAllowed()}:${locationAllowed()}"

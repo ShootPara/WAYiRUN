@@ -64,11 +64,17 @@ Ordinary warm/cold reopen after a completed run MUST show New Run rather than th
 
 ## 1.8 Automatic pause
 
-Auto-pause MUST default on and be captured at run start. It MUST pause after approximately five seconds of reliable stationary evidence and resume after approximately two seconds of sustained movement.
+Auto-pause MUST default on and be captured at run start. Indoor decisions MUST use TYPE_STEP_DETECTOR; outdoor decisions MUST use detector evidence and reported GPS speed. The cumulative step counter MUST remain an accounting input only. Raw accelerometer classification MUST NOT participate.
 
-Step-counter silence alone MUST NOT mean stationary. Indoor stillness requires fresh continuous motion evidence; delayed counters remain distance inputs and positive motion evidence. Recent steps veto stillness. Missing, stale, ambiguous, or conflicting evidence MUST NOT invent a transition.
+A successfully registered/permitted detector MUST first deliver two timely steps occurring within five seconds to arm silence-based stop detection. Five seconds with zero subsequent detected steps permits an indoor pause. Every timely detected step restarts that clock, measured from callback receipt. Detector events older than 2.5 seconds invalidate arming; duplicate, obsolete and future events MUST NOT create movement. Initial silence MUST NOT pause a run.
+
+Outdoor pause MUST require five seconds of qualifying stationary GPS concurrently with five seconds of armed detector silence. A confirmed missing/denied/failed detector permits GPS-only pause; a registered but unarmed or delivery-unreliable detector does not. Stale/unavailable GPS MUST prevent a new outdoor pause. GPS qualifies only with finite speed in 0–12 m/s, horizontal accuracy in 0–30 m, speed accuracy in 0–0.5 m/s, and age/inter-fix gap at most 2.5 seconds. Stationary means speed + speed accuracy <= 0.5 m/s; moving means speed - speed accuracy >= 1.0 m/s. Deadband/invalid evidence resets GPS dwell. Dwell requires distinct fixes spanning five stationary or two moving seconds, never repeated evaluation of one fix.
+
+An automatic pause MUST resume on two timely post-pause detector steps occurring within two seconds, without an additional dwell, OR (outdoors) two seconds of qualifying GPS movement. Steps may resume despite stationary/stale GPS. A policy tick gap above 2.5 seconds invalidates accumulated evidence. Registration changes, manual transitions and recovery MUST discard old evidence. Detector arming is ephemeral and MUST NOT be inferred from counter delivery. Missing evidence leaves the current state unchanged; manual Resume remains available.
 
 Manual pauses MUST never auto-resume. Automatic pauses MUST continue observing movement without accumulating active metrics. Resume MUST establish fresh measurement baselines. Automatic transitions MUST announce “Auto-paused” and “Resumed.”
+
+Transitions MUST NOT be backdated. Existing accounting excludes late counter batches received after a measurement segment closes, even if they contain pre-pause steps; no per-step timestamps or retrospective distance may be invented. Detector silence cannot distinguish a previously working sensor's silent failure from standing still. These limitations MUST remain explicit in acceptance evidence. No personalized calibration or new persisted policy state is required.
 
 ## 1.9 Active and finish interactions
 

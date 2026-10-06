@@ -23,7 +23,7 @@ The only material behavior unique to that older line is its Leaflet/OpenStreetMa
 | Identity | Google sign-in, encrypted local session, display name/photo, sign-out, explicit local-run import | Account isolation is automated; multi-account phone acceptance remains later |
 | Setup | Indoor/outdoor, none/time/distance goal, target, units, stride, countdown, announcements, auto-pause, playlist opening, connectivity/run indicators | Compose and instrumentation coverage exists |
 | Tracking | GPS, steps, stride distance, outdoor step fallback, time-only mode, source segments and route gaps | Quantitative sensor accuracy requires later device acceptance |
-| Run control | Countdown, pause, resume, automatic pause/resume, swipe finish, discard confirmation, new run | Automatic-pause device threshold remains unverified after the latest correction |
+| Run control | Countdown, pause, resume, detector-armed automatic pause/resume, concurrent outdoor GPS/step stop windows, swipe finish, discard confirmation, new run | Detector/GPS remediation requires the focused phone acceptance in TEST_PLAN.md 1.9; no raw accelerometer classification |
 | Recovery | Room checkpoints, interrupted pause, explicit resume, completed-run reopen rules | Process/reboot and external-activity acceptance remains later |
 | Metrics | Active time, distance, average pace, full splits and final partial split | Pure calculation coverage exists |
 | Audio | State, goal, milestone and completion cues with serialized playback and transient audio focus | Real speaker/headphone ducking remains later acceptance |
@@ -31,7 +31,7 @@ The only material behavior unique to that older line is its Leaflet/OpenStreetMa
 | Finish | Optional coaching, achievement celebration, summary, photo, sharing and discard/new-run controls | Combined physical flow remains later acceptance |
 | Coaching | Per-account OpenAI key, verified current/previous run context, anomaly classification, saved cloud recap/audio and onboard fallback | Paid-call tone and device playback remain later acceptance |
 | Achievements | Historical deterministic awards, finish celebration and deletion recomputation | Broader paused/source-changing performance curves are deliberately deferred |
-| Photos | Camera/picker/skip, bounded decode, time/distance/pace/route/weather overlays, preview/retake/keep/save/share | Real camera and share-target acceptance remains later |
+| Photos | Camera/picker/skip, bounded decode, time/distance/pace/route/weather overlays, preview/retake/keep/save/share; optional run-start weather has bounded meaningful retry | Real camera, share-target and physical-phone weather acceptance remain later |
 | Publication | Private default, durable publication intent, short links, photo visibility and unshare | Automated state-machine coverage exists |
 | Health Connect | Explicit write-only connection, exercise/distance export, stable IDs, retries and deletion cleanup | User-phone consent/display acceptance remains later |
 
@@ -96,3 +96,13 @@ The following are not missing baseline features:
 - The release Android variant is not the product implementation.
 - The application ID, OAuth clients, Worker URL, secrets/configuration, signing, policy declarations, and deployment process remain development/release concerns.
 - Comprehensive physical-device acceptance and development-deployment parity are intentionally outside this reconciliation sequence.
+
+## 1.9 Detector/GPS auto-pause remediation — October 5, 2026
+
+The approved replacement removes raw accelerometer classification and counter-driven motion decisions. A separately registered step detector must arm from two timely steps before five seconds of silence can pause indoors. Outdoor detector silence and uncertainty-qualified GPS stop evidence run concurrently. Two post-pause steps within two seconds or qualifying outdoor GPS movement resume only an automatic pause. REQUIREMENTS.md 1.8 defines exact thresholds and fallback behavior.
+
+The change retains Room v9, archive/settings compatibility, controller accounting and interrupted recovery. MotionWindow.kt and its classifier-only test were removed after reference tracing; Git history retains both. Detector evidence is ephemeral. Existing late counter batches received after segment closure remain excluded: the regression fixture demonstrates ten pre-pause steps arriving too late are not retrospectively counted.
+
+Android unit/build/lint and test-APK assembly passed: 125 unit tests, no failures/errors/skips, zero lint errors and 21 existing warnings. All 40 focused instrumentation tests passed on explicitly selected emulator-5554, including both auto-pause service tests, screen-off synthetic pause/resume, missing-detector GPS fallback, stale-generation manual protection, recovery, storage, announcements, music independence and photo/weather/noodle regressions. No physical phone was installed or tested; OPEN_WORK.md's bug remains open for TEST_PLAN.md 1.9.2 acceptance.
+
+Handoff APK: `android/app/build/outputs/apk/debug/WAYiRUN-2026-10-05_19-46-23_EDT.apk`, 40,290,032 bytes. SHA-256: `1779663DAF0CC88A365E231BA142A99EC9984899351C452A1E96CD27BBB64DFC`. Android signature verification passed. It includes the existing weather repair and prior noodle placement correction. Upgrade in place; preserve app data. Generated APK/tests/reports remain ignored. No schema, Worker, release-variant or deployment change was made by this remediation; existing weather changes remain pending separately. No commit or push was performed.

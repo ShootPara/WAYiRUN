@@ -89,7 +89,7 @@ Completed records are immutable except for associated operational/dependent tabl
 
 Each outdoor GPS point retains run ID, source segment, monotonic timestamp, latitude, longitude and accuracy meters. These are **SOURCE** observations. IDs are local database identities and are remapped safely during restore.
 
-GPS speed and speed-accuracy evidence used by live auto-pause policy is not retained in route rows. Raw accelerometer and step-detector motion samples are also not retained.
+GPS speed and speed-accuracy evidence used by live auto-pause policy is not retained in route rows. Step-detector occurrence/receipt timestamps, arming and candidate timers are ephemeral, not retained. Raw accelerometer classification is excluded by the October 2026 auto-pause contract. No schema change is required.
 
 ### 1.3.3 `measurements`
 

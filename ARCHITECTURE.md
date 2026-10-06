@@ -32,7 +32,7 @@ Wall-clock time is metadata. Monotonic time drives durations.
 - Compose screens and settings;
 - Google account sessions and per-account key controls;
 - the foreground tracking service;
-- GPS, step-counter, step-detector and accelerometer adapters;
+- GPS, step-counter and step-detector adapters;
 - Room storage and recovery;
 - authenticated cloud synchronization and restoration;
 - audio cues and coaching playback;
@@ -49,7 +49,7 @@ All run commands and sensor messages pass through one serialized tracking-servic
 
 1. Setup creates an immutable `RunSettings` capture.
 2. `TrackingService` creates or recovers a `RunController`.
-3. `SensorAdapters` provide GPS, cumulative steps, step detections and acceleration windows.
+3. `SensorAdapters` provide GPS, cumulative accounting steps and separately registered step detections. Detector occurrence and callback-receipt times remain distinct.
 4. `TrackingInput` validates source evidence and passes measurements to the controller.
 5. The controller calculates active time, distance, pace, splits, goals, announcements and pause transitions.
 6. `RunRepository` atomically stores the checkpoint and any new route/measurement record.
@@ -57,6 +57,8 @@ All run commands and sensor messages pass through one serialized tracking-servic
 8. A finished account-owned run is queued for cloud synchronization, coaching/publication/photo work as applicable, and Health Connect export.
 
 Indoor mode never registers location. Outdoor mode can use step fallback and later start a separate GPS segment. Pause/source/recovery boundaries remain explicit; route renderers never join separate segments.
+
+Auto-pause uses ephemeral detector arming/silence and GPS speed/uncertainty windows, as specified in REQUIREMENTS.md 1.8. Outdoor stop windows run concurrently. Counter callbacks never drive pause/resume. No raw accelerometer listener or general motion classifier is needed. Automatic pauses retain sensor observation, foreground service and the existing partial wake lock; manual pauses release observation. Recovery requires explicit resume and fresh evidence.
 
 ## 1.4 Route-display architecture
 

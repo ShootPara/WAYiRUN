@@ -9,13 +9,12 @@ data class TrackingResult(val update: RunUpdate, val measurement: RunMeasurement
 /** Prototype quality rules. Real route comparisons are required before claiming accuracy. */
 class TrackingInput(val controller: RunController, private val clock: RunClock) {
     var stepsUsable = false
+    var detectorUsable = false
         set(value) {
-            if (field != value) { motionPolicy.reset() }
+            motionPolicy.detectorAvailability(value, clock.read().monotonicMs)
             field = value
         }
-    private val motionPolicy = AutoPausePolicy()
-    private var motionAcceleration: MotionWindow? = null
-    private var motionGps: MotionGps? = null
+    private val motionPolicy = AutoPausePolicy(controller.snapshot().settings.mode)
     private var motionSinceMs = clock.read().monotonicMs
     private var lastGpsMs: Long? = null
     private var previousFix: GpsFix? = null
@@ -26,10 +25,8 @@ class TrackingInput(val controller: RunController, private val clock: RunClock) 
 
     private fun gpsFresh() = lastGpsMs?.let { clock.read().monotonicMs - it in 0..10_000 } == true
 
-    fun reset() {
-        motionPolicy.reset()
-        motionAcceleration = null
-        motionGps = null
+    fun reset(automaticTransition: Boolean = false) {
+        motionPolicy.reset(clock.read().monotonicMs, keepArming = automaticTransition)
         motionSinceMs = clock.read().monotonicMs
         resetMeasurements()
     }
@@ -44,28 +41,30 @@ class TrackingInput(val controller: RunController, private val clock: RunClock) 
     fun tick(): TrackingResult {
         val events = controller.tick().events.toMutableList()
         chooseSource(events)
+        applyMotionDecision(events, timerTick = true)
+        return TrackingResult(RunUpdate(controller.snapshot(), events))
+    }
+
+    private fun applyMotionDecision(events: MutableList<RunEvent>, timerTick: Boolean) {
         val s = controller.snapshot()
         val decision = motionPolicy.evaluate(clock.read().monotonicMs, s.state, s.pauseReason,
-            s.settings.autoPauseEnabled, stepsUsable, gps = motionGps, acceleration = motionAcceleration)
+            s.settings.autoPauseEnabled, timerTick)
         if (decision != AutoPauseDecision.NONE) {
             events += if (decision == AutoPauseDecision.PAUSE) controller.autoPause().events
                 else controller.autoResume().events
             // Motion seen while paused cannot become a distance baseline after resuming.
-            reset()
+            reset(automaticTransition = true)
         }
-        return TrackingResult(RunUpdate(controller.snapshot(), events))
     }
 
     fun gps(fix: GpsFix): TrackingResult {
         val s = controller.snapshot()
-        if (s.settings.mode == RunMode.OUTDOOR && fix.latitude.isFinite() && fix.latitude in -90.0..90.0 &&
-            fix.longitude.isFinite() && fix.longitude in -180.0..180.0 &&
-            fix.monotonicMs >= motionSinceMs &&
-            clock.read().monotonicMs - fix.monotonicMs in 0..AutoPausePolicy.GPS_FRESH_MS &&
-            (motionGps == null || fix.monotonicMs > motionGps!!.monotonicMs)) {
-            motionGps = if (fix.speedMetersPerSecond != null && fix.speedAccuracyMetersPerSecond != null)
-                MotionGps(fix.monotonicMs, fix.speedMetersPerSecond, fix.accuracyMeters.toDouble(),
-                    fix.speedAccuracyMetersPerSecond) else null
+        if (s.settings.mode == RunMode.OUTDOOR && fix.monotonicMs >= motionSinceMs) {
+            val validPosition = fix.latitude.isFinite() && fix.latitude in -90.0..90.0 &&
+                fix.longitude.isFinite() && fix.longitude in -180.0..180.0
+            motionPolicy.observeGps(clock.read().monotonicMs, MotionGps(fix.monotonicMs,
+                if (validPosition) fix.speedMetersPerSecond ?: Double.NaN else Double.NaN,
+                fix.accuracyMeters.toDouble(), fix.speedAccuracyMetersPerSecond ?: Double.NaN))
         }
         if (s.state != RunState.RUNNING || s.settings.mode != RunMode.OUTDOOR ||
             !fix.latitude.isFinite() || fix.latitude !in -90.0..90.0 ||
@@ -97,9 +96,6 @@ class TrackingInput(val controller: RunController, private val clock: RunClock) 
     }
 
     fun steps(timeMs: Long, count: Long): TrackingResult {
-        if (stepsUsable && count >= 0 && timeMs >= motionSinceMs &&
-            clock.read().monotonicMs - timeMs in 0..AutoPausePolicy.STEP_WINDOW_MS)
-            motionPolicy.observeSteps(clock.read().monotonicMs, MotionSteps(timeMs, count))
         if (!stepsUsable || count < 0 || controller.snapshot().state != RunState.RUNNING) return unchanged()
         val events = mutableListOf<RunEvent>()
         chooseSource(events)
@@ -112,17 +108,11 @@ class TrackingInput(val controller: RunController, private val clock: RunClock) 
         return TrackingResult(RunUpdate(controller.snapshot(), events), measurement.takeIf { controller.checkpoint().baseline == it })
     }
 
-    fun detectedStep(timeMs: Long) {
-        if (timeMs >= motionSinceMs) motionPolicy.observeStep(clock.read().monotonicMs, timeMs)
-    }
-
-    fun acceleration(window: MotionWindow) {
-        if (window.startedMs >= motionSinceMs &&
-            clock.read().monotonicMs - window.monotonicMs in 0..1_000 &&
-            (motionAcceleration == null || window.monotonicMs > motionAcceleration!!.monotonicMs)) {
-            motionAcceleration = window
-            motionPolicy.observeAcceleration(window)
-        }
+    fun detectedStep(timeMs: Long, receivedMs: Long = clock.read().monotonicMs): TrackingResult {
+        if (timeMs >= motionSinceMs) motionPolicy.observeStep(clock.read().monotonicMs, timeMs, receivedMs)
+        val events = mutableListOf<RunEvent>()
+        applyMotionDecision(events, timerTick = false)
+        return TrackingResult(RunUpdate(controller.snapshot(), events))
     }
 
     private fun chooseSource(events: MutableList<RunEvent>) {

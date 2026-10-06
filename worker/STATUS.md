@@ -1,8 +1,12 @@
 # WAYiRUN — Cloud foundation handoff
 
-## 0.1 Current deployment — September 28 photo repair
+## 0.1 Current deployment — October 5 weather repair
 
-The historical sections below describe earlier releases. Current development Worker: `ce8a67a6-ce47-4d49-9559-9314014d6efc`, deployed under the owner's explicit photo-repair authorization. Migrations 0008-0011 are applied, with none pending. All 148 local Worker tests, compile/dry-run, 27 live smoke checks and the authenticated synthetic photo/publication canary passed. The private database backup restored successfully in isolated SQLite. After synthetic cleanup, cloud photos increased from six in the backup to eight, including two current-format uploads. See ../PHOTO_SYNC_REPAIR.md for safeguards, recovery evidence, Android hardening and the required deployed-compatibility handoff gate. No production release or Git commit/push occurred.
+Current development Worker: `5b3b8fc8-f10a-47b0-8cd7-ae0a38c03dd7`. The bounded weather-reliability repair replaces the unsupported Workers `redirect: "error"` request with manual redirect rejection, supports WMO code 97, uses an eight-second deadline, and exposes meaningful bounded retry eligibility. No migration was required and none was pending. All 156 Worker tests and deployment dry-run passed; all 27 live smoke checks passed after deployment. A disposable authenticated outdoor-run canary completed a real Open-Meteo forecast lookup, verified immutable cached reuse, and confirmed complete cleanup. No personal coordinates or records were used or changed.
+
+## 0.2 Previous deployment — September 28 photo repair
+
+The historical sections below describe earlier releases. Previous development Worker: `ce8a67a6-ce47-4d49-9559-9314014d6efc`, deployed under the owner's explicit photo-repair authorization. Migrations 0008-0011 are applied, with none pending. All 148 local Worker tests, compile/dry-run, 27 live smoke checks and the authenticated synthetic photo/publication canary passed. The private database backup restored successfully in isolated SQLite. After synthetic cleanup, cloud photos increased from six in the backup to eight, including two current-format uploads. See ../PHOTO_SYNC_REPAIR.md for safeguards, recovery evidence, Android hardening and the required deployed-compatibility handoff gate. No production release or Git commit/push occurred.
 
 ## 1 Completed scope
 

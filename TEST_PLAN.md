@@ -97,3 +97,31 @@ At minimum, later acceptance must cover real GPS/steps, indoor auto-pause, scree
 ## 1.8 Failure handling
 
 A failing required command blocks the feature-development baseline until the failure is understood and either corrected in a separately scoped implementation milestone or documented as an environmental blocker. Do not weaken tests, lint, validation, ownership checks, or privacy guards to make the gate pass.
+
+## 1.9 Approved detector/GPS auto-pause remediation
+
+This bounded October 2026 remediation authorizes Android implementation, local gates, explicitly selected emulator regression and an APK handoff for physical acceptance. It does not authorize physical-phone installation, deployment, or commit/push. REQUIREMENTS.md 1.8 defines the policy, including concurrent outdoor timers. Historical acceleration tests/handoffs are superseded for the decision algorithm.
+
+### 1.9.1 Automated acceptance
+
+Pure tests must cover initial detector silence, two-step arming, every-step silence reset, exact five-second boundary, receipt-time conservatism, timely batched steps, delayed hardware/application delivery, duplicate/out-of-order/future events, re-registration and tick gaps. Resume requires two post-pause steps within two seconds without extra dwell. Counter batches never cause a policy transition.
+
+GPS tests must cover quality/uncertainty boundaries, deadband and invalid samples between ticks, distinct timestamps, stale fixes/gaps, concurrent five-second windows, confirmed missing-detector fallback, registered-but-unarmed suppression, GPS loss and step-based resume despite stationary GPS. Integration tests must preserve paused accounting, source gaps, fresh baselines, manual/interrupted protection, repeated stops, announcement progress and Health Connect intervals. A delayed pre-pause counter batch received after segment closure remains excluded; quantify this existing limitation rather than rewriting distance.
+
+Run the required Android gate plus `:app:assembleDebugAndroidTest`, then focused auto-pause/service/storage/settings/announcement/photo-weather instrumentation on an explicitly selected emulator. Synthetic callbacks and screen-off emulator tests establish integration behavior, not hardware sensitivity or OEM delivery.
+
+### 1.9.2 Physical acceptance handoff
+
+Record phone model, Android version, installed build, normal carried placement, permissions and battery mode. Use the same defaults for all testers; do not calibrate per person.
+
+1. Indoors, walk slowly, walk normally and jog for several minutes, including initial startup. No false pause.
+2. Stop for 15 seconds, then move again; repeat three times. Confirm state/cues, frozen paused time/distance and fresh resumed measurement. Five seconds of detector silence can mean roughly five to eight seconds after the last physical step because delivery and timer evaluation take time.
+3. While stopped, look at or gently reposition the phone. Ordinary handling should no longer require accelerometer quiet.
+4. Manually pause, then walk for at least 15 seconds. No automatic resume.
+5. Repeat movement and two stop/resume cycles with the screen locked and phone unplugged. Include one locked interval longer than ten minutes to exercise wake-lock renewal.
+6. Outdoors, repeat walking/jogging/stops with usable GPS, then poor reception. GPS loss must not create a pause. GPS-only fallback cannot promise resume below the configured movement threshold.
+7. Verify auto-pause off and interrupted recovery requiring explicit resume. Finish and inspect pause intervals, distance, splits and cues.
+
+For failures, capture only bounded detector-registration/event-age/count, GPS speed/uncertainty, tick-gap and decision evidence if instrumentation is needed; no coordinates, identities or indefinite raw logging. A detector silently failing after arming cannot be distinguished from stopping with detector-only input. A phone left on treadmill equipment cannot represent its runner.
+
+Keep OPEN_WORK.md's physical bug open until this acceptance passes. Report emulator and phone results separately. One phone validates that device; it does not establish population-wide reliability.

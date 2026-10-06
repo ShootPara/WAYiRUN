@@ -10,8 +10,7 @@ import android.os.Bundle
 import android.os.Looper
 import com.example.runningapp.domain.GpsFix
 import com.example.runningapp.domain.RunMode
-import com.example.runningapp.domain.AccelerationWindow
-import com.example.runningapp.domain.MotionWindow
+import android.os.SystemClock
 
 fun Context.granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 fun Context.activityAllowed() = Build.VERSION.SDK_INT < 29 || granted(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -24,7 +23,7 @@ open class SensorAdapters(private val context: Context) {
     private val locations = context.getSystemService(LocationManager::class.java)
     private var stepListener: SensorEventListener? = null
     private var locationListener: LocationListener? = null
-    private val motionListeners = mutableListOf<SensorEventListener>()
+    private var detectorListener: SensorEventListener? = null
     var generation = 0L
         private set
 
@@ -67,34 +66,31 @@ open class SensorAdapters(private val context: Context) {
         return hasSteps
     }
 
-    open fun startMotion(onStep: (Long, Long) -> Unit, onMotion: (Long, MotionWindow) -> Unit) {
+    open fun startMotion(onStep: (Long, Long, Long) -> Unit): Boolean {
         val token = generation
-        val window = AccelerationWindow()
-        fun register(type: Int, callback: (SensorEvent) -> Unit) {
-            val sensor = sensors.getDefaultSensor(type) ?: return
-            val listener = object : SensorEventListener {
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-                override fun onSensorChanged(event: SensorEvent) = callback(event)
+        if (!context.activityAllowed()) return false
+        val sensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) ?: return false
+        val listener = object : SensorEventListener {
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.values.firstOrNull() == 1f)
+                    onStep(token, event.timestamp / 1_000_000, SystemClock.elapsedRealtime())
             }
-            try {
-                if (sensors.registerListener(listener, sensor, 50_000, 0)) motionListeners += listener
-            } catch (_: SecurityException) { /* Unavailable evidence remains unknown. */ }
         }
-        if (context.activityAllowed()) register(Sensor.TYPE_STEP_DETECTOR) { event ->
-            if (event.values.firstOrNull() == 1f) onStep(token, event.timestamp / 1_000_000)
-        }
-        register(Sensor.TYPE_ACCELEROMETER) { event ->
-            if (event.values.size >= 3) window.add(event.timestamp / 1_000_000,
-                event.values[0].toDouble(), event.values[1].toDouble(), event.values[2].toDouble())
-                ?.let { onMotion(token, it) }
+        return try {
+            sensors.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL, 0).also {
+                if (it) detectorListener = listener
+            }
+        } catch (_: SecurityException) {
+            false
         }
     }
 
     open fun stop() {
         generation++
         stepListener?.let { sensors.unregisterListener(it) }
-        motionListeners.forEach { sensors.unregisterListener(it) }
-        motionListeners.clear()
+        detectorListener?.let { sensors.unregisterListener(it) }
+        detectorListener = null
         locationListener?.let { locations.removeUpdates(it) }
         stepListener = null
         locationListener = null
