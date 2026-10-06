@@ -1,3 +1,7 @@
+import java.time.ZonedDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -22,7 +26,8 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = "-dev"
+            versionNameSuffix = "-dev-photo-sync1"
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com\"")
         }
     }
 
@@ -32,8 +37,11 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
+
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
     lint {
         abortOnError = true
@@ -48,6 +56,14 @@ kotlin {
 }
 
 dependencies {
+    debugImplementation("androidx.health.connect:connect-client:1.1.0")
+    debugImplementation("androidx.work:work-runtime-ktx:2.10.5")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
+    debugImplementation("androidx.credentials:credentials:1.6.0")
+    debugImplementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    debugImplementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
+    debugImplementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.2")
+    debugImplementation("io.coil-kt:coil-compose:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     debugImplementation("androidx.room:room-runtime:2.8.4")
     debugImplementation("androidx.room:room-ktx:2.8.4")
@@ -66,3 +82,15 @@ dependencies {
 }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
+// Name the actual packaged artifact so tooling and handoff use the same APK.
+// AGP 8.13 has no public VariantOutput.outputFileName; keep this pinned-AGP bridge local.
+android.applicationVariants.all {
+    if (buildType.name == "debug") {
+        val stamp = ZonedDateTime.now(ZoneId.of("America/New_York"))
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss_z"))
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = "WAYiRUN-$stamp.apk"
+        }
+    }
+}

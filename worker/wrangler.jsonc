@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wayirun-dev",
+  "account_id": "6bf560a8b86852196c9898023e3b8d6b",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-17",
+  "workers_dev": true,
+  "preview_urls": false,
+  "rules": [{ "type": "Text", "globs": ["**/*.html", "**/*.browserjs", "**/*.css"], "fallthrough": true }],
+  "observability": { "enabled": false },
+  "vars": {
+    "APP_ENV": "development",
+    "LOCATION_LOOKUP_URL": "https://nominatim.openstreetmap.org/reverse",
+    "GOOGLE_WEB_CLIENT_ID": "933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com",
+    "GOOGLE_ANDROID_CLIENT_ID": "933230558080-8o82hopmd4ibnt2fllqpr8252lg3q44t.apps.googleusercontent.com"
+  },
+  "ratelimits": [
+    { "name": "RUN_RATE_LIMIT", "namespace_id": "786531903", "simple": { "limit": 300, "period": 60 } },
+    { "name": "RUN_TOTAL_LIMIT", "namespace_id": "786531904", "simple": { "limit": 3000, "period": 60 } },
+    { "name": "AUTH_RATE_LIMIT", "namespace_id": "786531901", "simple": { "limit": 30, "period": 60 } },
+    { "name": "AUTH_TOTAL_LIMIT", "namespace_id": "786531902", "simple": { "limit": 300, "period": 60 } }
+  ],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "wayirun-dev-db",
+    "database_id": "04bf8339-386b-4a03-80d7-12b4d1f99ffb",
+    "migrations_dir": "migrations"
+  }]
+}

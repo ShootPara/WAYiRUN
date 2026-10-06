@@ -14,6 +14,8 @@ fun interface RunClock {
 
 enum class RunState { READY, COUNTDOWN, RUNNING, PAUSED, FINISHED }
 @Serializable
+enum class PauseReason { MANUAL, AUTOMATIC, INTERRUPTED }
+@Serializable
 enum class RunMode { INDOOR, OUTDOOR }
 @Serializable
 enum class DistanceSource { GPS, STEPS }
@@ -37,6 +39,35 @@ sealed interface RunGoal {
     }
 }
 
+@Serializable
+enum class AnnouncementInterval(val timeMs: Long? = null, val distanceUnits: Double? = null) {
+    FIVE_MINUTES(timeMs = 300_000), TEN_MINUTES(timeMs = 600_000),
+    HALF_UNIT(distanceUnits = 0.5), ONE_UNIT(distanceUnits = 1.0),
+}
+
+@Serializable
+data class AnnouncementSelection(
+    val version: Int = 1,
+    val timeEnabled: Boolean = true,
+    val timeInterval: AnnouncementInterval = AnnouncementInterval.FIVE_MINUTES,
+    val distanceEnabled: Boolean = false,
+    val distanceInterval: AnnouncementInterval = AnnouncementInterval.ONE_UNIT,
+) {
+    init {
+        require(version == 1)
+        require(timeInterval.timeMs != null && distanceInterval.distanceUnits != null)
+    }
+
+    companion object {
+        fun legacy(interval: AnnouncementInterval) = AnnouncementSelection(
+            timeEnabled = interval.timeMs != null,
+            timeInterval = interval.takeIf { it.timeMs != null } ?: AnnouncementInterval.FIVE_MINUTES,
+            distanceEnabled = interval.distanceUnits != null,
+            distanceInterval = interval.takeIf { it.distanceUnits != null } ?: AnnouncementInterval.ONE_UNIT,
+        )
+    }
+}
+
 /** No personal stride or unit preference is inferred. Null stride permits time/GPS tracking. */
 @Serializable
 data class RunSettings(
@@ -45,7 +76,18 @@ data class RunSettings(
     val countdownSeconds: Int,
     val goal: RunGoal,
     val strideLengthMeters: Double?,
+    // Missing fields in pre-announcement archives retain their original silent-interval behavior.
+    val announcementsEnabled: Boolean = false,
+    val announcementInterval: AnnouncementInterval = AnnouncementInterval.FIVE_MINUTES,
+    // Old checkpoints retain their captured behavior; new setup explicitly defaults this on.
+    val autoPauseEnabled: Boolean = false,
+    val announcementSelection: AnnouncementSelection? = null,
 ) {
+    fun effectiveAnnouncements(): AnnouncementSelection {
+        val selected = announcementSelection ?: AnnouncementSelection.legacy(announcementInterval)
+        return if (announcementsEnabled) selected else selected.copy(timeEnabled = false, distanceEnabled = false)
+    }
+
     init {
         require(countdownSeconds in 0..10)
         require(strideLengthMeters == null ||
@@ -103,9 +145,11 @@ data class FullSplit(
 
 @Serializable
 
-enum class RunEventType { STARTED, PAUSED, RESUMED, FINISHED, GOAL_REACHED, SPLIT_COMPLETED }
+enum class RunEventType { STARTED, PAUSED, RESUMED, FINISHED, GOAL_REACHED, SPLIT_COMPLETED, ANNOUNCEMENT }
 @Serializable
 data class RunEventId(val runId: String, val sequence: Long)
+@Serializable
+enum class AnnouncementChannel { TIME, DISTANCE }
 @Serializable
 data class RunEvent(
     val id: RunEventId,
@@ -113,6 +157,9 @@ data class RunEvent(
     val activeDurationMs: Long,
     val distanceMeters: Double,
     val split: FullSplit? = null,
+    val pauseReason: PauseReason? = null,
+    val occurrenceActiveMs: Long? = null,
+    val announcementChannel: AnnouncementChannel? = null,
 )
 
 @Serializable
@@ -133,6 +180,7 @@ data class RunSnapshot(
     val segments: List<MeasurementSegment>,
     val splits: List<FullSplit>,
     val activeIntervals: List<ActiveInterval> = emptyList(),
+    val pauseReason: PauseReason? = null,
 )
 
 @Serializable

@@ -375,6 +375,7 @@ class RunControllerTest {
         f.steps(0, 0)
         assertEquals(0.0, f.steps(1_000, 2).snapshot.distanceMeters, 0.0)
         assertEquals(0.0, f.steps(2_000, 0).snapshot.distanceMeters, 0.0)
+        assertEquals(0.0, f.steps(3_000, 1).snapshot.distanceMeters, 0.0) // Finite but corrupt-sized input.
     }
 
     @Test fun previouslyReturnedSnapshotDoesNotChangeWithController() {

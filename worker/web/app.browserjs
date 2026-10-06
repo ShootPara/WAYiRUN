@@ -1,0 +1,373 @@
+import { prepareRoute } from "/route.js";
+import { showRouteMap } from "/map.js";
+import { achievementInput, evaluateAchievements } from "/achievements.js";
+import { collectExportRuns, createCsvExport, fetchWithBackoff, verifyCoaching, verifyPhoto, EXPORT_LIMIT } from "/export.js";
+const $ = id => document.getElementById(id);
+let destroyMap = null, mapGeneration = 0;
+let coachingUrl = null;
+let photoUrl=null;
+let publication=null, publicationRun=null, publicationBusy=false, pendingPublication=null;
+const publicationPanel=document.createElement("section");
+publicationPanel.id="publication-panel";
+publicationPanel.innerHTML='<h2>Sharing</h2><p id="publication-state" role="status" aria-live="polite"></p><div class="actions"><button id="share-run" disabled>Share run link</button><button id="copy-run" class="quiet" disabled>Copy run link</button><button id="unshare-run" class="quiet" disabled>Unshare</button></div><label class="photo-visibility"><input id="photo-visible" type="checkbox" disabled> Display photo with shared run</label>';
+$("public-run").parentElement.after(publicationPanel);
+publicationPanel.append($("public-run"));
+function renderPublication() {
+ for(const id of ["share-run","copy-run","unshare-run","photo-visible"])$(id).disabled=!publication||publicationBusy;
+ if(!publicationBusy)$("photo-visible").checked=publication?.photoVisible??true;
+ $("public-run").hidden=!publication?.publicUrl;
+ if(publication?.publicUrl){$("public-run").href=publication.publicUrl;$("public-run").textContent=publication.publicUrl;}
+ else $("public-run").removeAttribute("href");
+}
+async function loadPublication(runId,current) {
+ publicationRun=runId;$("publication-state").textContent="Loading sharing status...";
+ try {
+  const result=await json(`publications/${runId}`);if(current!==generation||publicationRun!==runId)return;
+  publication=result.publication;renderPublication();$("publication-state").textContent=publication.shared?"Shared":"Private";
+ }catch(error){if(current===generation)$("publication-state").textContent="Sharing status unavailable. Reopen the run to retry.";}
+}
+async function changePublication(action,delivery=null) {
+ if(!publication||publicationBusy||!publicationRun)return;
+ const runId=publicationRun,current=generation,photoVisible=$("photo-visible").checked;
+ const key=JSON.stringify({action,...(action==="photo"?{photoVisible}:{})});
+ if(pendingPublication?.key!==key)pendingPublication={key,body:{operationId:crypto.randomUUID(),expectedRevision:publication.revision,action,...(action==="photo"?{photoVisible}:{})}};
+ const attempt=pendingPublication;
+ publicationBusy=true;renderPublication();$("publication-state").textContent="Saving sharing status...";
+ try {
+  const response=await fetch(`/web-api/publications/${runId}`,{method:"PUT",credentials:"same-origin",cache:"no-store",signal:controller.signal,
+   headers:{"Content-Type":"application/json","X-WAYIRUN-Request":"1"},body:JSON.stringify(attempt.body)});
+  if(current!==generation||publicationRun!==runId)return;
+  const result=await response.json();
+  if(current!==generation||publicationRun!==runId)return;
+  if(response.status===409){pendingPublication=null;publication=null;renderPublication();await loadPublication(runId,current);
+   if(current===generation)$("publication-state").textContent="Sharing changed elsewhere. Review its status and try again.";return;}
+  if(!response.ok)throw Error();
+  publication=result.publication;pendingPublication=null;renderPublication();
+  $("publication-state").textContent=publication.shared?"Shared":"Private";
+  if(delivery && publication.publicUrl) {
+   try {
+    if(delivery==="share"&&navigator.share)await navigator.share({title:"WAYiRUN shared run",url:publication.publicUrl});
+    else {await navigator.clipboard.writeText(publication.publicUrl);if(current===generation)$("publication-state").textContent="Shared. Link copied.";}
+   }catch(error){if(current===generation)$("publication-state").textContent=error.name==="AbortError"?"Shared":"Shared. The link is available below.";}
+  }
+ }catch(error){if(current===generation)$("publication-state").textContent="Change not confirmed. Retry the action or reopen to check status.";}
+ finally {if(current===generation){publicationBusy=false;renderPublication();}}
+}
+$("share-run").onclick=()=>changePublication("share","share");
+$("copy-run").onclick=()=>changePublication("share","copy");
+$("unshare-run").onclick=()=>changePublication("unshare");
+$("photo-visible").onchange=()=>changePublication("photo");
+function clearPhoto() {
+  publication=null;publicationRun=null;publicationBusy=false;pendingPublication=null;renderPublication();$("publication-state").textContent="";
+  $("run-photo").removeAttribute("src");$("run-photo").hidden=true;$("public-run").removeAttribute("href");$("public-run").hidden=true;$("photo-state").textContent="";
+  if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=null;
+}
+async function readPhoto(runId,current) {
+  const result=await json(`photos/${runId}`);check(current===generation);
+  let bytes=null;
+  if(result.photo){
+    const response=await api(`photos/${runId}/image`);
+    if(!response.ok)throw Error("The run photo could not be downloaded.");
+    const reader=response.body.getReader(),parts=[];let length=0;
+    while(true){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>1000000){await reader.cancel();throw Error("Photo too large.");}parts.push(value);}
+    bytes=new Uint8Array(length);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}
+  }
+  await verifyPhoto(result.photo,bytes,()=>current===generation);return {metadata:result.photo,bytes};
+}
+async function loadPhoto(runId,current) {
+  void loadPublication(runId,current);
+  $("photo-state").textContent="Loading photo…";
+  try {
+    const photo=await readPhoto(runId,current);if(current!==generation)return;
+    $("photo-state").textContent=photo.metadata?"Saved photo":"No photo saved for this run.";
+    if(photo.bytes){photoUrl=URL.createObjectURL(new Blob([photo.bytes],{type:"image/jpeg"}));$("run-photo").src=photoUrl;$("run-photo").hidden=false;}
+  }catch(error){if(current===generation&&error.name!=="AbortError")$("photo-state").textContent="Photo could not load. Reopen the run to retry.";}
+}
+function clearCoaching() {
+  clearPhoto();
+  const player=$("coaching-audio");player.pause();player.removeAttribute("src");player.load();player.hidden=true;
+  if(coachingUrl)URL.revokeObjectURL(coachingUrl);coachingUrl=null;
+  $("coaching-copy").textContent="";$("coaching-state").textContent="";
+}
+async function loadCoaching(runId,current) {
+  $("coaching-state").textContent="Loading saved coaching…";
+  try {
+    const result=await json(`coaching-history/${runId}`);
+    const bytes=await verifyCoaching(result,runId,()=>current===generation);
+    if(current!==generation)return;
+    const c=result.coaching;
+    $("coaching-copy").textContent=c?.message??"";
+    $("coaching-state").textContent=!c?"No coaching is saved for this run.":c.state==="ready"?"AI-generated coaching · Replay saved audio":
+      ["preparing","text_pending","speech_pending"].includes(c.state)?"Coaching is still being prepared. Reopen this run to check again.":
+      c.error==="context_deleted"?"This coaching was removed because a run used to generate it was deleted.":"Coaching audio was not completed. Any saved recap appears above.";
+    if(bytes){coachingUrl=URL.createObjectURL(new Blob([bytes],{type:"audio/wav"}));$("coaching-audio").src=coachingUrl;$("coaching-audio").hidden=false;}
+  }catch(error){if(current===generation&&error.name!=="AbortError")$("coaching-state").textContent="Saved coaching could not load. Your run details are still available. Reopen the run to try again.";}
+}
+$("coaching-audio").addEventListener("error",()=>{$("coaching-state").textContent="The saved audio could not play in this browser. The recap is still available.";});
+function clearMap() { mapGeneration++; destroyMap?.(); destroyMap = null; $("route-map").replaceChildren(); $("route-panel").hidden = true; $("fit-route").disabled = true; $("route-status").textContent = ""; }
+let account = null, runs = new Map(), next = null, selected = null, generation = 0;
+let staged = { key: null, chunks: new Map() };
+let controller = new AbortController();
+let exporting = false;
+let deleting = false, loading = false;
+const chosen = new Set();
+let confirmedIds = [];
+function updateControls() {
+  const busy=exporting||deleting||loading;
+    for(const id of ["refresh","more","units","export","achievements"])$(id).disabled=busy;
+  for(const control of $("runs").querySelectorAll("button,input"))control.disabled=busy;
+  $("delete-selected").disabled=busy||chosen.size===0;
+  $("selection-count").textContent=chosen.size?`${chosen.size} selected`:"Select runs to delete";
+}
+function exportControls(busy) {
+  exporting = busy;
+  updateControls();
+  $("cancel-export").hidden=!busy;
+}
+async function exportRuns() {
+  if(exporting||deleting||loading)return;
+  const current=++generation, isCurrent=()=>current===generation;
+  exportControls(true);message("Gathering all synced runs…");
+  let writer;
+  const achievementRuns=[];
+  let achievementBytes=0;
+  try {
+    const all=await collectExportRuns(after=>json("runs"+(after?`?after=${encodeURIComponent(after)}`:"")),isCurrent);
+    writer=createCsvExport();
+    for(const [index,run] of all.entries()) {
+      summaryValid(run.summary);message(`Exporting run ${index+1} of ${all.length}…`);
+      const data=await archive(run,current),saved=await json(`coaching-history/${run.runId}`);
+        check(saved&&Object.keys(saved).sort().join(",")==="coaching,runId"&&saved.runId===run.runId&&saved.coaching!==undefined);
+      const photo=await readPhoto(run.runId,current);
+      await writer.add({...data,coaching:saved.coaching,photo},isCurrent);
+      const input=achievementInput(data);achievementBytes+=new TextEncoder().encode(JSON.stringify(input)).length;
+      if(achievementBytes>EXPORT_LIMIT)throw new Error("This achievement history exceeds the browser's 128 MiB limit.");
+      achievementRuns.push(input);
+      staged={key:null,chunks:new Map()};
+    }
+    if(!isCurrent())return;
+    writer.addAchievements(evaluateAchievements(achievementRuns));
+    const url=URL.createObjectURL(writer.finish()), link=document.createElement("a");
+    link.href=url;link.download=`WAYiRUN-all-runs-${new Date().toISOString().replace(/[:.]/g,"-")}.csv`;
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+    message(`CSV ready: ${all.length} synced run${all.length===1?"":"s"}, including all retained details.`);
+  } catch(error) {
+    if(isCurrent()&&error.name!=="AbortError")message(`${error.message} No export was downloaded.`);
+  } finally {
+    writer?.discard();
+    if(isCurrent()){staged={key:null,chunks:new Map()};exportControls(false);}
+  }
+}
+$("export").addEventListener("click",exportRuns);
+$("achievements").addEventListener("click",async()=>{
+  if(exporting||deleting||loading)return;
+  const current=++generation,isCurrent=()=>current===generation,inputs=[];
+  let bytes=0;
+  exportControls(true);$("achievement-list").replaceChildren();message("Reading your complete history for achievements…");
+  try {
+    const all=await collectExportRuns(after=>json("runs"+(after?`?after=${encodeURIComponent(after)}`:"")),isCurrent);
+    for(const [i,run] of all.entries()) { message(`Checking achievements: run ${i+1} of ${all.length}…`);const input=achievementInput(await archive(run,current));
+      bytes+=new TextEncoder().encode(JSON.stringify(input)).length;if(bytes>EXPORT_LIMIT)throw new Error("This achievement history exceeds the browser's 128 MiB limit.");
+      inputs.push(input);staged={key:null,chunks:new Map()}; }
+    if(!isCurrent())return;
+    const awards=evaluateAchievements(inputs);
+    for(const a of awards.reverse()) {const item=document.createElement("li"),title=document.createElement("strong"),detail=document.createElement("p");title.textContent=a.name;detail.textContent=`${a.detail} · ${a.date}`;item.append(title,detail);$("achievement-list").append(item);}
+    $("achievement-panel").hidden=false;message(awards.length?`${awards.length} achievements from all ${all.length} synced runs.`:"No achievements earned yet.");
+  }catch(error){if(isCurrent()&&error.name!=="AbortError")message(error.message);}
+  finally{if(isCurrent())exportControls(false);}
+});
+$("cancel-export").addEventListener("click",()=>{
+  generation++;controller.abort();controller=new AbortController();staged={key:null,chunks:new Map()};
+  exportControls(false);message("Export cancelled. No file was downloaded.");
+});
+$("delete-selected").addEventListener("click",()=>{
+  if(exporting||deleting||loading)return;
+  confirmedIds=[...chosen].filter(id=>runs.has(id));
+  if(!confirmedIds.length)return;
+  $("delete-title").textContent=`Delete ${confirmedIds.length} run${confirmedIds.length===1?"":"s"}?`;
+  $("delete-list").replaceChildren(...confirmedIds.map(id=>cell(`${date(runs.get(id).summary.startedUtcMs)} · ${distance(runs.get(id).summary.distanceMeters)}`,"li")));
+  $("confirm-delete").textContent=`Delete ${confirmedIds.length} run${confirmedIds.length===1?"":"s"}`;
+  $("delete-dialog").showModal();$("cancel-delete").focus();
+});
+$("cancel-delete").addEventListener("click",()=>$("delete-dialog").close());
+$("delete-dialog").addEventListener("close",()=>{confirmedIds=[];});
+$("confirm-delete").addEventListener("click",async()=>{
+  if(deleting||!confirmedIds.length)return;
+  const ids=[...confirmedIds],current=++generation;
+    deleting=true;$("delete-dialog").close();$("achievement-list").replaceChildren();$("achievement-panel").hidden=true;updateControls();
+  let completed=0,failed=0,lastError="";
+  for(const [index,id] of ids.entries()) {
+    if(current!==generation)break;
+    message(`Deleting run ${index+1} of ${ids.length}…`);
+    try {
+      const receipt=await json(`runs/${id}`,"DELETE");
+      if(current!==generation)break;
+      if(receipt.runId!==id||receipt.deleted!==true)throw new Error("The server did not confirm deletion.");
+      runs.delete(id);chosen.delete(id);completed++;staged={key:null,chunks:new Map()};renderHistory();
+    } catch(error) {
+      if(current!==generation)break;
+      failed++;lastError=error.message;
+      // Stop after a failure; leave failed/unattempted selections for an explicit retry.
+      break;
+    }
+  }
+  if(current===generation){
+    deleting=false;updateControls();
+    message(`${completed} run${completed===1?"":"s"} deleted.${failed?` ${ids.length-completed} not confirmed deleted and still selected. ${lastError} Retry Delete selected or refresh to check.`:" Phones will remove their copies when they next sync. Downloaded exports are unchanged."}`);
+    $(chosen.size?"delete-selected":"refresh").focus();
+  }
+});
+const unit = () => $("units").value === "MILES" ? { meters: 1609.344, label: "mi" } : { meters: 1000, label: "km" };
+const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+function check(value) { if (!value) throw new Error("This run could not be verified. Its saved data is unchanged."); }
+function message(text = "") { $("message").textContent = text; }
+function reset() { $("achievement-list").replaceChildren();$("achievement-panel").hidden=true;clearCoaching();deleting=false;loading=false;chosen.clear();confirmedIds=[];$("delete-dialog").close();exportControls(false); clearMap(); generation++; controller.abort(); controller = new AbortController(); runs.clear(); next = null; selected = null; staged = {key:null,chunks:new Map()}; $("runs").replaceChildren(); $("splits").replaceChildren(); $("settings").replaceChildren(); $("totals").replaceChildren(); $("detail-totals").replaceChildren(); $("detail").hidden = true; }
+async function api(path, method = "GET", body) {
+  const signal=controller.signal;
+  const send=()=>fetch(`/web-api/${path}`, {method, credentials:"same-origin", cache:"no-store", signal,
+    headers: {"X-WAYIRUN-Request":"1", ...(body ? {"Content-Type":"application/json"} : {})}, ...(body ? {body:JSON.stringify(body)} : {})});
+  const response = method==="GET"&&exporting
+    ? await fetchWithBackoff(send,signal,seconds=>message(`Export paused briefly by the server. Resuming automatically in ${seconds} seconds…`))
+    : await send();
+  if (!response.ok) {
+    if (response.status === 401) throw new Error(account ? "Your session has expired. Sign out and sign in again to continue." : "Sign-in could not be verified. Try sign-in again.");
+    if (response.status === 429) throw new Error("Please try again in a minute. Your runs are safe.");
+    if (response.status === 404) throw new Error("This run is no longer available. Refresh your history.");
+    throw new Error("Unable to connect right now. Please try again.");
+  }
+  return response;
+}
+const json = async (path, method, body) => (await api(path,method,body)).json();
+function duration(ms) { const seconds = Math.floor(ms/1000), h = Math.floor(seconds/3600), m = Math.floor(seconds/60)%60, s = seconds%60; return (h ? `${h}:` : "") + `${h?String(m).padStart(2,"0"):m}:${String(s).padStart(2,"0")}`; }
+function distance(m) { return `${(m/unit().meters).toFixed(2)} ${unit().label}`; }
+function pace(ms, meters) { return meters > 0 ? `${duration(ms/meters*unit().meters)} /${unit().label}` : "—"; }
+function date(ms, zone) { return new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short",...(zone?{timeZone:zone}:{})}).format(new Date(ms)); }
+function cell(text, tag="td") { const element = document.createElement(tag); element.textContent=text; return element; }
+function metrics(target, meters, time) {
+  target.replaceChildren();
+  for (const [value,label] of [[distance(meters),"Distance"],[duration(time),"Active time"],[pace(time,meters),"Average pace"]]) {
+    const box=document.createElement("div");box.className="metric";box.append(cell(value,"strong"),cell(label,"span"));target.append(box);
+  }
+}
+function summaryValid(s) {
+  check(s && s.state==="FINISHED" && [s.startedUtcMs,s.endedUtcMs,s.activeDurationMs].every(v=>Number.isSafeInteger(v)&&v>=0));
+  check(Number.isFinite(s.distanceMeters)&&s.distanceMeters>=0&&["INDOOR","OUTDOOR"].includes(s.mode)&&["MILES","KILOMETERS"].includes(s.units));
+}
+function renderHistory() {
+  $("runs").replaceChildren(); let meters=0,time=0;
+  for (const run of [...runs.values()].sort((a,b)=>b.summary.startedUtcMs-a.summary.startedUtcMs)) {
+    const s=run.summary;meters+=s.distanceMeters;time+=s.activeDurationMs;
+    const row=document.createElement("tr"), name=document.createElement("td"), button=document.createElement("button");
+    const selection=document.createElement("td"),checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.checked=chosen.has(run.runId);
+    checkbox.setAttribute("aria-label",`Select run ${date(s.startedUtcMs)}`);
+    checkbox.addEventListener("change",()=>{if(checkbox.checked)chosen.add(run.runId);else chosen.delete(run.runId);updateControls();});selection.append(checkbox);
+    button.textContent=date(s.startedUtcMs); button.addEventListener("click",()=>openRun(run));name.append(button);
+    row.append(selection,name,cell(s.mode==="INDOOR"?"Indoor":"Outdoor"),cell(distance(s.distanceMeters)),cell(duration(s.activeDurationMs)),cell(pace(s.activeDurationMs,s.distanceMeters)));$("runs").append(row);
+  }
+  metrics($("totals"),meters,time);$("empty").hidden=runs.size>0;$("more").hidden=!next;
+  $("empty").textContent=next?"No runs remain on this page. Load more runs to continue.":"No synced runs yet. Finish a run in WAYiRUN and let it sync to this account.";
+  $("scope").textContent=`${runs.size} ${next?"loaded ":""}run${runs.size===1?"":"s"}${next?" · totals for loaded runs":""}`;
+  updateControls();
+}
+async function loadHistory(append=false) {
+  if(exporting||deleting||loading)return;
+  const current=++generation;loading=true;updateControls();message("Loading your runs…");
+  try {
+    const result=await json("runs"+(append&&next?`?after=${encodeURIComponent(next)}`:""));
+    if(current!==generation)return;
+    check(Array.isArray(result.runs)&&result.runs.length<=20);
+    if(!append){runs.clear();chosen.clear();$("achievement-list").replaceChildren();$("achievement-panel").hidden=true;}
+    for(const run of result.runs){check(uuid.test(run.runId));summaryValid(run.summary);runs.set(run.runId,run);}
+    check(result.next===null||typeof result.next==="string");next=result.next;renderHistory();message();
+  }catch(error){if(current===generation&&error.name!=="AbortError")message(error.message);}
+  finally{if(current===generation){loading=false;updateControls();}}
+}
+async function hash(bytes){return [...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function archive(run,current){
+  const detail=await json(`runs/${run.runId}`);check(current===generation);
+  for(const key of ["runId","operationId","manifestHash","completedAt"])check(detail[key]===run[key]);
+  check(typeof detail.manifestJson==="string"&&await hash(new TextEncoder().encode(detail.manifestJson))===detail.manifestHash);
+  const manifest=JSON.parse(detail.manifestJson);check(manifest.schemaVersion===1&&manifest.runId===run.runId&&manifest.operationId===run.operationId);summaryValid(manifest.summary);
+  const descriptors=manifest.chunks;check(Array.isArray(descriptors)&&descriptors.length>0&&descriptors.length<=128);
+  const key=`${account.id}:${run.runId}:${run.manifestHash}`;if(staged.key!==key)staged={key,chunks:new Map()};
+  const chunks=[];let size=0;
+  for(let i=0;i<descriptors.length;i++){
+    check(current===generation);const d=descriptors[i];check(Number.isInteger(d.bytes)&&d.bytes>0&&d.bytes<=131072&&/^[0-9a-f]{64}$/.test(d.sha256));
+    let bytes=staged.chunks.get(i);
+    if(!bytes){const response=await api(`runs/${run.runId}/chunks/${i}`);check(response.headers.get("Content-Type")==="application/octet-stream");bytes=await response.arrayBuffer();}
+    check(bytes.byteLength===d.bytes&&await hash(bytes)===d.sha256);check(current===generation);staged.chunks.set(i,bytes);chunks.push(new Uint8Array(bytes));size+=bytes.byteLength;check(size<=16777216);
+  }
+  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  const value=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
+  check(value.version===1&&value.run?.id===run.runId&&value.run.cloudOwnerId===account.id&&value.run.state==="FINISHED"&&value.run.activeSlot===null);
+  const cp=JSON.parse(value.run.checkpoint),s=cp.snapshot;check(s&&s.runId===run.runId&&s.state==="FINISHED");
+  for(const field of ["startedUtcMs","endedUtcMs","activeDurationMs","distanceMeters"])check(s[field]===manifest.summary[field]);
+  check(s.settings?.mode===manifest.summary.mode&&s.settings.units===manifest.summary.units);
+  for(const list of ["route","measurements","splits","intervals","segments"])check(Array.isArray(value[list])&&value[list].every(row=>row.runId===run.runId));
+  check(value.intervals.length===s.activeIntervals.length&&value.segments.length===s.segments.length);
+  value.intervals.forEach((row,i)=>check(JSON.stringify(JSON.parse(row.value))===JSON.stringify(s.activeIntervals[i])));
+  value.segments.forEach((row,i)=>check(JSON.stringify(JSON.parse(row.value))===JSON.stringify(s.segments[i])));
+  check(value.route.every(p=>s.settings.mode==="OUTDOOR"&&Number.isFinite(p.latitude)&&Math.abs(p.latitude)<=90&&Number.isFinite(p.longitude)&&Math.abs(p.longitude)<=180&&Number.isFinite(p.accuracyMeters)&&p.accuracyMeters>=0&&s.segments.some(seg=>seg.id===p.segmentId&&seg.source==="GPS")));
+  check(value.splits.every((split,i)=>split.number===i+1&&Number.isFinite(split.meters)&&split.meters>0&&Number.isSafeInteger(split.durationMs)&&split.durationMs>=0));
+  const full=value.splits.filter(split=>!split.partial);check(full.length===s.splits.length);
+  full.forEach((split,i)=>check(split.durationMs===s.splits[i].durationMs&&split.meters===(s.settings.units==="MILES"?1609.344:1000)));
+  const remainder=s.distanceMeters-(s.splits.at(-1)?.endDistanceMeters||0);
+  const partial=value.splits.filter(split=>split.partial);
+  check(partial.length===(remainder>0.000001?1:0));
+  if(partial.length)check(partial[0]===value.splits.at(-1)&&Math.abs(partial[0].meters-remainder)<0.000001&&partial[0].durationMs===s.activeDurationMs-(s.splits.at(-1)?.endActiveMs||0));
+  check(Number.isInteger(s.settings.countdownSeconds)&&s.settings.countdownSeconds>=0&&s.settings.countdownSeconds<=10);
+  check(s.settings.strideLengthMeters===null||(Number.isFinite(s.settings.strideLengthMeters)&&s.settings.strideLengthMeters>0));
+  const final=await json(`runs/${run.runId}`);check(final.manifestHash===run.manifestHash&&current===generation);
+  const geometry = prepareRoute(s.settings.mode, s.segments, value.route);
+  return {value,s,geometry};
+}
+async function openRun(run){
+  clearCoaching();
+  const current=++generation;message("Opening run…");
+  try{const data=await archive(run,current);if(current!==generation)return;selected=data;renderDetail();$("history").hidden=true;$("detail").hidden=false;$("detail").focus();message();renderMap();loadCoaching(run.runId,current);loadPhoto(run.runId,current);}
+  catch(error){if(current===generation&&error.name!=="AbortError")message(error.message);}
+}
+function renderDetail(){
+  const {value,s}=selected;$("detail-date").textContent=date(s.startedUtcMs,value.run.zoneId);$("detail-title").textContent=s.settings.mode==="INDOOR"?"Indoor run":"Outdoor run";
+  metrics($("detail-totals"),s.distanceMeters,s.activeDurationMs);$("splits").replaceChildren();
+  for(const split of value.splits){const row=document.createElement("tr");row.append(cell(split.partial?"Partial":String(split.number)),cell(distance(split.meters)),cell(duration(split.durationMs)),cell(pace(split.durationMs,split.meters)));$("splits").append(row);}
+  const settings=s.settings,goal=settings.goal;const goalText=goal?.meters?distance(goal.meters):goal?.durationMs?duration(goal.durationMs):"None";
+  $("settings").replaceChildren();for(const [label,text]of [["Goal",goalText],["Countdown",`${settings.countdownSeconds} seconds`],["Stride",settings.strideLengthMeters?`${(settings.strideLengthMeters*100).toFixed(1)} cm`:"Not set"],["Finished",date(s.endedUtcMs,value.run.zoneId)]])$("settings").append(cell(label,"dt"),cell(text,"dd"));
+  $("route-note").textContent=selected.geometry.note;$("route-note").hidden=selected.geometry.parts.length>0;$("route-end-legend").hidden=selected.geometry.pointCount<2;
+}
+async function renderMap() {
+  clearMap();
+  const geometry = selected.geometry;
+  if (!geometry.parts.length) return;
+  const current = mapGeneration;
+  $("route-panel").hidden = false;
+  $("route-status").textContent = "Loading route…";
+  try {
+    const cleanup = await showRouteMap($("route-map"), $("route-status"), $("fit-route"), geometry, () => current === mapGeneration);
+    if (current !== mapGeneration) { cleanup?.(); return; }
+    destroyMap = cleanup; $("fit-route").disabled = false;
+  } catch {
+    if (current === mapGeneration) $("route-status").textContent = "The route could not load. Your run details are still available. Reopen the run to try again.";
+  }
+}
+async function signedIn(){const data=await json("account");reset();account=data.account;$("name").textContent=account.displayName||"Your account";$("avatar").hidden=true;
+  if(account.pictureUrl){try{const url=new URL(account.pictureUrl);if(url.protocol==="https:"&&url.hostname.endsWith(".googleusercontent.com")){$("avatar").src=url.href;$("avatar").hidden=false;}}catch{}}
+  $("welcome").hidden=true;$("profile").hidden=false;$("history").hidden=false;await loadHistory();}
+async function setupSignIn(){
+  $("signin-retry").hidden=true;
+  try{const config=await json("config"),challenge=await json("challenge","POST");check(config.clientId);
+    const deadline=Date.now()+10000;while(!window.google?.accounts?.id&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
+    if(!window.google?.accounts?.id)throw new Error("Google sign-in could not load. Check your connection and try again.");
+    google.accounts.id.initialize({client_id:config.clientId,nonce:challenge.nonce,auto_select:false,callback:async result=>{
+      try{message("Signing in…");await json("google","POST",{idToken:result.credential,nonce:challenge.nonce});await signedIn();}
+      catch(error){message(error.message);$("signin-retry").hidden=false;}
+    }});
+    $("google-button").replaceChildren();google.accounts.id.renderButton($("google-button"),{theme:"outline",size:"large",shape:"pill",text:"signin_with",width:260});
+  }catch(error){message(error.message);$("signin-retry").hidden=false;}
+}
+$("signin-retry").addEventListener("click",setupSignIn);
+$("logout").addEventListener("click",async()=>{reset();$("history").hidden=true;message("Signing out…");try{await json("logout","POST");account=null;$("profile").hidden=true;$("name").textContent="";$("avatar").removeAttribute("src");$("welcome").hidden=false;window.google?.accounts?.id.disableAutoSelect();message();await setupSignIn();}catch(error){message(error.message);}});
+$("refresh").addEventListener("click",()=>loadHistory());$("more").addEventListener("click",()=>loadHistory(true));
+$("back").addEventListener("click",()=>{clearCoaching();clearMap();generation++;selected=null;$("detail").hidden=true;$("history").hidden=false;message();});
+$("units").addEventListener("change",()=>{renderHistory();if(selected)renderDetail();});
+try{await signedIn();}catch{account=null;$("history").hidden=true;await setupSignIn();}

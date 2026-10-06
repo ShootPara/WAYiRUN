@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Looper
 import com.example.runningapp.domain.GpsFix
 import com.example.runningapp.domain.RunMode
+import android.os.SystemClock
 
 fun Context.granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 fun Context.activityAllowed() = Build.VERSION.SDK_INT < 29 || granted(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -17,20 +18,21 @@ fun Context.locationAllowed() = granted(Manifest.permission.ACCESS_FINE_LOCATION
     getSystemService(LocationManager::class.java).isLocationEnabled
 
 /** Each registration has its own callback, invalidated before pause/resume or permission changes. */
-class SensorAdapters(private val context: Context) {
+open class SensorAdapters(private val context: Context) {
     private val sensors = context.getSystemService(SensorManager::class.java)
     private val locations = context.getSystemService(LocationManager::class.java)
     private var stepListener: SensorEventListener? = null
     private var locationListener: LocationListener? = null
+    private var detectorListener: SensorEventListener? = null
     var generation = 0L
         private set
 
-    fun start(mode: RunMode, stride: Double?, onGps: (Long, GpsFix) -> Unit, onSteps: (Long, Long, Long) -> Unit): Boolean {
+    open fun start(mode: RunMode, stride: Double?, onGps: (Long, GpsFix) -> Unit, onSteps: (Long, Long, Long) -> Unit): Boolean {
         stop()
         val token = generation
         val stepSensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
         var hasSteps = false
-        if (stride != null && context.activityAllowed() && stepSensor != null) {
+        if (context.activityAllowed() && stepSensor != null) {
             val listener = object : SensorEventListener {
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
                 override fun onSensorChanged(event: SensorEvent) {
@@ -46,7 +48,10 @@ class SensorAdapters(private val context: Context) {
             val listener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
                     if (location.hasAccuracy()) onGps(token, GpsFix(location.elapsedRealtimeNanos / 1_000_000,
-                        location.latitude, location.longitude, location.accuracy))
+                        location.latitude, location.longitude, location.accuracy,
+                        if (location.hasSpeed()) location.speed.toDouble() else null,
+                        if (Build.VERSION.SDK_INT >= 26 && location.hasSpeedAccuracy())
+                            location.speedAccuracyMetersPerSecond.toDouble() else null))
                 }
                 override fun onProviderEnabled(provider: String) = Unit
                 override fun onProviderDisabled(provider: String) = Unit
@@ -61,9 +66,31 @@ class SensorAdapters(private val context: Context) {
         return hasSteps
     }
 
-    fun stop() {
+    open fun startMotion(onStep: (Long, Long, Long) -> Unit): Boolean {
+        val token = generation
+        if (!context.activityAllowed()) return false
+        val sensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) ?: return false
+        val listener = object : SensorEventListener {
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.values.firstOrNull() == 1f)
+                    onStep(token, event.timestamp / 1_000_000, SystemClock.elapsedRealtime())
+            }
+        }
+        return try {
+            sensors.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL, 0).also {
+                if (it) detectorListener = listener
+            }
+        } catch (_: SecurityException) {
+            false
+        }
+    }
+
+    open fun stop() {
         generation++
         stepListener?.let { sensors.unregisterListener(it) }
+        detectorListener?.let { sensors.unregisterListener(it) }
+        detectorListener = null
         locationListener?.let { locations.removeUpdates(it) }
         stepListener = null
         locationListener = null

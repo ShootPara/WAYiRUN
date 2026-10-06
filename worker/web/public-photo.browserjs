@@ -1,0 +1,26 @@
+import {showRouteMap} from "/map.js";
+const $=id=>document.getElementById(id),base=location.pathname.replace(/\/$/,"");
+$("photo").hidden=true;
+const duration=ms=>{const n=Math.floor(ms/1000),h=Math.floor(n/3600);return `${h?h+":":""}${h?String(Math.floor(n/60)%60).padStart(2,"0"):Math.floor(n/60)}:${String(n%60).padStart(2,"0")}`;};
+try {
+ const response=await fetch(`${base}/data`,{cache:"no-store"});if(!response.ok)throw Error();
+ const data=await response.json(),unit=data.settings.units==="MILES"?"mi":"km",meters=unit==="mi"?1609.344:1000;
+ $("photo").hidden=!data.photoVisible;
+ if(data.photoVisible){$("photo").src=`${base}/image`;$("photo").onerror=()=>{$("photo").hidden=true;};}
+ $("stats").textContent=`${new Date(data.run.startedUtcMs).toLocaleString()} · ${data.settings.mode==="INDOOR"?"Indoor run":"Outdoor run"} · ${(data.run.distanceMeters/meters).toFixed(2)} ${unit} · ${duration(data.run.activeDurationMs)} · ${data.run.averagePaceMsPerUnit==null?"—":duration(data.run.averagePaceMsPerUnit)} /${unit}`;
+ const geometry=data.geometry;
+ $("location").textContent=data.location?.label ?? (geometry.pointCount?"Outdoor route recorded":"No GPS route recorded.");
+ if(data.location?.attribution){const a=document.createElement("a");a.textContent=data.location.attribution.label;a.href="https://www.openstreetmap.org/copyright";a.rel="noopener";$("attribution").append(a);}
+ if(data.photoVisible&&data.weather){
+  const credit=document.createElement("p"),provider=document.createElement("a"),license=document.createElement("a");
+  provider.textContent="Weather data by Open-Meteo.com";provider.href="https://open-meteo.com/";provider.rel="noopener";
+  license.textContent="CC BY 4.0";license.href="https://creativecommons.org/licenses/by/4.0/";license.rel="noopener";
+  credit.append(provider," · ",license," · Rounded hourly model estimate; emoji representation.");$("attribution").append(credit);
+ }
+ if(geometry.parts.length)await showRouteMap($("map"),$("map-status"),$("fit"),geometry,()=>true);else {$("map").hidden=true;$("fit").hidden=true;$("map-status").textContent=geometry.note;}
+ for(const split of data.splits){const p=document.createElement("p");p.textContent=`${split.partial?"Partial":`Split ${split.number}`} · ${(split.meters/meters).toFixed(2)} ${unit} · ${duration(split.durationMs)}`;$("splits").append(p);}
+ const goal=data.settings.goal;
+ $("settings").textContent=[`Units: ${unit==="mi"?"Miles":"Kilometers"}`,`Countdown: ${data.settings.countdownSeconds??0} seconds`,
+   `Goal: ${goal?.type?.endsWith("Distance")?`${(goal.meters/meters).toFixed(2)} ${unit}`:goal?.type?.endsWith("Time")?duration(goal.durationMs):"None"}`,
+   `Stride: ${data.settings.strideLengthMeters==null?"Not set":`${data.settings.strideLengthMeters} meters`}`].join("\n");
+}catch{$("error").textContent="This shared run is unavailable.";}

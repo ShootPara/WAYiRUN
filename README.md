@@ -1,43 +1,62 @@
-# WAYiRUN
+# 1 WAYiRUN
 
-An Android running tracker with a planned Cloudflare-backed desktop history application. The current implementation includes the Android shell and a pure Kotlin run controller. The shell displays WAYiRUN; device tracking and the other product features are not integrated yet.
+WAYiRUN is an Android running tracker with a Cloudflare-backed private desktop history application. This repository is currently a **feature-development baseline**, not a production release.
 
-## 1 Workspace layout
+The complete Android application is in the `debug` source set. The `release` source set remains a name-only shell and is intentionally outside the feature-baseline reconciliation. The development product includes local run tracking and recovery, account-owned cloud synchronization, desktop history and export, coaching, achievements, photos, private-by-default publication, route-noodle graphics, weather overlays, and Health Connect export.
 
-This directory is the Git repository root: `<repository-root>`. There is no nested `RunningApp` repository.
+## 1.1 Current product direction
+
+- Route displays are provider-independent route noodles with preserved gaps and start/finish markers. Basemap, Leaflet, and map-tile behavior is superseded.
+- Music integration opens a saved YouTube Music playlist and ducks other audio during WAYiRUN cues. The app does not send player transport commands or request notification-listener access.
+- Runs and photos are private by default. Publication requires an explicit share/copy/image-share intent; photo visibility and unsharing remain independently controllable.
+- The Android debug application and Cloudflare Worker are development systems. Production identity, signing, configuration, deployment, and release acceptance are separate later work.
+
+## 1.2 Authoritative documentation
+
+| Document | Purpose |
+| --- | --- |
+| [REQUIREMENTS.md](REQUIREMENTS.md) | Current accepted product behavior, exclusions, and deliberate deferrals |
+| [CURRENT_STATE.md](CURRENT_STATE.md) | Factual inventory of delivered behavior and current environment boundaries |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Current Android, Worker, browser, and persistence structure |
+| [DATA_MODEL.md](DATA_MODEL.md) | Room, archive, D1, settings, secret, and data-classification contract |
+| [OPEN_WORK.md](OPEN_WORK.md) | Genuine bugs, unverified behavior, deferred features, and release work kept as separate categories |
+| [TEST_PLAN.md](TEST_PLAN.md) | Reproducible automated baseline and later acceptance boundaries |
+| [AGENTS.md](AGENTS.md) | Repository-specific agent instructions |
+| [the then-current working guide](User%20Preferences%20LLM%20Guide.md) | Collaboration and milestone workflow |
+
+Historical plans, handoffs, reports, and implementation contracts remain evidence, not current authority. Their disposition is indexed in [docs/history/README.md](docs/history/README.md).
+
+## 1.3 Workspace
+
+This directory is the Git repository root. Do not create a nested repository.
 
 | Path | Purpose |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | Instructions for coding agents and milestone boundaries |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Accepted product behavior and remaining product decisions |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Technical structure and platform boundaries |
-| [DATA_MODEL.md](DATA_MODEL.md) | Logical records and persistence invariants |
-| [TASKS.md](TASKS.md) | Ordered milestones, verification history, and next execution brief |
-| [the then-current working guide](User%20Preferences%20LLM%20Guide.md) | Working style and plan → guardrails → execute → verify workflow |
-| [android/README.md](android/README.md) | Android setup, pinned tooling, and build outputs |
-| `android/` | Gradle wrapper and single-module Android app |
-| `.git/` | Existing repository metadata and history; do not recreate |
+| `android/` | One-module Android application, Gradle wrapper, tests, and exported Room schemas |
+| `worker/` | Cloudflare Worker, D1 migrations, browser application, tests, and development deployment tooling |
+| `testdata/` | Checked-in deterministic test fixtures |
+| `docs/history/` | Index for non-authoritative historical implementation material |
 
-Keep the project documents at this root. Add future application directories only when their milestone begins.
+Generated build directories, local SDK paths, Wrangler state, dependencies, credentials, signing material, and secrets must remain untracked.
 
-## 2 Current verification
+## 1.4 Baseline verification
 
-Milestone 2 passed `:app:testDebugUnitTest`, `:app:assembleDebug`, and `:app:lintDebug` on 2026-09-12. All 27 controller tests passed. Lint reported zero errors and three dependency/tool version advisories. No phone launch, sensor, media, or screen-off behavior has been verified. See TASKS.md Section 5.6 for the completed checks and artifact paths.
-
-From `android/` on Windows:
+Android, from `android/` on Windows:
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
 ```
 
-The local SDK path belongs in ignored `android/local.properties`. Build outputs, caches, credentials, and signing material must remain untracked. The Gradle wrapper JAR is required source tooling and must be included in the baseline commit.
+Worker, from `worker/`:
 
-## 3 Next milestone
+```powershell
+npm.cmd test
+```
 
-Milestones 0–2 and repository alignment are complete. Next is Milestone 3: the durable local tracking prototype. Read TASKS.md Sections 6 and 10 for its scope, entry decisions, and verification gates. Planning and execution authorization come before implementation.
+These commands verify the feature-development baseline. They do not establish physical GPS/step accuracy, screen-off behavior, real audio ducking, camera/share behavior, Health Connect behavior on a user phone, deployment parity, or production readiness.
 
-## 4 Git handoff
+## 1.5 Git baseline
 
-The existing branch, origin, and commit history were preserved when the redundant nested folder was removed. Open this root folder as the repository in your Git client and as the local project in Codex. If a client still points to the old nested path, locate the repository here; do not initialize another repository.
+`codex/account-sessions` is the candidate authoritative development lineage. It contains the still-valid behavior from the divergent `development` lineage and later replacements. The old `development` route-map implementation uses the rejected Leaflet/OpenStreetMap basemap direction and must not be restored.
 
-The user will review, commit, and push the baseline. No commit or push was performed during consolidation.
+The user controls commits, pushes, branch consolidation, and deployment unless explicitly delegated.

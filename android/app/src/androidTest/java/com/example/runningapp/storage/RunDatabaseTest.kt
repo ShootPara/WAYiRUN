@@ -12,6 +12,68 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RunDatabaseTest {
+    @Test fun legacyAndDualSelectionsSurviveArchiveWithoutCheckpointRewrites() = runBlocking {
+        val selections = listOf(null, AnnouncementSelection(),
+            AnnouncementSelection(timeEnabled = false, distanceEnabled = true),
+            AnnouncementSelection(distanceEnabled = true), AnnouncementSelection(timeEnabled = false))
+        for (selection in selections) for (enabled in listOf(false, true)) {
+            val run = RunController(java.util.UUID.randomUUID().toString(), RunSettings(RunMode.INDOOR,
+                RunUnits.KILOMETERS, 0, RunGoal.None, null, announcementsEnabled = enabled,
+                announcementSelection = selection), clock)
+            run.start(); time += 1_000; run.finish(); save(run)
+            val archive = db.runs().archive(run.snapshot().runId)!!
+            val bytes = archive.encode()
+            val restored = RunArchive.decode(bytes)
+            assertEquals(archive.run.checkpoint, restored.run.checkpoint)
+            assertEquals(run.snapshot().settings, restored.run.decode().snapshot.settings)
+            assertArrayEquals(bytes, restored.encode())
+        }
+    }
+
+    @Test fun announcementChoiceAndProgressSurviveStoredCheckpointRecovery() = runBlocking {
+        val run = RunController("announcements", RunSettings(RunMode.INDOOR, RunUnits.MILES, 0,
+            RunGoal.None, null, true, AnnouncementInterval.TEN_MINUTES), clock)
+        run.start(); time = 600_000
+        assertEquals(1, run.tick().events.count { it.type == RunEventType.ANNOUNCEMENT })
+        save(run)
+        val saved = repo.active()!!.decode()
+        assertTrue(saved.snapshot.settings.announcementsEnabled)
+        assertEquals(AnnouncementInterval.TEN_MINUTES, saved.snapshot.settings.announcementInterval)
+        time = 10
+        val recovered = RunController.recover(saved, clock)
+        assertTrue(recovered.resume().events.none { it.type == RunEventType.ANNOUNCEMENT })
+        time += 600_000
+        assertEquals(1, recovered.tick().events.count { it.type == RunEventType.ANNOUNCEMENT })
+    }
+
+    @Test fun photoQueueFollowsOwnerAndNeverAcknowledgesAReplacementAsSynced() = runBlocking {
+        val r=run("photo");time=1000;r.finish()
+        repo.save(r.checkpoint(),"test-owner","UTC",0,false,cloudOwnerId="alice")
+        val old=RunPhoto("photo","first",byteArrayOf(1,2,3),"{}",true)
+        db.runs().putPhoto(old)
+        assertEquals(1,db.runs().pendingPhotos("alice").size)
+        assertTrue(db.runs().pendingPhotos("bob").isEmpty())
+        db.runs().putPhoto(old.copy(revision="second",public=false))
+        db.runs().photoSynced("photo","first","https://old")
+        assertFalse(db.runs().photo("photo")!!.synced)
+        db.runs().photoSynced("photo","second",null)
+        assertTrue(db.runs().photo("photo")!!.synced)
+        repo.discard("photo","test-owner")
+        assertNull(db.runs().photo("photo"))
+    }
+
+    @Test fun achievementsAreDurableOwnerScopedAndRecomputedOnDeletion() = runBlocking {
+        val r=run("award");r.selectSource(DistanceSource.STEPS)
+        val segment=r.snapshot().currentSegmentId!!
+        r.record(RunMeasurement.Steps(segment,0,100))
+        time=10000;r.record(RunMeasurement.Steps(segment,time,1100));r.finish()
+        repo.save(r.checkpoint(),"test-owner","UTC",0,false,cloudOwnerId="alice")
+        assertTrue(db.runs().achievementCache("alice")!!.awards.contains("Kicking It Off"))
+        assertNull(db.runs().achievementCache("bob"))
+        assertEquals(db.runs().rebuildAchievements("alice","test-owner"),db.runs().rebuildAchievements("alice","test-owner"))
+        assertTrue(repo.discard("award","test-owner"))
+        assertEquals("[]",db.runs().achievementCache("alice")!!.awards)
+    }
     private lateinit var db: RunDatabase
     private lateinit var repo: RunRepository
     private var time = 0L
@@ -76,5 +138,32 @@ class RunDatabaseTest {
         assertTrue(stored.interrupted)
         assertEquals(RunState.PAUSED, stored.decode().snapshot.state)
         assertEquals(1_000L, stored.decode().snapshot.activeDurationMs)
+    }
+
+    @Test fun discardRemovesEveryOwnedTableAndPreservesOtherRuns() = runBlocking {
+        val first = run(); first.selectSource(DistanceSource.STEPS); first.finish(); save(first)
+        db.runs().putRoute(RoutePoint(runId = "one", segmentId = 1, monotonicMs = 0, latitude = 0.0, longitude = 0.0, accuracyMeters = 1f))
+        db.runs().putMeasurement(StoredMeasurement(runId = "one", segmentId = 1, monotonicMs = 0, source = "STEPS", deltaMeters = 1.0, totalMeters = 1.0, activeMs = 0, reading = "test"))
+        db.runs().putSplits(listOf(StoredSplit("one", 1, 1.0, 1000, true)))
+        val other = run("two"); other.finish(); save(other)
+        val tables = listOf("active_intervals", "source_segments", "route_points", "measurements", "splits")
+        fun rows(table: String): Long = db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table WHERE runId = ?", arrayOf<Any>("one")).use { it.moveToFirst(); it.getLong(0) }
+        tables.forEach { assertTrue("Fixture has $it", rows(it) > 0) }
+        assertFalse(repo.discard("one", "different-owner"))
+        assertTrue(repo.discard("one", "test-owner"))
+        assertTrue(repo.discard("one", "test-owner"))
+        assertNull(db.runs().get("one")); assertNotNull(db.runs().get("two"))
+        tables.forEach { assertEquals("No remaining $it", 0L, rows(it)) }
+    }
+
+    @Test fun discardRefusesActiveRunAndRollsBackStorageFailure() = runBlocking {
+        val first = run(); save(first)
+        assertFalse(repo.discard("one", "test-owner"))
+        first.finish(); save(first)
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER fail_discard BEFORE DELETE ON runs BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+        try { repo.discard("one", "test-owner"); fail("Expected deletion failure") }
+        catch (_: android.database.sqlite.SQLiteException) { }
+        assertNotNull(db.runs().get("one"))
+        assertEquals(RunState.FINISHED.name, db.runs().get("one")!!.state)
     }
 }

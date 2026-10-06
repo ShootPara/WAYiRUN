@@ -1,0 +1,35 @@
+// Route-only rendering: no map library, tiles, or network requests.
+export async function showRouteMap(element, status, fitButton, geometry, isCurrent) {
+  if (!isCurrent()) return null;
+  const points = geometry.parts.flat();
+  if (!points.length) return null;
+  const latitude = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+  const factor = Math.max(0.01, Math.cos(latitude * Math.PI / 180));
+  const projected = geometry.normalized ? geometry.parts : geometry.parts.map(part => part.map(([lat, lon]) => [lon * factor, -lat]));
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of projected.flat()) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  const span = Math.max(maxX - minX, maxY - minY) || 1;
+  const transform = ([x, y]) => [50 + (x - (minX + maxX) / 2) * 84 / span, 50 + (y - (minY + maxY) / 2) * 84 / span];
+  const parts = projected.map(part => part.map(transform));
+  const ns = "http://www.w3.org/2000/svg";
+  function node(tag, attrs) {
+    const value = document.createElementNS(ns, tag);
+    for (const [key, text] of Object.entries(attrs)) value.setAttribute(key, String(text));
+    return value;
+  }
+  const svg = node("svg", { viewBox: "0 0 100 100", role: "img", "aria-label": "Recorded route with start and finish markers", class: "route-graphic" });
+  for (const part of parts) {
+    if (part.length > 1) svg.append(node("polyline", { points: part.map(p => p.join(",")).join(" "), fill: "none", stroke: "#205e50", "stroke-width": 1.1, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    else svg.append(node("circle", { cx: part[0][0], cy: part[0][1], r: 0.9, fill: "#205e50" }));
+  }
+  function marker(point, fill, label, radius) {
+    const circle = node("circle", { cx: point[0], cy: point[1], r: radius, fill, stroke: "#172c29", "stroke-width": 0.5 });
+    const title = node("title", {}); title.textContent = label; circle.append(title); svg.append(circle);
+  }
+  marker(parts[0][0], "#c5f06b", "First recorded GPS point", 2.1);
+  if (geometry.pointCount > 1) marker(parts.at(-1).at(-1), "#ffffff", "Last recorded GPS point", 1.35);
+  element.replaceChildren(svg);
+  status.textContent = geometry.note;
+  fitButton.hidden = true;
+  return () => { svg.remove(); fitButton.onclick = null; };
+}

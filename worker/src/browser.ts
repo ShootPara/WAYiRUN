@@ -1,0 +1,128 @@
+import {handlePhotos} from "./photos.js";
+import {handlePublication} from "./publication.js";
+import publicPhotoScript from "../web/public-photo.browserjs";
+import { handleAuth, reply, smallJson, hash, SESSION_SECONDS, type AuthEnv } from "./auth.js";
+import { handleRuns } from "./runs.js";
+import { handleCoachingHistory } from "./coaching-history.js";
+import page from "../web/index.html";
+import script from "../web/app.browserjs";
+import style from "../web/style.css";
+import routeScript from "../web/route.browserjs";
+import mapScript from "../web/map.browserjs";
+import exportScript from "../web/export.browserjs";
+import achievementScript from "../web/achievements.browserjs";
+
+const assets: Record<string, [string, string]> = {
+  "/public-photo.js": [publicPhotoScript,"text/javascript"],
+  "/achievements.js": [achievementScript, "text/javascript"],
+  "/export.js": [exportScript, "text/javascript"],
+  "/app.js": [script, "text/javascript"], "/style.css": [style, "text/css"],
+  "/route.js": [routeScript, "text/javascript"], "/map.js": [mapScript, "text/javascript"],
+};
+export const browserAssetPaths = ["/", ...Object.keys(assets)];
+
+export const WEB_ORIGIN = "https://wayirun-dev.unopenedparachute.workers.dev";
+const sessionName = "__Host-wayirun";
+const nonceName = "__Host-wayirun-login";
+const opaque = /^[0-9a-f]{64}$/;
+function cookie(request: Request, name: string): string | null {
+  const values = (request.headers.get("Cookie") ?? "").split(";").map(v => v.trim()).filter(v => v.startsWith(`${name}=`));
+  if (values.length !== 1) return null;
+  const value = values[0]!.slice(name.length + 1);
+  return opaque.test(value) ? value : null;
+}
+function setCookie(name: string, value: string, seconds: number) {
+  return `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${seconds}`;
+}
+function protect(response: Response, nonce: string): Response {
+  const out = new Response(response.body, response);
+  out.headers.set("Cache-Control", "no-store");
+  out.headers.set("X-Content-Type-Options", "nosniff");
+  out.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  out.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  out.headers.set("Content-Security-Policy", `default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'nonce-${nonce}' https://accounts.google.com/gsi/style; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; img-src 'self' https://*.googleusercontent.com data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+  return out;
+}
+export async function handleBrowser(request: Request, env: AuthEnv): Promise<Response> {
+  // GIS propagates the script nonce to its generated stylesheet. Never reuse it between responses.
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+  try { return protect(await route(request, env, nonce), nonce); }
+  catch { return protect(reply({ error: "web_unavailable" }, 503), nonce); }
+}
+async function route(request: Request, env: AuthEnv, nonce: string): Promise<Response> {
+  const url = new URL(request.url), path = url.pathname;
+  if (browserAssetPaths.includes(path)) {
+    if (request.method !== "GET" && request.method !== "HEAD") return reply({ error: "method_not_allowed" }, 405);
+    const [body, type] = path === "/" ? [page.replaceAll("__CSP_NONCE__", nonce), "text/html"] : assets[path]!;
+    return new Response(request.method === "HEAD" ? null : body, { headers: { "Content-Type": `${type}; charset=utf-8` } });
+  }
+  // Fixed deployment origin, no wildcard CORS, no bearer or caller-selected owner at this boundary.
+  if (url.origin !== WEB_ORIGIN || request.headers.has("Authorization") ||
+      request.headers.get("Sec-Fetch-Site") === "cross-site" ||
+      (request.headers.has("Origin") && request.headers.get("Origin") !== WEB_ORIGIN)) return reply({ error: "origin_not_allowed" }, 403);
+  const authPaths: Record<string, string> = { "/web-api/challenge": "/api/auth/challenge", "/web-api/google": "/api/auth/google",
+    "/web-api/account": "/api/account", "/web-api/logout": "/api/auth/logout" };
+  const auth = authPaths[path];
+  const runs = /^\/web-api\/runs(?:\/[0-9a-f-]+(?:\/chunks\/(0|[1-9][0-9]*))?)?$/.test(path);
+  const photo = /^\/web-api\/photos\/[0-9a-f-]+(?:\/image)?$/.test(path);
+  const publication = /^\/web-api\/publications\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
+  const coaching = /^\/web-api\/coaching-history\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
+  if (!auth && !runs && !coaching && !photo && !publication && path !== "/web-api/config") return reply({ error: "not_found" }, 404);
+  const deleting = request.method === "DELETE" && /^\/web-api\/runs\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(path);
+  const publishing = publication && request.method === "PUT";
+  const mutating = publishing || deleting || ["/web-api/challenge", "/web-api/google", "/web-api/logout"].includes(path);
+  if (request.method !== (publishing ? "PUT" : deleting ? "DELETE" : mutating ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405);
+  if (mutating && (request.headers.get("Origin") !== WEB_ORIGIN || request.headers.get("X-WAYIRUN-Request") !== "1")) return reply({ error: "csrf_rejected" }, 403);
+  if (deleting && request.body) {
+    const reader = request.body.getReader();
+    try {
+      while (true) { const {done,value}=await reader.read(); if(done)break; if(value.length){await reader.cancel();return reply({error:"invalid_request"},400);} }
+    } finally { reader.releaseLock(); }
+  }
+  if (path === "/web-api/config") return reply({ clientId: env.GOOGLE_WEB_CLIENT_ID ?? null });
+  const headers = new Headers();
+  const ip = request.headers.get("CF-Connecting-IP"); if (ip) headers.set("CF-Connecting-IP", ip);
+  let body: string | undefined;
+  if (publishing) {
+    try { body=JSON.stringify(await smallJson(request)); } catch { return reply({error:"invalid_request"},400); }
+    headers.set("Content-Type","application/json");
+  }
+  if (path === "/web-api/google") {
+    let input: Record<string, unknown>;
+    try { input = await smallJson(request); } catch { return reply({ error: "invalid_request" }, 400); }
+    const nonce = cookie(request, nonceName);
+    if (!nonce || input.nonce !== nonce) return reply({ error: "invalid_identity" }, 401);
+    body = JSON.stringify(input); headers.set("Content-Type", "application/json");
+  }
+  if (path !== "/web-api/challenge" && path !== "/web-api/google") {
+    const token = cookie(request, sessionName);
+    if (!token) return reply({ error: "unauthorized" }, 401);
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const forwarded = new Request(`${WEB_ORIGIN}${auth ?? path.replace("/web-api/", "/api/")}${url.search}`, { method: request.method, headers, ...(body ? { body } : {}) });
+  const response = auth ? await handleAuth(forwarded, env) : publication ? await handlePublication(forwarded,env) : photo ? await handlePhotos(forwarded,env) : coaching ? await handleCoachingHistory(forwarded, env) : await handleRuns(forwarded, env);
+  if (path === "/web-api/account" && response.ok) {
+    const token = cookie(request, sessionName)!;
+    const now = Math.floor(Date.now() / 1000);
+    // Renew only an already valid session. A concurrent logout must never be undone.
+    const result = await env.DB.prepare("UPDATE auth_sessions SET expires_at = MAX(expires_at, ?) WHERE token_hash = ? AND expires_at > ? AND revoked_at IS NULL")
+      .bind(now + SESSION_SECONDS, await hash(token), now).run();
+    if (result.meta.changes !== 1) return reply({ error: "unauthorized" }, 401);
+    response.headers.set("Set-Cookie", setCookie(sessionName, token, SESSION_SECONDS));
+  }
+  if (path === "/web-api/challenge" && response.ok) {
+    const data = await response.json() as { nonce: string; expiresIn: number };
+    return reply(data, 200, { "Set-Cookie": setCookie(nonceName, data.nonce, 300) });
+  }
+  if (path === "/web-api/google" && response.ok) {
+    const data = await response.json() as { accessToken: string; expiresIn: number };
+    const result = reply({ signedIn: true });
+    result.headers.append("Set-Cookie", setCookie(sessionName, data.accessToken, data.expiresIn));
+    result.headers.append("Set-Cookie", setCookie(nonceName, "", 0));
+    return result;
+  }
+  if (path === "/web-api/logout" && (response.ok || response.status === 401)) {
+    return reply({ signedOut: true }, 200, { "Set-Cookie": setCookie(sessionName, "", 0) });
+  }
+  return response;
+}
