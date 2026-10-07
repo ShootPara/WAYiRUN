@@ -16,7 +16,8 @@
     "smoke:dev": "node scripts/smoke-dev.mjs",
     "deploy:prod": "node scripts/deploy-prod.mjs",
     "smoke:prod": "node scripts/smoke-prod.mjs",
-    "verify:prod-config": "node scripts/verify-prod-config.mjs"
+    "verify:prod-config": "node scripts/verify-prod-config.mjs",
+    "test:migration": "node --test test/migration.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260914.1",
