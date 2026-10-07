@@ -158,6 +158,8 @@ The installed development app must retain effective application ID `com.example.
 
 Changing the public application ID does not require a Kotlin namespace/package refactor. Preserve namespace `com.example.runningapp` for V1 unless compilation or a verified platform requirement proves a refactor necessary. Milestone 5 moves the functional product into shared/variant-safe source sets, keeps test harnesses out of release, binds development and production origins/OAuth at compile time, and introduces no runtime environment selector.
 
+Milestone 5 implemented this boundary without changing the namespace or debug sandbox identity. Shared product code, Room version 10, functional manifest entries and resources now compile into both variants. Debug is `com.example.runningapp.debug` / `1.0.0-dev` with the existing development origin and OAuth identifiers. Release is `com.unopenedparachute.wayirun` / `1.0.0` with `https://wayirun.slopcopy.com` and explicit Milestone 7 OAuth placeholders. Release sign-in fails closed locally while placeholders remain, and the separate production-readiness task rejects such an artifact. The structural unsigned release is not a distributable production artifact.
+
 Because different application IDs use different Android sandboxes, the production package cannot inherit the installed debug app's Room database. Section 1.9 is therefore a release gate, not optional cleanup.
 
 ## 1.7 OAuth topology and pending generated values

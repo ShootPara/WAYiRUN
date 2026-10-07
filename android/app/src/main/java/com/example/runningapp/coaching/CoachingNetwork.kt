@@ -1,5 +1,6 @@
 package com.example.runningapp.coaching
 
+import com.example.runningapp.BuildConfig
 import com.example.runningapp.account.AccountSession
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
@@ -24,7 +25,7 @@ class CoachingNetwork : CoachingApi {
 
     private suspend fun request(session: AccountSession, runId: String, audio: Boolean, body: String?): ByteArray = suspendCancellableCoroutine { continuation ->
         require(runId.matches(Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")))
-        val connection = URL("https://wayirun-dev.unopenedparachute.workers.dev/api/coaching/$runId${if (audio) "/audio" else ""}")
+        val connection = URL("${BuildConfig.API_ORIGIN}/api/coaching/$runId${if (audio) "/audio" else ""}")
             .openConnection() as HttpsURLConnection
         continuation.invokeOnCancellation { connection.disconnect() }
         executor.execute {

@@ -1,6 +1,6 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestone 1 complete
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 5 complete
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
@@ -138,3 +138,9 @@ Debug assembly, lint and all 125 JVM tests pass. Thirteen bounded instrumentatio
 Worker runtime configuration now accepts only the reviewed development and production environment/origin pairs and centralizes OAuth identifiers, provider endpoints and write mode. The early write-freeze gate blocks every classified native/browser mutation, including cache-, session- and job-mutating GET routes, before handler execution while retaining health/readiness and verified read-only access. Development deployment remains pinned to its existing Worker, D1 and rate-limit resources. The checked-in production config is pinned to `wayirun-prod` and the `wayirun.slopcopy.com` Custom Domain but intentionally undeployable until its D1, rate-limit and OAuth placeholders are replaced with reviewed provider-generated values.
 
 All 165 Worker/browser tests and nine focused environment/guard/freeze tests pass. Development and synthetic-production Wrangler dry-runs pass; the real production config is proven to fail closed on placeholders. No production resource, deployment, remote migration, DNS change, Android change, data migration, commit or push occurred. Milestone 4 is complete and Milestone 5 is not started.
+
+## 1.15 V1 Milestone 5 functional release promotion — October 6, 2026
+
+The complete Android product now compiles from shared `main` code in both variants. The debug identity remains exactly `com.example.runningapp.debug`, preserving access compatibility with the existing Android sandbox and `wayirun-local.db`; it is labeled `WAYiRUN Dev` and uses only the development origin/OAuth identifiers. The non-debuggable unsigned release uses `com.unopenedparachute.wayirun`, label `WAYiRUN`, version code `1`, version `1.0.0`, and `https://wayirun.slopcopy.com`. The old name-only release activity is removed. Release OAuth remains deliberately represented by two Milestone 7 placeholders; sign-in fails closed locally and the explicit production-readiness task rejects the artifact until they are replaced.
+
+Debug and release each passed 126 JVM tests with zero failures, errors or skips; both assemblies passed; both lint runs had zero errors and 21 existing warnings. Twenty-three focused Room/database/coaching instrumentation tests passed with synthetic data on explicitly selected `Pixel_7` emulator `emulator-5554`. Room remains version 10 with unchanged database name, migrations and schemas 1–10; no schema diff exists. APK inspection confirmed exact variant identities, versions, labels, authorities, components and environment separation. The release contains all functional product packages and the production origin, but none of the development hostname, development OAuth IDs, debug package/label or test harness. It is `STRUCTURALLY VALID — NOT PRODUCTION READY` pending Milestone 7 OAuth. No physical phone, personal data, signing material, provider resource, deployment, migration, commit or push was used. Milestone 5 is complete; Milestone 6 is not started.

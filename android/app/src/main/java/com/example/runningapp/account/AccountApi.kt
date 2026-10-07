@@ -1,5 +1,6 @@
 package com.example.runningapp.account
 
+import com.example.runningapp.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -7,7 +8,7 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 class AccountApi {
-    private val origin = "https://wayirun-dev.unopenedparachute.workers.dev"
+    private val origin = BuildConfig.API_ORIGIN
     suspend fun challenge(): String = request("/api/auth/challenge", "POST").getString("nonce")
         .also { require(it.matches(Regex("[0-9a-f]{64}"))) }
 

@@ -38,6 +38,14 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     fun signIn(activity: Activity) {
         if (mutable.value.busy || activeRun()) return
+        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.startsWith("__PRODUCTION_GOOGLE_") ||
+            BuildConfig.GOOGLE_ANDROID_CLIENT_ID.startsWith("__PRODUCTION_GOOGLE_")) {
+            mutable.value = mutable.value.copy(
+                busy = false,
+                message = "Production sign-in is not configured yet. Local running is still available.",
+            )
+            return
+        }
         mutable.value = mutable.value.copy(busy = true, message = null)
         viewModelScope.launch {
             var issued: AccountSession? = null

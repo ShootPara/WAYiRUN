@@ -1,5 +1,6 @@
 package com.example.runningapp.sync
 
+import com.example.runningapp.BuildConfig
 import com.example.runningapp.account.AccountSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,7 +24,7 @@ class CloudSyncApi : SyncApi {
     private suspend fun exchange(session: AccountSession, path: String, method: String, body: ByteArray?,
         contentType: String, match: String?, limit: Int): ByteArray = withContext(Dispatchers.IO) {
             require(path.startsWith("/api/") && !path.contains(".."))
-            val connection = URL("https://wayirun-dev.unopenedparachute.workers.dev$path").openConnection() as HttpsURLConnection
+            val connection = URL("${BuildConfig.API_ORIGIN}$path").openConnection() as HttpsURLConnection
             try {
                 connection.requestMethod = method
                 connection.connectTimeout = 15000; connection.readTimeout = 15000

@@ -1,6 +1,7 @@
 package com.example.runningapp.photos
 
 import android.content.Context
+import com.example.runningapp.BuildConfig
 import com.example.runningapp.account.SessionStore
 import com.example.runningapp.storage.RunDatabase
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +48,7 @@ internal fun interface PhotoUploader {
 /** Small transport boundary: the queue can be tested with real Room and synthetic HTTP outcomes. */
 internal class CloudPhotoUploader : PhotoUploader {
     override suspend fun upload(session: AccountSession, photo: RunPhoto): JSONObject = withContext(Dispatchers.IO) {
-            val connection=URL("https://wayirun-dev.unopenedparachute.workers.dev/api/photos/${photo.runId}").openConnection() as HttpsURLConnection
+            val connection=URL("${BuildConfig.API_ORIGIN}/api/photos/${photo.runId}").openConnection() as HttpsURLConnection
             try {
                 connection.requestMethod="PUT";connection.connectTimeout=15000;connection.readTimeout=30000
                 connection.instanceFollowRedirects=false;connection.useCaches=false;connection.doOutput=true

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.runningapp.BuildConfig
 import com.example.runningapp.account.SessionStore
 import com.example.runningapp.photos.LocalExternalRunAction
 import com.example.runningapp.storage.RunDatabase
@@ -44,14 +45,14 @@ internal fun publicationStatus(value: RunPublication?): String = when {
 }
 
 internal fun publicationShareIntent(link: String): Intent {
-    require(Regex("https://wayirun-dev\\.unopenedparachute\\.workers\\.dev/r/[0-9a-f]{32}").matches(link))
+    require(isPublicationLink(link))
     return Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"; putExtra(Intent.EXTRA_TEXT, link)
     }, "Share run link")
 }
 
 internal fun deliverPublication(context: Context, delivery: String, link: String, external: (String?) -> Unit, runId: String) {
-    require(Regex("https://wayirun-dev\\.unopenedparachute\\.workers\\.dev/r/[0-9a-f]{32}").matches(link))
+    require(isPublicationLink(link))
     if (delivery == "copy") {
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Run link", link))
     } else {
@@ -60,6 +61,9 @@ internal fun deliverPublication(context: Context, delivery: String, link: String
         context.startActivity(publicationShareIntent(link))
     }
 }
+
+internal fun isPublicationLink(link: String): Boolean =
+    Regex("${Regex.escape(BuildConfig.API_ORIGIN)}/r/[0-9a-f]{32}").matches(link)
 
 @Composable
 fun RunSharing(id: String) {

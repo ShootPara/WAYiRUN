@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 4 complete; Milestone 5 not started
+Status: Controlling execution plan; Milestones 1 through 5 complete; Milestone 6 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -94,7 +94,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 2 | Resolve production decisions and compliance prerequisites | COMPLETE | `V1_MILESTONE_2_DECISION_RECORD.md`; owner identity/domain/distribution choices and technical policies recorded |
 | 3 | Design exact environment/resource map | COMPLETE | `V1_ENVIRONMENT_RESOURCE_MAP.md`; exact boundaries approved and `slopcopy.com` ownership verified read-only |
 | 4 | Implement environment-safe Worker configuration | COMPLETE | Fail-closed runtime/freeze configuration, isolated guarded production config, and 165 passing Worker tests |
-| 5 | Promote the functional Android app into release | NOT STARTED | Release compiles with production-bound configuration and no debug shell |
+| 5 | Promote the functional Android app into release | COMPLETE | Shared functional product builds in debug/release; variant and artifact gates pass with production OAuth intentionally pending |
 | 6 | Establish production signing | NOT STARTED | Recoverable key custody and verified signing fingerprint |
 | 7 | Configure production Google OAuth | NOT STARTED | Verified production clients and real sign-in preconditions |
 | 8 | Create production Cloudflare resources and schema | NOT STARTED | Bound empty migrated schema; no production traffic |
@@ -240,6 +240,14 @@ TypeScript compilation, development and synthetic-production Wrangler dry-runs, 
 ### 1.11.2 Verification
 
 Add variant/configuration tests and run unit, lint, debug assembly, unsigned release compilation, and release manifest/config inspection. Prove by artifact inspection that release contains no development hostname, development OAuth client, debug application ID, test harness, or development-only control.
+
+### 1.11.3 Completion evidence — October 6, 2026
+
+The functional Android product, manifest components, fallback audio, photo paths and Room implementation now live in the shared `main` source set; the obsolete release shell is removed. Kotlin namespace remains `com.example.runningapp`. Debug retains exact application ID `com.example.runningapp.debug`, label `WAYiRUN Dev`, version `1.0.0-dev`, development origin and existing development OAuth identifiers. Release uses application ID `com.unopenedparachute.wayirun`, label `WAYiRUN`, version code `1`, version `1.0.0`, production origin `https://wayirun.slopcopy.com`, and explicit Milestone 7 OAuth placeholders. Authentication detects those placeholders locally and makes no Google or Worker request. A separate production-readiness task rejects the placeholders and is deliberately not an `assembleRelease` dependency.
+
+Both debug and release JVM suites passed 126 tests with zero failures, errors or skips. Debug and unsigned release assembly passed. Debug and release lint each completed with zero errors and the same 21 existing warnings. Twenty-three focused synthetic instrumentation tests passed on explicitly selected `Pixel_7` emulator `emulator-5554`, covering Room 9→10 preservation, schema validation, stored runs and dependent state, and durable coaching request recovery/idempotency. Room remains version 10, database name `wayirun-local.db`, migrations and operation semantics are unchanged, schemas 1–10 remain intact, and no schema diff was produced.
+
+Deterministic APK inspection proved release package/version/debuggability, production FileProvider authority and functional components; all product packages and the production origin are present, while the development hostname, both development OAuth IDs, debug package/label and test harness are absent. The unsigned structural release retains only the two expected production OAuth placeholders and is `STRUCTURALLY VALID — NOT PRODUCTION READY` until Milestone 7. Debug artifact inspection reconfirmed its exact package, development configuration and functional database/tracking classes. No physical phone, personal data, signing key, OAuth client, production service, deployment, data migration, commit or push was used. Milestone 5 is complete; Milestone 6 is not started.
 
 ## 1.12 Milestone 6 — establish production signing
 

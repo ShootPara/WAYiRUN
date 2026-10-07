@@ -86,13 +86,12 @@ class PublicationSync(private val dao: RunDao, private val api: SyncApi,
         require(revision >= row.revision && revision <= 9007199254740991L)
         val shared = value.getBoolean("shared")
         val link = if (value.isNull("publicUrl")) null else value.getString("publicUrl")
-        require(if (shared) link != null && PUBLIC_LINK.matches(link) else link == null)
+        require(if (shared) link != null && isPublicationLink(link) else link == null)
         return row.copy(known = true, shared = shared, photoVisible = value.getBoolean("photoVisible"),
             revision = revision, publicUrl = link, error = null)
     }
 
     companion object {
         private val lock = Mutex()
-        private val PUBLIC_LINK = Regex("https://wayirun-dev\\.unopenedparachute\\.workers\\.dev/r/[0-9a-f]{32}")
     }
 }
