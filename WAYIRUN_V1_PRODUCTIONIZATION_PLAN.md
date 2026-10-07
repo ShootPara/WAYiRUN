@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 11 complete; Milestone 12 not started
+Status: Controlling execution plan; Milestones 1 through 12 complete; Milestone 13 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -101,7 +101,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 9 | Build and rehearse migration | COMPLETE | Deterministic data-only package; two successful clean disposable-D1 rebuilds and exact reconciliation |
 | 10 | Take final backup and perform controlled migration | COMPLETE | Frozen source, mirrored immutable export, exact production import and reconciliation |
 | 11 | Deploy and smoke-test production Worker/browser | COMPLETE | Production version `c2cc4d87-89c8-492f-9413-bba63a426530`; authenticated read/export/publication acceptance and unchanged durable graph |
-| 12 | Build signed WAYiRUN 1.0 artifacts | NOT STARTED | Verified APK/AAB metadata, hashes, signature, and endpoint audit |
+| 12 | Build signed WAYiRUN 1.0 artifacts | COMPLETE | Owner-signed APK/AAB from `1fd9e7c`; identity, signer, endpoints and readiness verified |
 | 13 | Perform physical and end-to-end production acceptance | NOT STARTED | Recorded pass/fail matrix; all blockers resolved |
 | 14 | Cut over operations and document recovery | NOT STARTED | Canonical-production declaration and operator runbook |
 | 15 | Finalize version control and V1 marker | NOT STARTED | Accepted commit, push, `v1.0.0` tag, clean status |
@@ -422,6 +422,12 @@ Live export initially exposed a fail-closed verifier defect that accepted only t
 ### 1.18.2 Exit
 
 Artifacts are reproducibly tied to an accepted source commit and exact production backend, with secrets absent.
+
+### 1.18.3 Completion evidence — October 7, 2026
+
+Clean synchronized `main` commit `1fd9e7c` produced the canonical ignored artifact `private-signing/release/WAYiRUN-1.0.0-production.apk`: 32,861,252 bytes, SHA-256 `8A67B8AA7CF8D41C54B2886DA085B46A3CE6392627EAA743F8D7B960770E87DE`. It is package `com.unopenedparachute.wayirun`, version code `1`, version name `1.0.0`, non-debuggable, labeled `WAYiRUN`, and signed by exactly one RSA-4096 owner certificate. APK Signature Scheme v2 verifies; signer SHA-1 is `89:77:30:BD:C5:CA:5B:DA:0C:6E:B7:6F:EB:B7:77:A4:12:F3:9A:84` and SHA-256 is `C4:B6:54:9A:3B:A9:C1:7F:91:0F:49:65:DB:44:50:75:A3:F1:2B:52:A3:B3:A0:06:58:20:F6:27:15:AA:BA:5F`.
+
+The production origin and both production OAuth client IDs are present. The development hostname, both development OAuth clients, debug application ID/label, OAuth placeholders, test runner and unexpected signer are absent; the production FileProvider authority is `com.unopenedparachute.wayirun.photos`. The explicit production-readiness task passed. Debug and release JVM tests, debug assembly, debug/release lint and owner-signed release assembly passed without source changes. Optional ignored `WAYiRUN-1.0.0-production.aab` was also created locally (11,913,501 bytes; SHA-256 `0D9F930CF9C5DD71CCEF52B12A89ED659E610F8930CF285594C77039CE5F2BE4`) without Play upload or enrollment. No APK/AAB was installed or tracked, and no server resource or data changed. Milestone 12 is `COMPLETE`; Milestone 13 is `NOT STARTED`.
 
 ## 1.19 Milestone 13 — physical and end-to-end production acceptance
 

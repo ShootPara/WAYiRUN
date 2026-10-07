@@ -1,6 +1,6 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 11 complete; Milestone 12 not started
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 12 complete; Milestone 13 not started
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
@@ -196,3 +196,9 @@ Production Worker version `c2cc4d87-89c8-492f-9413-bba63a426530` is deployed wit
 The owner's Google browser login reused the migrated account without changing its ID, Google subject, display name, picture or creation time; only the expected account `updated_at` field and one bounded production session changed. The production browser loads all 21 runs, including the October 6 run after the complete page is loaded, and live reads verified archive-backed detail, route gaps, splits, settings, a photo, saved coaching text/audio, seven shared publications and six private publication states. Shared page/data/image reads return success only at `https://wayirun.slopcopy.com`; private equivalents remain unavailable.
 
 The first live all-run export safely aborted because its URL verifier still allowed only the development hostname. A bounded repair added only `wayirun.slopcopy.com` and regression coverage. The corrected browser verified and downloaded one CSV containing all 21 synced runs and retained details. Final durable counts remain 1 account, 21 runs, 103 chunks, 13 tombstones, 12 completed coaching results, 72 audio chunks, 13 photos and 13 publication states; production `openai_keys` remains empty. No run, publication, photo, coaching result or owner changed. Development remains readable and write-frozen with its original D1, OAuth clients, deployment and keyring. Milestone 11 is `COMPLETE`; Milestone 12 is `NOT STARTED`.
+
+## 1.23 V1 Milestone 12 final signed artifacts — October 7, 2026
+
+Clean synchronized `main` commit `1fd9e7c` produced ignored canonical APK `private-signing/release/WAYiRUN-1.0.0-production.apk`, 32,861,252 bytes, SHA-256 `8A67B8AA7CF8D41C54B2886DA085B46A3CE6392627EAA743F8D7B960770E87DE`. It is package `com.unopenedparachute.wayirun`, version code `1`, version `1.0.0`, non-debuggable, labeled `WAYiRUN`, uses FileProvider authority `com.unopenedparachute.wayirun.photos`, and verifies under APK Signature Scheme v2 with exactly the Milestone 6 RSA-4096 owner certificate.
+
+Deterministic inspection found the production origin and both production OAuth client IDs, with no development hostname/client IDs, debug identity/label, OAuth placeholders, test runner or unexpected signer. The production-readiness task passed. Debug and release JVM tests, debug assembly, debug/release lint and owner-signed release assembly passed. Optional ignored `WAYiRUN-1.0.0-production.aab` was also generated locally (11,913,501 bytes; SHA-256 `0D9F930CF9C5DD71CCEF52B12A89ED659E610F8930CF285594C77039CE5F2BE4`) without Play work. Neither artifact was installed or tracked; production and frozen development were not changed. Milestone 12 is `COMPLETE`; Milestone 13 is `NOT STARTED`.
