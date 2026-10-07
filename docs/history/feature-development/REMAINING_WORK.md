@@ -1,5 +1,7 @@
 # 1 Remaining WAYiRUN work
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 Current execution authority: REQUIREMENTS.md, ISSUES_AND_QUIBBLES_IMPLEMENTATION_PLAN.md version 0.2, and subsequent explicit user decisions. Issue-plan Milestones 1-14 are locally complete. the owner authorized the September 28 photo-sync repair and matching development deployment; the Worker and migrations 0008-0011 are now live. PHOTO_SYNC_REPAIR.md records recovery, Android queue/status hardening, verification and the current handoff. Physical-phone acceptance remains. No automatic commit/push or production deployment is authorized.
 
 Milestone 7 is complete: automatic media transport/listener/access UI is removed while playlist opening and cue ducking remain. The Android build/JVM/lint gate and 22 focused emulator tests passed. Real YouTube Music/headphone behavior and audible ducking remain phone acceptance; no phone APK was installed or handed off.

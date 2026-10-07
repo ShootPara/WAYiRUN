@@ -6,7 +6,7 @@ Snapshot date: October 7, 2026
 
 ## 1.1 Repository
 
-`main` is the canonical branch. The documented source checkpoint is commit `d4e4564`, which records the final signed WAYiRUN 1.0 artifacts without tracking the APK, AAB, signing keys or private migration evidence.
+`main` is the canonical branch. The historical signed-artifact checkpoint is recorded in the productionization history; the durable public source marker is the annotated `v1.0.0` tag. APKs, AABs, signing keys and private migration evidence are not tracked.
 
 Historical milestone plans, test handoffs and phone reports are stored under `docs/history/`. They do not override the current requirements or source.
 

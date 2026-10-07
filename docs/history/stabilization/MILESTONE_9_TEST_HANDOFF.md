@@ -1,5 +1,7 @@
 # 1 Milestone 9 test handoff
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 ## 1.1 Status and scope
 
 Phase 2 verification is complete. This milestone changes only Worker coaching classification, prompt guidance, tests and documentation. Earlier pending changes remain preserved. No deployment, paid provider call, Android build, phone install, commit or push occurred.

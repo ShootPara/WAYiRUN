@@ -1,5 +1,7 @@
 # 1 WAYiRUN V1 environment and resource map
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 Version: 1.0
 Status: Approved environment/resource design; implementation reconciled through Milestone 9
 Decision date: October 6, 2026
@@ -35,7 +37,7 @@ Read-only repository and Cloudflare verification established:
 
 | Concern | Verified development value |
 | --- | --- |
-| Cloudflare account ID | `6bf560a8b86852196c9898023e3b8d6b` |
+| Cloudflare account | Owner-controlled account recorded in the active Worker configuration |
 | Worker | `wayirun-dev` |
 | Configuration | `worker/wrangler.jsonc` |
 | Main module | `worker/src/index.ts` |
@@ -54,7 +56,7 @@ The development deploy script accepts no target arguments, performs a dry run, a
 | Concern | Verified development value |
 | --- | --- |
 | Database | `wayirun-dev-db` |
-| Database ID | `04bf8339-386b-4a03-80d7-12b4d1f99ffb` |
+| Database identity | Dedicated development D1 recorded in the active Worker configuration |
 | Binding | `DB` |
 | Migrations directory | `worker/migrations` |
 | Migration chain | Immutable `0001` through `0011` |
@@ -91,10 +93,10 @@ D1 contains accounts; authentication challenges/sessions; completed and staged r
 | Environment | `APP_ENV=development` | `APP_ENV=production` |
 | Exposure | Development `workers.dev` hostname | Custom Domain `wayirun.slopcopy.com`; `workers_dev=false` |
 | D1 database | `wayirun-dev-db` | `wayirun-prod-db` |
-| D1 database ID | `04bf8339-386b-4a03-80d7-12b4d1f99ffb` | `e4624be3-14f5-4cbc-939c-90009d377102` |
+| D1 database identity | Dedicated development D1 | Dedicated production D1 |
 | D1 binding | `DB` | `DB` |
 | Rate-limit bindings | Existing four development namespaces | `AUTH_RATE_LIMIT=163240785`; `AUTH_TOTAL_LIMIT=397761007`; `RUN_RATE_LIMIT=956644363`; `RUN_TOTAL_LIMIT=510952580` |
-| Secret | Development `COACHING_KEYRING` | Fresh production-only `COACHING_KEYRING`, provisioned; recovery copy under ignored `private-signing/production/` |
+| Secret | Development `COACHING_KEYRING` | Fresh production-only `COACHING_KEYRING`, provisioned with owner-controlled recovery material outside Git |
 | Deployment command | `npm run deploy:dev` | `npm run deploy:prod` |
 | Backups | Development source plus protected exports | Encrypted 30-day rolling backups plus separately retained cutover backup |
 
@@ -142,7 +144,7 @@ The existing development guard remains unchanged and must continue rejecting pro
 
 `worker/scripts/deploy-prod.mjs` will accept no additional arguments and will use only `worker/wrangler.production.jsonc`. Before any dry run, migration or deployment, `worker/scripts/deploy-prod-guard.mjs` must require:
 
-- account ID `6bf560a8b86852196c9898023e3b8d6b`;
+- the reviewed owner-controlled Cloudflare account;
 - Worker name `wayirun-prod`;
 - `APP_ENV=production`;
 - D1 name `wayirun-prod-db`, binding `DB`, and the reviewed production database ID;
@@ -223,8 +225,8 @@ Keep the debug app, local Room database, development D1 and immutable exports un
 
 Two encrypted owner-controlled copies are required:
 
-1. Primary: password-protected keystore plus separately encrypted backup in ignored repository-local `private-signing/`.
-2. Secondary: the owner's Google Drive mirror of the repository folder, independent of GitHub and the production Cloudflare account.
+1. Primary: password-protected keystore plus separately encrypted backup in ignored owner-controlled storage.
+2. Secondary: an independent owner-controlled backup outside GitHub and the production Cloudflare account.
 
 The entire signing directory and its credentials remain outside Git. Exact private paths, credentials and encryption keys are not recorded in tracked documentation.
 
@@ -268,7 +270,7 @@ Any source mutation after the freeze, count/hash mismatch, orphan, missing media
 
 | Value | Placeholder | Resolution milestone |
 | --- | --- | --- |
-| Production D1 database ID | `e4624be3-14f5-4cbc-939c-90009d377102` | Resolved in 8 |
+| Production D1 database identity | Dedicated production database | Resolved in 8 |
 | `AUTH_RATE_LIMIT` namespace ID | `163240785` | Resolved in 8 |
 | `AUTH_TOTAL_LIMIT` namespace ID | `397761007` | Resolved in 8 |
 | `RUN_RATE_LIMIT` namespace ID | `956644363` | Resolved in 8 |
@@ -315,7 +317,7 @@ Real packages, replay SQL and rehearsal configuration remain under ignored `priv
 
 ## 1.16 Milestone 10 frozen-source and production-data boundary
 
-Development is preserved but write-frozen at Worker version `e4f9b4f1-5275-4713-bf21-fed22366d98a`. The final immutable source package is `private-signing/migration/milestone10-cutover-final/` and is covered by manifest SHA-256 `6f0de322d7483a7446a6bf50f5ab10ae48aa90bd6f2d3fb95b8298544482d8f9`; it remains ignored locally and represented in the owner's Google Drive mirror. Production D1 UUID `e4624be3-14f5-4cbc-939c-90009d377102` now contains the exactly reconciled durable source graph. Production authentication state and `openai_keys` remain empty. Do not resume development writes, reimport this package, or treat development as authoritative after a later production-write boundary without the forward-reconciliation procedure.
+Development is preserved but write-frozen. The final immutable source package and its manifest remain in owner-controlled storage outside Git. The dedicated production D1 contains the exactly reconciled durable source graph; production authentication state and `openai_keys` remained empty at cutover. Do not resume development writes, reimport the package, or treat development as authoritative after a later production-write boundary without the forward-reconciliation procedure.
 
 ## 1.17 Milestone 11 accepted production boundary
 

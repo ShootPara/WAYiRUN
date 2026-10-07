@@ -9,7 +9,7 @@ This file records user-visible and architecture-level changes. Detailed mileston
 
 ## 1.2 Version 1.0.0
 
-Release date: not yet assigned
+Release date: 2026-10-07
 
 ### 1.2.1 Added
 

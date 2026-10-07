@@ -2,15 +2,15 @@
 
 ## 1.1 Working directory and authority
 
-Work in `<repository-root>`. `REQUIREMENTS.md` is the product contract, `CURRENT_STATE.md` is the implementation snapshot, `OPEN_WORK.md` contains unresolved work, and later explicit user decisions override earlier proposals. Historical material under `docs/history/` is evidence only.
+Treat the directory containing this file as the repository root. `REQUIREMENTS.md` is the product contract, `CURRENT_STATE.md` is the implementation snapshot, and `OPEN_WORK.md` contains unresolved work. Historical material under `docs/history/` is evidence only.
 
 Keep decimal heading and subheading numbering in authored project documents.
 
 ## 1.2 Scope discipline
 
-Follow plan → guardrails → execute → verify. Keep planning and implementation distinct. Implement only the bounded task requested by the user and preserve unrelated edits. This directory is the Git repository root; do not create a nested repository.
+Follow plan → guardrails → execute → verify. Keep planning and implementation distinct. Implement only the bounded task and preserve unrelated edits. Do not create a nested repository.
 
-`main` is canonical. The user handles commits, pushes, tags, deployments and repository visibility unless explicitly delegated. Do not deploy, install to a device or mutate production resources without task-specific authorization.
+`main` is canonical. Treat commits, pushes, tags, deployments, device installation, production mutation and repository-visibility changes as explicit operations rather than incidental implementation steps.
 
 ## 1.3 Implementation boundaries
 

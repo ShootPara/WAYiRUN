@@ -4,6 +4,8 @@ WAYiRUN is a private-by-default Android running tracker with a desktop-accessibl
 
 Version: 1.0.0
 
+[Homepage](https://wayirun.slopcopy.com) · [Privacy](https://wayirun.slopcopy.com/privacy) · [Support](https://wayirun.slopcopy.com/support) · [Project history](docs/PROJECT_HISTORY.md)
+
 ## 1.1 Current status
 
 The functional Android product is shared by the debug and release variants. The release variant uses the permanent application ID `com.unopenedparachute.wayirun`, the production origin `https://wayirun.slopcopy.com`, dedicated production OAuth configuration, and owner-controlled signing material stored outside Git.
@@ -59,7 +61,7 @@ Release signing and deployment require owner-controlled configuration that is in
 | `TEST_PLAN.md` | Current verification strategy |
 | `CHANGELOG.md` | Release-level change history |
 | `docs/DEVELOPMENT.md` | Developer setup and repository workflow |
-| `docs/PROJECT_HISTORY.md` | Curated development history |
+| [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) | Curated development history |
 | `docs/history/README.md` | Index of historical plans and handoffs |
 
 ## 1.6 Product boundaries

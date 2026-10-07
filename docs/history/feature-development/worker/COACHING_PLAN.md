@@ -1,5 +1,7 @@
 # 1 AI coaching plan - September 18, 2026
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 September 27 update: issue-plan Milestone 9's deterministic current-run quality classifier and prompt guidance are complete. TypeScript compilation, local deployment dry-run and all 118 Worker tests passed. See ../MILESTONE_9_TEST_HANDOFF.md for the complete bounded contract and results. Existing model, voice, full-archive input and durable-job decisions remain in force.
 
 ## 1.1 Accepted decisions and authority

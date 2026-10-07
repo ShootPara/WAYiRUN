@@ -1,5 +1,7 @@
 # 1 Auto-pause correction and milestone announcements
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 ## 1.1 Status and authority
 
 Approved September 28, 2026, including the recommended defaults. Based on the owner's physical indoor-run report and latest announcement decisions. Milestone 12 implementation and automated verification are complete; physical BUG-006 acceptance remains open. See MILESTONE_12_TEST_HANDOFF.md. the owner subsequently authorized continuing through tests without a model-switch pause because paid credits are available. Milestones 13 and 14 remain separate pending implementation; no deployment or physical-phone installation is authorized here.

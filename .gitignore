@@ -7,6 +7,19 @@
 *.iml
 .DS_Store
 Thumbs.db
+.vscode/
+*.log
+*.tmp
+*.bak
+
+# Packaged applications and local databases
+*.apk
+*.aab
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Credentials and signing material
 /private-signing/
@@ -17,6 +30,12 @@ Thumbs.db
 .dev.vars.*
 *.jks
 *.keystore
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
 keystore.properties
 signing.local.properties
 credentials*.json

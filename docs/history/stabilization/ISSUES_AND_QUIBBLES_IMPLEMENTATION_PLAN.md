@@ -1,5 +1,7 @@
 # 1 WAYiRUN issues and quibbles implementation plan
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 Version: 0.2
 Status: Accepted execution plan; milestone completion evidence tracked in Section 14.1 and TASKS.md
 Date: 2026-09-22

@@ -1,5 +1,7 @@
 # WAYiRUN — Implementation Plan
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 Version: 0.5
 Status: September 28 issue-plan milestones 1-14 locally complete; matching development backend deployed during photo-sync repair; physical-phone acceptance remains
 FILE: <repository-root>\TASKS.md (NEW)

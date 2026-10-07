@@ -1,5 +1,7 @@
 # WAYiRUN — Audio, music, notification, and discard follow-up
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 ## 1 Latest user findings and accepted changes
 
 Latest disposition: the user accepts active-session music controls as implemented and defers phone testing. Do not reopen the restricted-setting investigation as a prerequisite for development. Playlist setup/launch remains separate work; historical device-check requirements below are retained as future verification, not a current blocker.

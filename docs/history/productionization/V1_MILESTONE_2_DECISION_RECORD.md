@@ -1,5 +1,7 @@
 # 1 WAYiRUN V1 Milestone 2 decision record
 
+> **HISTORICAL RECORD:** This document is preserved as evidence of the project's development. Statements describing it as controlling or authoritative applied during that phase and do not override current repository documentation or source.
+
 Version: 1.0
 Status: Approved owner decisions and production policy
 Decision date: October 6, 2026; distribution amendment October 7, 2026
@@ -31,7 +33,7 @@ The domain and public URLs are approved intended values, not claims that DNS, TL
 - The canonical V1 signing identity is one permanent owner-controlled release key used for directly distributed signed APKs.
 - Google Play publication is optional future work. If pursued, the owner-controlled key may be evaluated as the Play upload key; Play may use a different app-signing certificate for Play-delivered installs, which must then be added to Android OAuth configuration.
 - `UnopenedParachute` is the signing and publishing owner. Permanent signing material must never be silently created by an agent or stored in Git.
-- The owner-approved Milestone 6 custody location is the ignored repository-local `private-signing/` directory. It contains the password-protected primary keystore, an independently AES-256-GCM-encrypted backup, and ignored local signing properties. The repository folder's owner-controlled Google Drive mirror is the second storage copy. GitHub must never receive any of these files. Passwords remain only in ignored local signing configuration and must never appear in tracked files, documentation, chat, or build logs; no separate password-manager requirement is imposed.
+- Milestone 6 established owner-controlled custody for the password-protected primary keystore, an independently encrypted backup and local signing properties outside Git. GitHub must never receive these files. Passwords remain only in ignored local signing configuration and must never appear in tracked files, documentation, chat or build logs.
 - Development and production OAuth clients will remain separate but use the same owner-controlled Google Cloud project, subject to Milestone 3 read-only ownership/recovery verification.
 - Development and production will use the same owner-controlled Cloudflare account but entirely separate Workers, D1 databases, rate-limit namespaces, non-secret configuration, routes, and secret instances.
 - Production OAuth must use `com.unopenedparachute.wayirun`, the production signing certificate fingerprints, and `https://wayirun.slopcopy.com`. The provisional package must not be registered as production.
