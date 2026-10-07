@@ -1,6 +1,6 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 8 complete; Milestone 9 not started
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 9 complete; Milestone 10 not started
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
@@ -172,3 +172,11 @@ After D1 capacity was freed, Cloudflare created the isolated production database
 The owner deliberately chose a fresh production `COACHING_KEYRING` and one-time OpenAI API-key re-entry after cutover. Existing development encrypted key envelopes are not part of production migration and remain preserved in the untouched development D1. The fresh keyring is provisioned only to production and backed up under ignored `private-signing/production/`; production `openai_keys` remains empty.
 
 `wayirun-prod` version `2b46e490-7aa7-4bd4-b290-1c8ce26964f3` is deployed with `workers_dev=false`, the exact production D1/OAuth/rate-limit bindings and Custom Domain `https://wayirun.slopcopy.com`. The Custom Domain resolves through Cloudflare with valid TLS. Health, readiness, browser assets and OAuth configuration smoke checks pass. A live check exposed and corrected the remaining same-project OAuth prefix rejection so runtime validation now rejects only the exact development clients. Production remains empty of migrated user data, and development resources remain unchanged. Milestone 8 is `COMPLETE`; Milestone 9 is `NOT STARTED`.
+
+## 1.20 V1 Milestone 9 migration rehearsal — October 7, 2026
+
+The deterministic migration tools are `worker/scripts/migration-core.mjs`, `migration-cli.mjs`, `migration-export.mjs`, `migration-import.mjs` and `migration-reconcile.mjs`. Sensitive JSONL, replay SQL and manifests stay under ignored `private-signing/migration/`. The final package identifies and hashes its source and tool, preserves stable IDs/ownership/archive chunks/deletions/completed coaching and audio/photos/publication state, and deliberately excludes authentication state, encrypted OpenAI-key envelopes, provider gates and unresolved operational rows.
+
+Development contained 1 owner, 21 completed runs, 103 chunks, 13 deletion tombstones, 12 completed coaching results with 72 audio chunks, 13 photos and 13 publication states. It had no incomplete upload or active coaching job. One result-free failed coaching attempt, one already-applied publication operation and one unresolved weather attempt were explicitly omitted as operational; no owner decision remains unresolved.
+
+Two independently created `wayirun-m9-rehearsal` databases received migrations `0001`–`0011`, the same package and complete reconciliation. Counts, canonical hashes, chunk hashes, binary byte totals, stable IDs and relationships matched; excluded tables/classes stayed empty. A post-rehearsal export matched all original source counts and canonical hashes. The disposable D1 was deleted. Production remained empty, development and production deployments/configuration remained unchanged, and all 172 Worker tests passed. Milestone 9 is `COMPLETE`; Milestone 10 is `NOT STARTED`.

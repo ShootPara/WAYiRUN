@@ -1,7 +1,7 @@
 # 1 WAYiRUN V1 environment and resource map
 
 Version: 1.0
-Status: Approved Milestone 3 environment and resource design
+Status: Approved environment/resource design; implementation reconciled through Milestone 9
 Decision date: October 6, 2026
 
 ## 1.1 Authority and scope
@@ -276,8 +276,8 @@ Any source mutation after the freeze, count/hash mismatch, orphan, missing media
 | Android signing fingerprints | `<TO_BE_ESTABLISHED_IN_MILESTONE_6>` | 6 |
 | Production Android OAuth client ID | `933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com` | Resolved in 7 |
 | Production Web OAuth client ID | `933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com` | Resolved in 7 |
-| Production Worker deployment/version ID | `<TO_BE_CREATED_IN_MILESTONE_11>` | 11 |
-| Custom Domain DNS record/TLS certificate | `<TO_BE_CREATED_BY_CLOUDFLARE_IN_MILESTONE_8>` | 8 |
+| Production Worker deployment/version ID | `2b46e490-7aa7-4bd4-b290-1c8ce26964f3` | Resolved in 8 |
+| Custom Domain DNS record/TLS certificate | `wayirun.slopcopy.com`; active Custom Domain with valid TLS | Resolved in 8 |
 
 These placeholders do not block this design milestone. Their named milestones must replace them with verified values before any dependent action.
 
@@ -305,4 +305,10 @@ Before the Milestone 4 write freeze, the development Android client gained an ad
 
 ## 1.14 Milestone 4 implemented configuration boundary
 
-`worker/src/environment.ts` is the fail-closed runtime authority for the two approved environment/origin pairs and provider variables. `worker/src/write-policy.ts` classifies mutations before dispatch and provides the bounded `WRITE_MODE=frozen` maintenance response. `worker/wrangler.production.jsonc` fixes the approved account, Worker name, Custom Domain, D1 name/binding, rate-limit binding names and provider URLs; its production D1 UUID, namespace IDs and OAuth client IDs remain explicit unresolved placeholders. `deploy-prod.mjs` and its guard accept no caller target, while `verify-prod-config.mjs` proves placeholder rejection and performs an ignored synthetic production dry-run without remote contact. Milestone 4 is complete; Milestone 5 is not started.
+`worker/src/environment.ts` is the fail-closed runtime authority for the two approved environment/origin pairs and provider variables. `worker/src/write-policy.ts` classifies mutations before dispatch and provides the bounded `WRITE_MODE=frozen` maintenance response. `worker/wrangler.production.jsonc` fixes the approved account, Worker name, Custom Domain, D1 name/binding, rate-limit binding names and provider URLs. The D1 UUID, namespace IDs and OAuth client IDs described as placeholders when Milestone 4 completed were resolved in Milestones 7 and 8. `deploy-prod.mjs` and its guard accept no caller target, while `verify-prod-config.mjs` validates the exact resolved production shape and performs a local dry run without remote mutation.
+
+## 1.15 Milestone 9 migration implementation boundary
+
+The tracked migration implementation is `worker/scripts/migration-core.mjs`, `migration-cli.mjs`, `migration-export.mjs`, `migration-import.mjs` and `migration-reconcile.mjs`. Durable source rows are exported in stable JSONL order with explicit development D1 identity, counts, canonical hashes, artifact hashes and a tool-source hash. Binary archive, photo and coaching-audio data is replayed through bounded statements and then verified byte-for-byte. Imports reject the named development and production databases, require an empty migrated target and fail reconciliation on any count, hash, ownership, relationship, chunk, media or excluded-category mismatch.
+
+Real packages, replay SQL and rehearsal configuration remain under ignored `private-signing/migration/`. The completed rehearsal used and then deleted only disposable `wayirun-m9-rehearsal`; neither Android nor either Worker was pointed at it. The production D1 remains empty for Milestone 10.

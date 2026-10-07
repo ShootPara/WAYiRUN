@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 8 complete; Milestone 9 not started
+Status: Controlling execution plan; Milestones 1 through 9 complete; Milestone 10 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -98,7 +98,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 6 | Establish owner-controlled production signing | COMPLETE | Ignored two-copy custody, verified certificate fingerprints and signed APK |
 | 7 | Configure production Google OAuth | COMPLETE | Dedicated production Android/Web clients, configuration and local artifact gates verified; live sign-in deferred until the production Worker exists |
 | 8 | Create production Cloudflare resources and schema | COMPLETE | Empty migrated D1, isolated bindings, fresh keyring, production Worker/Custom Domain and smoke evidence |
-| 9 | Build and rehearse migration | NOT STARTED | Repeatable data-only tool and successful disposable rehearsal |
+| 9 | Build and rehearse migration | COMPLETE | Deterministic data-only package; two successful clean disposable-D1 rebuilds and exact reconciliation |
 | 10 | Take final backup and perform controlled migration | NOT STARTED | Frozen source boundary, immutable backup, production reconciliation |
 | 11 | Deploy and smoke-test production Worker/browser | NOT STARTED | Deployment ID, route, bindings, and safe smoke evidence |
 | 12 | Build signed WAYiRUN 1.0 artifacts | NOT STARTED | Verified APK/AAB metadata, hashes, signature, and endpoint audit |
@@ -347,6 +347,14 @@ This list is a hypothesis from the current schema. The live data and code decide
 ### 1.15.3 Exit
 
 The same tool can reproduce the migration from a source export into a fresh migrated schema, and reconciliation passes before real production data is touched.
+
+### 1.15.4 Completion evidence — October 7, 2026
+
+Tracked tooling in `worker/scripts/migration-*.mjs` exports explicitly selected durable rows in stable JSONL order, records source identity/timestamp/tool hash/counts/per-file SHA-256 and canonical hashes, validates owner/run relationships and archive/media integrity, produces bounded binary replay statements, imports only into a named disposable target, and reconciles the complete target graph. `worker/test/migration.test.mjs` covers exclusions, stable hashing, ownership, duplicates, orphans, missing/corrupt chunks and media, encrypted-key omission, deterministic SQL and large binary statement bounds.
+
+The ignored final evidence package under `private-signing/migration/milestone9-evidence/` records source `wayirun-dev-db` UUID `04bf8339-386b-4a03-80d7-12b4d1f99ffb`, 1 owner, 21 completed runs, 103 archive chunks, 13 deletion tombstones, 12 completed coaching results, 72 coaching-audio chunks, 13 photos and 13 stable publication rows. It contains no encrypted OpenAI-key envelope, authentication state or unresolved operational row. The source contained no incomplete upload or active coaching job. One failed provider-limit coaching attempt without a result, one already-applied publication receipt and one unresolved weather attempt without a snapshot were explicitly classified as operational and excluded.
+
+Disposable D1 `wayirun-m9-rehearsal` was built twice from immutable migrations `0001` through `0011`, imported from the same package and reconciled by identical counts and canonical hashes, including archive chunk hashes and exact photo/audio bytes. Excluded categories remained empty. A final independent export matched every pre-rehearsal source table count and canonical hash. Production remained empty and neither development nor production configuration/deployment changed. The rehearsal database was deleted after evidence collection. All 172 Worker tests passed. No real production import, cutover, permanent freeze, Android install, commit or push occurred. Milestone 9 is `COMPLETE`; Milestone 10 is `NOT STARTED`.
 
 ## 1.16 Milestone 10 — final backup and controlled migration
 
