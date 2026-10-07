@@ -5,7 +5,7 @@ export function assertDevelopmentTarget(config) {
   if (config.name !== "wayirun-dev" || config.vars?.APP_ENV !== "development" ||
       config.account_id !== "6bf560a8b86852196c9898023e3b8d6b" ||
       config.workers_dev!==true || config.vars?.PUBLIC_ORIGIN!=="https://wayirun-dev.unopenedparachute.workers.dev" ||
-      config.vars?.WRITE_MODE!=="normal" || config.routes || config.route || config.env || database?.length !== 1 ||
+      !["normal","frozen"].includes(config.vars?.WRITE_MODE) || config.routes || config.route || config.env || database?.length !== 1 ||
       config.vars?.GOOGLE_WEB_CLIENT_ID!=="933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com" ||
       config.vars?.GOOGLE_ANDROID_CLIENT_ID!=="933230558080-8o82hopmd4ibnt2fllqpr8252lg3q44t.apps.googleusercontent.com" ||
       config.vars?.LOCATION_LOOKUP_URL!=="https://nominatim.openstreetmap.org/reverse" ||

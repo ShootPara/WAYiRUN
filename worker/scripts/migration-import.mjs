@@ -1,11 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { executeFile, query } from "./migration-cli.mjs";
-import { TABLES, fileSha256, insertSql, validateRows } from "./migration-core.mjs";
+import { TABLES, assertImportTarget, fileSha256, insertSql, validateRows } from "./migration-core.mjs";
 
-const [packageArg, database, config = "wrangler.jsonc"] = process.argv.slice(2);
-if (!packageArg || !database) throw Error("Usage: migration-import.mjs PACKAGE_DIRECTORY TARGET_DATABASE [CONFIG]");
-if (["wayirun-dev-db", "wayirun-prod-db"].includes(database)) throw Error("Import target must be a disposable rehearsal database.");
+const [packageArg, database, config = "wrangler.jsonc", authorization] = process.argv.slice(2);
+if (!packageArg || !database) throw Error("Usage: migration-import.mjs PACKAGE_DIRECTORY TARGET_DATABASE [CONFIG] [--production-cutover]");
+assertImportTarget(database, JSON.parse(readFileSync(resolve(config), "utf8")), authorization);
 const directory = resolve(packageArg);
 const manifest = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8"));
 if (manifest.format !== "wayirun-d1-migration-v1") throw Error("Unsupported migration package.");

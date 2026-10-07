@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { EXCLUSIONS, TABLES, canonicalLine, insertSql, sha256, tableHash, validateRows } from "../scripts/migration-core.mjs";
+import { EXCLUSIONS, TABLES, assertImportTarget, canonicalLine, insertSql, sha256, tableHash, validateRows } from "../scripts/migration-core.mjs";
 
 const fixture = () => {
   const data = Buffer.from("archive").toString("hex"), audio = Buffer.from("wav").toString("hex"), jpeg = Buffer.from([0xff,0xd8,0xff,0xd9]).toString("hex");
@@ -22,3 +22,4 @@ test("duplicate IDs and owner crossover fail closed",()=>{const x=fixture();x.ac
 test("orphan and missing chunk/media fail closed",()=>{const x=fixture();x.run_photos[0].run_id="missing";assert.throws(()=>validateRows(x),/orphan-run/);const y=fixture();y.run_chunks=[];assert.throws(()=>validateRows(y),/missing-chunk/);const z=fixture();z.run_photos[0].jpeg_hex="00";assert.throws(()=>validateRows(z),/invalid-size/);});
 test("SQL replay is deterministic and preserves blobs without envelope tables",()=>{const row=fixture().run_chunks[0];assert.equal(insertSql("run_chunks",row),insertSql("run_chunks",row));assert.match(insertSql("run_chunks",row),/X'[0-9a-f]+'/);});
 test("large binary replay uses bounded statements",()=>{const x=fixture().run_photos[0];x.jpeg_hex=Buffer.alloc(459202,7).toString("hex");const statements=insertSql("run_photos",x).split("\n");assert.ok(statements.length>1);assert.ok(Math.max(...statements.map(value=>value.length))<50_000);});
+test("production import requires the exact explicit cutover target",()=>{const production={name:"wayirun-prod",d1_databases:[{binding:"DB",database_name:"wayirun-prod-db",database_id:"e4624be3-14f5-4cbc-939c-90009d377102"}]};assert.throws(()=>assertImportTarget("wayirun-dev-db",{},undefined),/development/);assert.throws(()=>assertImportTarget("wayirun-prod-db",production,undefined),/explicit/);assert.throws(()=>assertImportTarget("wayirun-prod-db",{...production,name:"other"},"--production-cutover"),/exact/);assert.doesNotThrow(()=>assertImportTarget("wayirun-prod-db",production,"--production-cutover"));assert.doesNotThrow(()=>assertImportTarget("wayirun-m9-rehearsal",{},undefined));});

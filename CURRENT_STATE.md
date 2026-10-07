@@ -1,6 +1,6 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 9 complete; Milestone 10 not started
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 10 complete; Milestone 11 not started
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
@@ -180,3 +180,11 @@ The deterministic migration tools are `worker/scripts/migration-core.mjs`, `migr
 Development contained 1 owner, 21 completed runs, 103 chunks, 13 deletion tombstones, 12 completed coaching results with 72 audio chunks, 13 photos and 13 publication states. It had no incomplete upload or active coaching job. One result-free failed coaching attempt, one already-applied publication operation and one unresolved weather attempt were explicitly omitted as operational; no owner decision remains unresolved.
 
 Two independently created `wayirun-m9-rehearsal` databases received migrations `0001`–`0011`, the same package and complete reconciliation. Counts, canonical hashes, chunk hashes, binary byte totals, stable IDs and relationships matched; excluded tables/classes stayed empty. A post-rehearsal export matched all original source counts and canonical hashes. The disposable D1 was deleted. Production remained empty, development and production deployments/configuration remained unchanged, and all 172 Worker tests passed. Milestone 9 is `COMPLETE`; Milestone 10 is `NOT STARTED`.
+
+## 1.21 V1 Milestone 10 controlled production migration — October 7, 2026
+
+The owner reported 21 synchronized phone runs and 0 pending, exactly matching development D1. Development version `e4f9b4f1-5275-4713-bf21-fed22366d98a` has been write-frozen since `2026-10-07T14:22:48.9425019Z`; reads remain available and mutations return the bounded 503/Retry-After response. The debug app, phone Room database, development D1, deployment history and keyring remain preserved.
+
+The final ignored package is `private-signing/migration/milestone10-cutover-final/`, exported at `2026-10-07T14:26:06Z` from development UUID `04bf8339-386b-4a03-80d7-12b4d1f99ffb`. Its manifest-covered size is 51,655,872 bytes, manifest SHA-256 is `6f0de322d7483a7446a6bf50f5ab10ae48aa90bd6f2d3fb95b8298544482d8f9`, and tool-source SHA-256 is `90bed675bf3f8b742e5f0aa385b460fd8b3aa78d515630fdbbc45c3d6e8b8deb`. Google Drive mirror metadata provides the approved second-copy evidence, including matching large-artifact hashes.
+
+Production import began `2026-10-07T14:27:09.3552566Z`. Exact reconciliation passed for 1 owner, 21 runs, 103 chunks, 13 deletion tombstones, 12 completed coaching results, 72 audio chunks, 13 photos and 13 publication states. Selected graph checks covered ordinary, photo, coaching, shared/private publication and tombstone states with no missing chunks, orphans, ownership crossover or deletion conflict; no retained location/weather snapshot existed. Authentication/transient rows and `openai_keys` are empty. Production `COACHING_KEYRING` remains provisioned, operational endpoints pass, and deployment remains `2b46e490-7aa7-4bd4-b290-1c8ce26964f3`. Milestone 10 is `COMPLETE`; Milestone 11 is `NOT STARTED`.

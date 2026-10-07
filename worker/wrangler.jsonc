@@ -11,7 +11,7 @@
   "vars": {
     "APP_ENV": "development",
     "PUBLIC_ORIGIN": "https://wayirun-dev.unopenedparachute.workers.dev",
-    "WRITE_MODE": "normal",
+    "WRITE_MODE": "frozen",
     "LOCATION_LOOKUP_URL": "https://nominatim.openstreetmap.org/reverse",
     "WEATHER_FORECAST_URL": "https://api.open-meteo.com/v1/forecast",
     "WEATHER_ARCHIVE_URL": "https://archive-api.open-meteo.com/v1/archive",

@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 9 complete; Milestone 10 not started
+Status: Controlling execution plan; Milestones 1 through 10 complete; Milestone 11 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -99,7 +99,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 7 | Configure production Google OAuth | COMPLETE | Dedicated production Android/Web clients, configuration and local artifact gates verified; live sign-in deferred until the production Worker exists |
 | 8 | Create production Cloudflare resources and schema | COMPLETE | Empty migrated D1, isolated bindings, fresh keyring, production Worker/Custom Domain and smoke evidence |
 | 9 | Build and rehearse migration | COMPLETE | Deterministic data-only package; two successful clean disposable-D1 rebuilds and exact reconciliation |
-| 10 | Take final backup and perform controlled migration | NOT STARTED | Frozen source boundary, immutable backup, production reconciliation |
+| 10 | Take final backup and perform controlled migration | COMPLETE | Frozen source, mirrored immutable export, exact production import and reconciliation |
 | 11 | Deploy and smoke-test production Worker/browser | NOT STARTED | Deployment ID, route, bindings, and safe smoke evidence |
 | 12 | Build signed WAYiRUN 1.0 artifacts | NOT STARTED | Verified APK/AAB metadata, hashes, signature, and endpoint audit |
 | 13 | Perform physical and end-to-end production acceptance | NOT STARTED | Recorded pass/fail matrix; all blockers resolved |
@@ -376,6 +376,14 @@ Milestones 4 through 9 are complete. Production has not accepted user writes. A 
 ### 1.16.3 Failure rule
 
 Before production writes begin, a failed migration may be discarded and repeated from the final source export after diagnosis. Do not patch production data ad hoc merely to make counts match.
+
+### 1.16.4 Completion evidence — October 7, 2026
+
+The owner verified the existing debug phone UI showed 21 synchronized runs and 0 pending work, matching the 21 completed development-cloud runs; the connected emulator contained no WAYiRUN debug installation and was not used. Development Worker version `e4f9b4f1-5275-4713-bf21-fed22366d98a` entered guarded `WRITE_MODE=frozen` at `2026-10-07T14:22:48.9425019Z`. Health, readiness and browser reads remained HTTP 200 while a representative mutation returned HTTP 503 with `Retry-After: 60` and `Cache-Control: no-store`.
+
+The fresh ignored cutover evidence is `private-signing/migration/milestone10-cutover-final/`, exported from development D1 UUID `04bf8339-386b-4a03-80d7-12b4d1f99ffb` at `2026-10-07T14:26:06Z`. The immutable manifest-covered package is 51,655,872 bytes; manifest SHA-256 is `6f0de322d7483a7446a6bf50f5ab10ae48aa90bd6f2d3fb95b8298544482d8f9`, tool-source SHA-256 is `90bed675bf3f8b742e5f0aa385b460fd8b3aa78d515630fdbbc45c3d6e8b8deb`, and source commit is `fa8bb23ecc7751a6cdc8cac37e69f5cded4bb2b9`. Google Drive mirror metadata contains the final folder and matching content hashes for the archive-chunk, coaching-audio and photo artifacts. The package contains 1 owner, 21 runs, 103 chunks, 13 tombstones, 12 completed coaching results, 72 audio chunks, 13 photos and 13 publication states; the development encrypted OpenAI-key envelope and operational/transient rows are excluded.
+
+Immediately before import, production had no durable user data. Two already-expired login challenges were removed as disposable operational artifacts; no active challenge or session existed. The same rehearsed importer, protected by an added explicit exact-name/UUID production-cutover gate, imported into `wayirun-prod-db` beginning `2026-10-07T14:27:09.3552566Z`. Complete reconciliation matched every included row count and canonical hash, archive chunk hash, photo/audio byte, stable ID, owner/run relationship, deletion tombstone and publication state. Excluded categories and production `openai_keys` remained empty. Selected graph verification found 5 ordinary runs, 13 with photos, 12 with completed coaching, 7 shared and 6 private publication states, 13 non-conflicting tombstones, and zero missing chunks or orphan photo/coaching/publication records; no retained location/weather snapshot existed. Production health, readiness, browser and configuration endpoints returned HTTP 200, production secret name `COACHING_KEYRING` remained provisioned, and production deployment remained `2b46e490-7aa7-4bd4-b290-1c8ce26964f3`. Development remains preserved and frozen. Milestone 10 is `COMPLETE`; Milestone 11 is `NOT STARTED`.
 
 ## 1.17 Milestone 11 — deploy and smoke-test production Worker/browser
 

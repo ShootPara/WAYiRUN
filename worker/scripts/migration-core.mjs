@@ -40,6 +40,19 @@ export const sha256 = value => createHash("sha256").update(value).digest("hex");
 export const canonicalLine = row => `${JSON.stringify(row)}\n`;
 export const fileSha256 = path => sha256(readFileSync(path));
 
+export function assertImportTarget(database, config, authorization) {
+  if (database === SOURCE.name) throw Error("Import target cannot be the development source.");
+  if (database !== "wayirun-prod-db") {
+    if (authorization !== undefined) throw Error("Production authorization is invalid for a rehearsal target.");
+    return;
+  }
+  const binding = config.d1_databases?.find(value => value.binding === "DB");
+  if (authorization !== "--production-cutover" || config.name !== "wayirun-prod" ||
+      binding?.database_name !== "wayirun-prod-db" || binding?.database_id !== "e4624be3-14f5-4cbc-939c-90009d377102") {
+    throw Error("Production import requires the explicit cutover gate and exact approved target.");
+  }
+}
+
 export function validateRows(tables) {
   const errors = [];
   const keys = (rows, fn) => new Set(rows.map(fn));

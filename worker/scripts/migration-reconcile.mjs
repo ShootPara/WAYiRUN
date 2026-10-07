@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { query } from "./migration-cli.mjs";
-import { TABLES, tableHash, validateRows } from "./migration-core.mjs";
+import { TABLES, assertImportTarget, tableHash, validateRows } from "./migration-core.mjs";
 
-const [packageArg, database, config = "wrangler.jsonc"] = process.argv.slice(2);
-if (!packageArg || !database) throw Error("Usage: migration-reconcile.mjs PACKAGE_DIRECTORY TARGET_DATABASE [CONFIG]");
-if (["wayirun-dev-db", "wayirun-prod-db"].includes(database)) throw Error("Reconciliation target must be a disposable rehearsal database.");
+const [packageArg, database, config = "wrangler.jsonc", authorization] = process.argv.slice(2);
+if (!packageArg || !database) throw Error("Usage: migration-reconcile.mjs PACKAGE_DIRECTORY TARGET_DATABASE [CONFIG] [--production-cutover]");
+assertImportTarget(database, JSON.parse(readFileSync(resolve(config), "utf8")), authorization);
 const directory = resolve(packageArg), manifest = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8")), tables = {};
 for (const [name, spec] of Object.entries(TABLES)) {
   const rows = [];
