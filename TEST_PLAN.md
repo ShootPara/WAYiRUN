@@ -1,127 +1,75 @@
 # 1 WAYiRUN test plan
 
-Status: Feature-development baseline verification
+Status: Current verification strategy
 
-## 1.1 Verification boundaries
+## 1.1 Evidence classes
 
-This document separates the reproducible automated feature baseline from later deployment and physical-device acceptance.
+Report the following independently. Passing one class does not imply another:
 
-Milestone 6 MUST run only local automated checks. It MUST NOT deploy, install an APK, launch a connected device, call a paid model, use personal run data, or claim physical behavior from compilation/emulation.
+1. Kotlin/JVM and Worker unit/integration tests.
+2. Android build and lint.
+3. Android instrumentation and emulator behavior.
+4. Browser and Worker local verification.
+5. Deployed-service and production-configuration checks.
+6. Physical-device behavior.
 
-## 1.2 Prerequisites
+Historical test counts and milestone-specific commands are retained under `docs/history/`; they are evidence for those exact checkpoints, not permanent expected counts.
 
-- Windows PowerShell.
-- JDK 17 or a compatible newer runtime; the project commonly uses Android Studio JDK 21.
-- Android SDK platform 36 configured through ignored `android/local.properties` or the environment.
-- Node.js 22 through 24 for the Worker.
-- Checked-in Gradle wrapper and npm lockfile.
-- No credentials are required for local unit/Worker verification.
+## 1.2 Android baseline
 
-Generated `build`, `.gradle`, `.kotlin`, `.wrangler`, `node_modules`, local SDK configuration and secrets remain ignored.
-
-## 1.3 Required feature-baseline gate
-
-### 1.3.1 Android
-
-From `android/`:
+From `android/` on Windows:
 
 ```powershell
-.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
+./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
 ```
 
-Required results:
+For release-affecting changes, also run the relevant release unit, lint, assembly and production-readiness tasks. Owner-signed assembly requires ignored signing configuration and should be run only when the task requires a signed artifact.
 
-- all JVM/debug-unit tests pass;
-- the debug APK is assembled using the timestamped WAYiRUN filename;
-- lint completes with zero errors;
-- Room schema output does not introduce an unexplained tracked change.
+Database changes require a new forward migration, an exported Room schema and migration tests from every supported predecessor. Applied migration code and checked-in historical schemas must not be rewritten.
 
-The APK path is `android/app/build/outputs/apk/debug/WAYiRUN-<timestamp>.apk`. Test and lint reports are generated beneath `android/app/build/reports/`.
-
-### 1.3.2 Worker and browser modules
+## 1.3 Worker baseline
 
 From `worker/`:
 
 ```powershell
+npm.cmd ci
 npm.cmd test
 ```
 
-The script compiles strict TypeScript, performs a Wrangler deployment dry run into ignored local output, and runs all Node/Miniflare/workerd tests in `worker/test`.
+The suite compiles TypeScript, creates deploy output and exercises Worker/D1 behavior in local isolated runtimes. Migration work must additionally test deterministic export/import/reconciliation and preserve applied SQL files.
 
-Required results:
+Deployment dry-runs, target guards, smoke tests and live canaries are required only for an explicitly authorized deployment task. Local tests must not contact or mutate remote resources.
 
-- TypeScript compilation passes;
-- deployment dry run passes;
-- every Worker test passes;
-- no remote deployment or database is contacted;
-- no tracked file changes are generated.
+## 1.4 Focused regression coverage
 
-## 1.4 Baseline evidence to record
+Changes should add or select coverage for the affected contract, including as applicable:
 
-After the gate, record:
+- Run-controller accounting, pause/recovery, goals and split behavior.
+- Auto-pause evidence timing and stale-callback rejection.
+- Room migrations, ownership and synchronization queues.
+- Coaching durability and paid-attempt idempotency.
+- Photo, weather, publication and deletion reconciliation.
+- Browser privacy, export completeness and authorization isolation.
+- Environment and deployment guards.
 
-- current branch and HEAD;
-- clean/modified/untracked Git state;
-- Android task result and test count;
-- lint error/warning counts;
-- generated APK filename, size and SHA-256;
-- Worker test count and pass/fail result;
-- any warning that affects reproducibility or feature work.
+## 1.5 Instrumentation and emulator checks
 
-Do not commit generated reports or APKs unless a later explicit decision changes repository artifact policy. The current build output remains an ignored local handoff artifact.
+Use an explicitly selected emulator. Confirm that it contains no real user account or private run data before destructive test setup. Never clear or replace data on a physical device as part of an emulator test workflow.
 
-## 1.5 Optional emulator regression gate
+Record the classes run, failures, reruns and any visual conditions such as dark mode or enlarged text. Do not convert a transient failure into a pass without recording the cause or successful focused reproduction.
 
-Instrumentation coverage exists for account/session state, setup/settings, tracking service behavior, recovery, synchronization, Room migrations, coaching, photos, publication and Health Connect. It requires an explicitly started and unlocked emulator.
+## 1.6 Physical-device checks
 
-Do not install to or launch a connected emulator or phone merely as part of the feature baseline. A later bounded emulator milestone may run:
+Physical installation and operation require an active task that includes them. Record the device, Android version, build identity, permissions, battery settings and exact scenario. Sensor, background, audio, camera and Health Connect conclusions apply only to the tested conditions.
 
-```powershell
-.\gradlew.bat :app:connectedDebugAndroidTest --console=plain
-```
+Remaining physical observations are listed in `OPEN_WORK.md` without blocking unrelated documentation or maintenance work.
 
-Its result is separate from the required Milestone 6 gate.
+## 1.7 Documentation-only changes
 
-## 1.6 Later deployment verification
+For changes limited to Markdown and tracked-file organization:
 
-Development deployment parity is intentionally postponed. When authorized, it must separately verify the exact Worker version, applied D1 migrations, health/readiness/auth behavior, Android compatibility, and cleanup of any guarded synthetic records.
-
-No deployment result is required for the feature-development baseline.
-
-## 1.7 Later physical-device acceptance
-
-Comprehensive physical acceptance is intentionally postponed to the release phase. `OPEN_WORK.md` lists the implemented-but-unverified behaviors. Historical detailed cases remain in `COMPREHENSIVE_TEST_PLAN.md`, but that file is evidence/checklist material rather than a current baseline gate.
-
-At minimum, later acceptance must cover real GPS/steps, indoor auto-pause, screen-off/background behavior, audio ducking, camera/picker/share targets, coaching playback, Health Connect, recovery, and phone/web deletion reconciliation.
-
-## 1.8 Failure handling
-
-A failing required command blocks the feature-development baseline until the failure is understood and either corrected in a separately scoped implementation milestone or documented as an environmental blocker. Do not weaken tests, lint, validation, ownership checks, or privacy guards to make the gate pass.
-
-## 1.9 Approved detector/GPS auto-pause remediation
-
-This bounded October 2026 remediation authorizes Android implementation, local gates, explicitly selected emulator regression and an APK handoff for physical acceptance. It does not authorize physical-phone installation, deployment, or commit/push. REQUIREMENTS.md 1.8 defines the policy, including concurrent outdoor timers. Historical acceleration tests/handoffs are superseded for the decision algorithm.
-
-### 1.9.1 Automated acceptance
-
-Pure tests must cover initial detector silence, two-step arming, every-step silence reset, exact five-second boundary, receipt-time conservatism, timely batched steps, delayed hardware/application delivery, duplicate/out-of-order/future events, re-registration and tick gaps. Resume requires two post-pause steps within two seconds without extra dwell. Counter batches never cause a policy transition.
-
-GPS tests must cover quality/uncertainty boundaries, deadband and invalid samples between ticks, distinct timestamps, stale fixes/gaps, concurrent five-second windows, confirmed missing-detector fallback, registered-but-unarmed suppression, GPS loss and step-based resume despite stationary GPS. Integration tests must preserve paused accounting, source gaps, fresh baselines, manual/interrupted protection, repeated stops, announcement progress and Health Connect intervals. A delayed pre-pause counter batch received after segment closure remains excluded; quantify this existing limitation rather than rewriting distance.
-
-Run the required Android gate plus `:app:assembleDebugAndroidTest`, then focused auto-pause/service/storage/settings/announcement/photo-weather instrumentation on an explicitly selected emulator. Synthetic callbacks and screen-off emulator tests establish integration behavior, not hardware sensitivity or OEM delivery.
-
-### 1.9.2 Physical acceptance handoff
-
-Record phone model, Android version, installed build, normal carried placement, permissions and battery mode. Use the same defaults for all testers; do not calibrate per person.
-
-1. Indoors, walk slowly, walk normally and jog for several minutes, including initial startup. No false pause.
-2. Stop for 15 seconds, then move again; repeat three times. Confirm state/cues, frozen paused time/distance and fresh resumed measurement. Five seconds of detector silence can mean roughly five to eight seconds after the last physical step because delivery and timer evaluation take time.
-3. While stopped, look at or gently reposition the phone. Ordinary handling should no longer require accelerometer quiet.
-4. Manually pause, then walk for at least 15 seconds. No automatic resume.
-5. Repeat movement and two stop/resume cycles with the screen locked and phone unplugged. Include one locked interval longer than ten minutes to exercise wake-lock renewal.
-6. Outdoors, repeat walking/jogging/stops with usable GPS, then poor reception. GPS loss must not create a pause. GPS-only fallback cannot promise resume below the configured movement threshold.
-7. Verify auto-pause off and interrupted recovery requiring explicit resume. Finish and inspect pause intervals, distance, splits and cues.
-
-For failures, capture only bounded detector-registration/event-age/count, GPS speed/uncertainty, tick-gap and decision evidence if instrumentation is needed; no coordinates, identities or indefinite raw logging. A detector silently failing after arming cannot be distinguished from stopping with detector-only input. A phone left on treadmill equipment cannot represent its runner.
-
-Keep OPEN_WORK.md's physical bug open until this acceptance passes. Report emulator and phone results separately. One phone validates that device; it does not establish population-wide reliability.
+1. Verify all relative Markdown links.
+2. Search current-facing documents for superseded product and environment claims.
+3. Run `git diff --check`.
+4. Confirm no runtime source, schema, dependency or configuration changed.
+5. Review the complete rename/delete/rewrite diff.

@@ -1,62 +1,73 @@
 # 1 WAYiRUN
 
-WAYiRUN is an Android running tracker with a Cloudflare-backed private desktop history application. This repository is currently a **feature-development baseline**, not a production release.
+WAYiRUN is a private-by-default Android running tracker with a desktop-accessible web history. It records outdoor GPS routes, indoor stride-based distance, goals, splits, announcements, achievements, photos, coaching, publication state, and Health Connect exports while preserving owner isolation and offline operation.
 
-The complete Android application is in the `debug` source set. The `release` source set remains a name-only shell and is intentionally outside the feature-baseline reconciliation. The development product includes local run tracking and recovery, account-owned cloud synchronization, desktop history and export, coaching, achievements, photos, private-by-default publication, route-noodle graphics, weather overlays, and Health Connect export.
+Version: 1.0.0
 
-## 1.1 Current product direction
+## 1.1 Current status
 
-- Route displays are provider-independent route noodles with preserved gaps and start/finish markers. Basemap, Leaflet, and map-tile behavior is superseded.
-- Music integration opens a saved YouTube Music playlist and ducks other audio during WAYiRUN cues. The app does not send player transport commands or request notification-listener access.
-- Runs and photos are private by default. Publication requires an explicit share/copy/image-share intent; photo visibility and unsharing remain independently controllable.
-- The Android debug application and Cloudflare Worker are development systems. Production identity, signing, configuration, deployment, and release acceptance are separate later work.
+The functional Android product is shared by the debug and release variants. The release variant uses the permanent application ID `com.unopenedparachute.wayirun`, the production origin `https://wayirun.slopcopy.com`, dedicated production OAuth configuration, and owner-controlled signing material stored outside Git.
 
-## 1.2 Authoritative documentation
+Development and production Cloudflare Workers and D1 databases are separate. Production contains the migrated retained history; development remains a non-production environment and is currently write-frozen.
 
-| Document | Purpose |
-| --- | --- |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Current accepted product behavior, exclusions, and deliberate deferrals |
-| [CURRENT_STATE.md](CURRENT_STATE.md) | Factual inventory of delivered behavior and current environment boundaries |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Current Android, Worker, browser, and persistence structure |
-| [DATA_MODEL.md](DATA_MODEL.md) | Room, archive, D1, settings, secret, and data-classification contract |
-| [OPEN_WORK.md](OPEN_WORK.md) | Genuine bugs, unverified behavior, deferred features, and release work kept as separate categories |
-| [TEST_PLAN.md](TEST_PLAN.md) | Reproducible automated baseline and later acceptance boundaries |
-| [AGENTS.md](AGENTS.md) | Repository-specific agent instructions |
-| [the then-current working guide](User%20Preferences%20LLM%20Guide.md) | Collaboration and milestone workflow |
+Physical-device observations and deliberately deferred work are recorded separately in `OPEN_WORK.md`. They do not change the source-state description above.
 
-Historical plans, handoffs, reports, and implementation contracts remain evidence, not current authority. Their disposition is indexed in [docs/history/README.md](docs/history/README.md).
+## 1.2 Major capabilities
 
-## 1.3 Workspace
+- Outdoor GPS, indoor steps and honest time-only tracking.
+- Pause, auto-pause, recovery, splits, goals and configurable spoken milestones.
+- Owner-isolated Google account synchronization and browser history.
+- Private-by-default run publication with independent photo visibility and unsharing.
+- Achievements, run photos, route overlays, weather context and CSV export.
+- Per-account OpenAI coaching with durable request/result handling.
+- Completed-session and distance export to Health Connect.
 
-This directory is the Git repository root. Do not create a nested repository.
+## 1.3 Architecture
 
-| Path | Purpose |
-| --- | --- |
-| `android/` | One-module Android application, Gradle wrapper, tests, and exported Room schemas |
-| `worker/` | Cloudflare Worker, D1 migrations, browser application, tests, and development deployment tooling |
-| `testdata/` | Checked-in deterministic test fixtures |
-| `docs/history/` | Index for non-authoritative historical implementation material |
+The repository contains one Android application module under `android/app` and one Cloudflare Worker/browser application under `worker`. Android retains the authoritative local run record in Room and synchronizes completed archives through guarded adapters. The Worker provides authentication, owner-isolated storage, coaching, photos, publication, export and the browser interface using D1.
 
-Generated build directories, local SDK paths, Wrangler state, dependencies, credentials, signing material, and secrets must remain untracked.
+See `ARCHITECTURE.md` and `DATA_MODEL.md` for the current implementation and persistence contracts.
 
-## 1.4 Baseline verification
+## 1.4 Build and test
 
-Android, from `android/` on Windows:
+Android prerequisites are JDK 17 and an Android SDK configured in ignored `android/local.properties`.
 
 ```powershell
-.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
+cd android
+./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
 ```
 
-Worker, from `worker/`:
+Worker prerequisites are Node.js 22 or 24 and npm.
 
 ```powershell
+cd worker
+npm.cmd ci
 npm.cmd test
 ```
 
-These commands verify the feature-development baseline. They do not establish physical GPS/step accuracy, screen-off behavior, real audio ducking, camera/share behavior, Health Connect behavior on a user phone, deployment parity, or production readiness.
+Release signing and deployment require owner-controlled configuration that is intentionally absent from Git. See `docs/DEVELOPMENT.md`, `android/README.md`, and `worker/README.md`.
 
-## 1.5 Git baseline
+## 1.5 Documentation
 
-`codex/account-sessions` is the candidate authoritative development lineage. It contains the still-valid behavior from the divergent `development` lineage and later replacements. The old `development` route-map implementation uses the rejected Leaflet/OpenStreetMap basemap direction and must not be restored.
+| Document | Purpose |
+| --- | --- |
+| `REQUIREMENTS.md` | Product behavior, boundaries and deliberate exclusions |
+| `CURRENT_STATE.md` | Current implementation and environment snapshot |
+| `ARCHITECTURE.md` | Android, Worker and browser architecture |
+| `DATA_MODEL.md` | Persistence, synchronization and data ownership |
+| `OPEN_WORK.md` | Unresolved verification and post-1.0 deferrals |
+| `TEST_PLAN.md` | Current verification strategy |
+| `CHANGELOG.md` | Release-level change history |
+| `docs/DEVELOPMENT.md` | Developer setup and repository workflow |
+| `docs/PROJECT_HISTORY.md` | Curated development history |
+| `docs/history/README.md` | Index of historical plans and handoffs |
 
-The user controls commits, pushes, branch consolidation, and deployment unless explicitly delegated.
+## 1.6 Product boundaries
+
+WAYiRUN is not a social network or general health platform. It deliberately excludes social feeds, calorie tracking, advertisements, automatic control of external music players, basemap-backed route displays, Health Connect imports and a watch application.
+
+## 1.7 Distribution and license
+
+Version 1.0 uses an owner-signed direct APK. Google Play distribution is deferred.
+
+No license has been granted by this repository. All rights are reserved unless the owner later adds a license file.

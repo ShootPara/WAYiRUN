@@ -1,12 +1,12 @@
 # 1 WAYiRUN requirements
 
 Version: 1.0
-Status: Accepted feature-development requirements
+Status: Accepted Version 1.0 product contract
 Baseline date: 2026-09-29
 
 ## 1.1 Authority
 
-This document is the product source of truth for the feature-development baseline. Later explicit user decisions supersede it. `CURRENT_STATE.md` records delivery, `OPEN_WORK.md` records remaining work by category, and historical plans are evidence only.
+This document is the product source of truth for WAYiRUN Version 1.0 behavior. Later explicit user decisions supersede it. `CURRENT_STATE.md` records delivery, `OPEN_WORK.md` records unresolved and deferred work, and historical plans are evidence only.
 
 MUST and MUST NOT identify required behavior. Unsettled or deferred ideas are not permission to invent behavior.
 
@@ -148,13 +148,13 @@ Generated outputs, credentials, API keys, signing material, local SDK paths, Wra
 
 ## 1.17 Deliberate deferrals and exclusions
 
-The following are not required for the feature-development baseline:
+The following are not required for Version 1.0:
 
 - week/month/year/lifetime statistics selectors, sorting choices, or charts;
 - coaching voice selection;
 - broader achievement performance calculations across discontinuous evidence;
 - automatic photo restoration onto a new phone;
-- production Android identity, release implementation, signing, distribution, policy declarations, production Cloudflare configuration, or production deployment;
-- comprehensive physical-device or release acceptance.
+- Google Play publication, Play App Signing, store listing, or store-specific policy workflow;
+- population-wide physical-device qualification beyond documented device-specific evidence.
 
 Deferred items MUST remain separate from bugs and unverified behavior in `OPEN_WORK.md`.

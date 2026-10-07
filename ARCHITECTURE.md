@@ -1,109 +1,75 @@
 # 1 WAYiRUN architecture
 
 Version: 1.0
-Status: Current feature-development architecture
+Status: Current implementation architecture
 
-## 1.1 Authority and boundary
+## 1.1 System boundary
 
-This document describes the implementation on the candidate `codex/account-sessions` baseline. Product behavior is governed by `REQUIREMENTS.md`; persisted fields are governed by `DATA_MODEL.md`.
+WAYiRUN consists of one Android application module and one Cloudflare Worker/browser application. Android owns run capture and the authoritative local record. The Worker supplies account identity, owner-isolated synchronization, coaching, browser history, media and explicit public-run pages.
 
-WAYiRUN has one Android application module and one Cloudflare Worker/browser application. The complete Android product remains in the debug source set. No production release architecture is implied.
+Development and production use separate Android identities, OAuth clients, Worker configurations, rate-limit namespaces and D1 databases. Environment selection is compile-time/configuration-time; the shipped app has no runtime environment switch.
 
-## 1.2 Android structure
+## 1.2 Android source structure
 
-### 1.2.1 Pure domain
+The functional product lives in `android/app/src/main`. The Kotlin namespace is `com.example.runningapp`; the production application ID is `com.unopenedparachute.wayirun`, while debug is explicitly set to `com.example.runningapp.debug`.
 
-`android/app/src/main/java/com/example/runningapp/domain` contains Android-independent run behavior:
+Important packages are:
 
-- run settings, goals, states, pause reasons and units;
-- elapsed-time, distance, pace and split accounting;
-- source transitions and recovery checkpoints;
-- announcement and goal occurrences;
-- auto-pause evidence policy;
-- achievement calculation;
-- Health Connect export projection.
+- `domain`: pure Kotlin run state, accounting, goals, splits, achievements and auto-pause policy.
+- `tracking`: foreground service, sensor adapters, notifications, cues and playlist opening.
+- `storage`: Room entities, migrations, run archives and publication state.
+- `sync`: upload, restore, download cache and background synchronization.
+- `account`: Google identity, sessions and per-account coaching-key controls.
+- `coaching`: durable request synchronization, generated/fallback audio and finish behavior.
+- `photos`: camera/picker flow, rendering, weather context and photo synchronization.
+- `sharing`: publication intent and Android sharing.
+- `health`: Health Connect adapter, export engine and retry worker.
+- `ui`: Compose screens and settings.
 
-Wall-clock time is metadata. Monotonic time drives durations.
+Unit tests live in `src/test`, variant configuration tests in `src/testDebug` and `src/testRelease`, and instrumentation tests in `src/androidTest`.
 
-### 1.2.2 Debug product integration
+## 1.3 Run domain and tracking
 
-`android/app/src/debug` contains the functional application:
+`RunController` is the central state machine for countdown, running, manual/automatic pause, recovery, finish and discard. It operates on domain inputs rather than Android sensors directly. Captured run settings prevent later preference changes from rewriting an active or recovered run.
 
-- Compose screens and settings;
-- Google account sessions and per-account key controls;
-- the foreground tracking service;
-- GPS, step-counter and step-detector adapters;
-- Room storage and recovery;
-- authenticated cloud synchronization and restoration;
-- audio cues and coaching playback;
-- photo editing, sharing and publication state;
-- Health Connect export workers.
+`TrackingService` owns active background tracking and the ongoing notification. GPS, detector and cumulative step-counter callbacks enter through adapters. `AutoPausePolicy` evaluates bounded detector/GPS evidence; the cumulative counter remains a distance-accounting input rather than a silence detector.
 
-All run commands and sensor messages pass through one serialized tracking-service consumer. The service commits a recovery checkpoint before playing newly emitted cues, preventing a crash from replaying acknowledged run events.
+Route and distance accounting preserve source changes and gaps. Pause transitions close measurement intervals without inventing retrospective samples.
 
-### 1.2.3 Release shell
+## 1.4 Local persistence
 
-`android/app/src/release` displays only the WAYiRUN name and excludes development services and integrations. Promoting the functional application into a release variant is later production work and is not part of this baseline.
+Room database `wayirun-local.db` is schema version 10. It stores runs, route points, measurements, splits, active intervals, source segments, synchronization operations, coaching requests, pull state, achievements, photos, Health Connect state and publication state.
 
-## 1.3 Tracking flow
+Migrations 1→10 are explicit and registered in `RunDatabase`. Exported schemas 1–10 are checked in under `android/app/schemas`. Applied migrations and historical schemas are immutable.
 
-1. Setup creates an immutable `RunSettings` capture.
-2. `TrackingService` creates or recovers a `RunController`.
-3. `SensorAdapters` provide GPS, cumulative accounting steps and separately registered step detections. Detector occurrence and callback-receipt times remain distinct.
-4. `TrackingInput` validates source evidence and passes measurements to the controller.
-5. The controller calculates active time, distance, pace, splits, goals, announcements and pause transitions.
-6. `RunRepository` atomically stores the checkpoint and any new route/measurement record.
-7. New event IDs are sent to the cue queue only after persistence.
-8. A finished account-owned run is queued for cloud synchronization, coaching/publication/photo work as applicable, and Health Connect export.
+Completed runs are serialized into archive format version 1 for upload and reconstruction. Android remains the source of truth for captured run behavior; cloud copies support synchronization, browsing and recovery.
 
-Indoor mode never registers location. Outdoor mode can use step fallback and later start a separate GPS segment. Pause/source/recovery boundaries remain explicit; route renderers never join separate segments.
+## 1.5 Account and synchronization
 
-Auto-pause uses ephemeral detector arming/silence and GPS speed/uncertainty windows, as specified in REQUIREMENTS.md 1.8. Outdoor stop windows run concurrently. Counter callbacks never drive pause/resume. No raw accelerometer listener or general motion classifier is needed. Automatic pauses retain sensor observation, foreground service and the existing partial wake lock; manual pauses release observation. Recovery requires explicit resume and fresh evidence.
+Google identity is exchanged for a bounded Worker session. Data APIs require an authenticated owner and enforce ownership server-side. Pre-account local runs remain local until explicitly imported. New runs capture the selected owner at start.
 
-## 1.4 Route-display architecture
+Synchronization uses stable run and operation identifiers, immutable archive chunks, receipts and deletion tombstones. Restore validates complete archives before writing local records. Account changes invalidate stale work so callbacks cannot mutate another owner's state.
 
-Private and public routes are rendered as provider-independent polylines on an app-owned surface. Coordinates are normalized for public output. Renderers preserve source gaps and show start/finish markers.
+## 1.6 Coaching, photos and publication
 
-No Leaflet, OpenStreetMap tiles, Mapbox, or other basemap is part of the current direction. The Worker may use a separately attributed OpenStreetMap-compatible geocoding result for coarse city/region text; that does not authorize a basemap or public raw coordinates.
+Per-account OpenAI keys are encrypted by the Worker and never included in Android, exports or public pages. Coaching requests are durable and idempotent; saved results and audio can be replayed from private history.
 
-## 1.5 Audio and music boundary
+Photo rendering is local, orientation-aware and bounded. Overlays use retained time, distance, pace, route geometry and available cached weather. Photo synchronization and publication are separate state machines.
 
-WAYiRUN owns its spoken/tone cue queue and requests temporary audio focus that allows other audio to duck. It releases focus after completion, failure, cancellation, or teardown.
+Runs are private by default. Explicit sharing records publication intent. Public pages expose only the selected run and use provider-independent route geometry without raw-coordinate APIs or basemap dependencies.
 
-Music integration only validates and opens a saved YouTube Music playlist. Run commands never issue player transport events, and external player/headphone events never change run state. No notification-listener access is requested.
+## 1.7 Health Connect
 
-## 1.6 Local persistence and ownership
+Health Connect is isolated behind `HealthAdapter`. WAYiRUN writes completed exercise sessions and distance only. Stable record identifiers support retry and deletion cleanup. Health Connect is not a source for run imports.
 
-Room stores active and completed runs, detailed samples, recovery state, sync queues, photos, publication state, achievements, and Health Connect work. A stable local owner identifies pre-account runs. A separate immutable cloud owner determines account synchronization.
+## 1.8 Worker and browser
 
-Signing in never silently claims old runs. Explicit import is transactional. Account switching must not expose another account's completion workflow or private data.
+The Worker entry point is `worker/src/index.ts`. Supporting modules cover authentication, environment guards, runs, coaching, photos, location/weather, publication, public routes and browser history.
 
-## 1.7 Cloud architecture
+D1 schema is defined by immutable migrations `0001`–`0011`. Browser assets under `worker/web` are bundled by Wrangler and served from the same origin as the API. Styled application controls are used instead of native browser alert/confirm flows.
 
-The Cloudflare Worker uses D1 and exposes bounded routes for:
+Development configuration is `worker/wrangler.jsonc`; production is `worker/wrangler.production.jsonc`. Deployment scripts validate the exact account, Worker, database and environment before allowing remote mutation.
 
-- Google authentication and sessions;
-- account metadata and encrypted OpenAI-key state;
-- staged run upload, immutable completion, download and deletion;
-- coaching generation/status/audio/history;
-- photos and cached weather;
-- publication state, short public links and public run data;
-- the authenticated browser application.
+## 1.9 Secrets and generated artifacts
 
-Run archives remain the detailed source of truth. D1 tables around them provide identity, operational state, publication, cached enrichment, coaching, and deletion behavior.
-
-## 1.8 Browser application
-
-The Worker serves a dependency-light browser UI for authenticated history, details, achievements, export and deletion. Browser sessions use cookies and CSRF protection rather than native bearer-token behavior.
-
-The browser validates archives before displaying or exporting them. Public pages resolve a single published run and expose normalized route geometry rather than raw coordinates.
-
-## 1.9 Offline and retry behavior
-
-Tracking, timing, available distance sources, recovery, onboard coaching fallback, and local Health Connect export do not require internet. Account-owned cloud operations are durable queues with bounded retry state. Deletion markers and intent IDs prevent stale uploads or acknowledgements from resurrecting removed data.
-
-## 1.10 Environment separation
-
-The checked-in Worker target and Android debug configuration are development-only. Production identity, signing, OAuth, domains, secrets, capacity and deployment require a separate approved release milestone.
-
-Local SDK configuration belongs in ignored `android/local.properties`. Wrangler state, dependencies, generated builds, credentials and secrets remain untracked.
+Signing properties, keystores, keyring material, private backups, migration evidence, Wrangler state, local SDK paths, build output and node modules are ignored. Public client IDs and resource identifiers required for configuration are not credentials; private keys, passwords, session secrets and user OpenAI keys must never enter Git.

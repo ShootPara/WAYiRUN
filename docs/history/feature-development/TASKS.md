@@ -48,7 +48,7 @@ Verification: `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lint
 
 Artifact: `android/app/build/outputs/apk/debug/WAYiRUN-2026-09-22_09-46-00_EDT.apk` (intermediate verification build, existing health1 version label). Reports: `android/app/build/reports/tests/testDebugUnitTest/index.html` and `android/app/build/reports/lint-results-debug.html`. Physical camera/share-target behavior and full process death while an external camera is open remain device acceptance; those are not claimed from picker and service tests. No physical-phone install, deployment, commit, or push. Next bounded milestone: issue-plan 3.0, route-only graphics.
 
-Read [REQUIREMENTS.md](REQUIREMENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), and [the then-current working guide](User%20Preferences%20LLM%20Guide.md) before work. Product requirements take precedence over proposed technical details.
+Read [REQUIREMENTS.md](../../../REQUIREMENTS.md), [ARCHITECTURE.md](../../../ARCHITECTURE.md), and [DATA_MODEL.md](../../../DATA_MODEL.md) before work. At the time, a private working-style guide was also used; it has since been removed from the current tree. Product requirements take precedence over proposed technical details.
 
 ### 1.3 Issue-plan milestone 3 completed - September 22
 
@@ -315,7 +315,7 @@ The timer and recorded measurements recover only through the last successful com
 
 ### 6.7 Reviewed feedback and proposed next task
 
-See [PHONE_TEST_REVIEW_2026-09-14.md](PHONE_TEST_REVIEW_2026-09-14.md) for source findings, feedback disposition, affected files, tests, and the bounded reliability plan. The [original report](WAYiRUN_Phone_Test_Report_2026-09-14.md) remains unchanged. Photos are absent as expected; basic state/goal cues are already implemented. The existing foreground service also intends to retain a paused notification, so reproduce that behavior before changing it.
+See [PHONE_TEST_REVIEW_2026-09-14.md](../phone-testing/PHONE_TEST_REVIEW_2026-09-14.md) for source findings, feedback disposition, affected files, tests, and the bounded reliability plan. The [original report](../phone-testing/WAYiRUN_Phone_Test_Report_2026-09-14.md) remains unchanged. Photos are absent as expected; basic state/goal cues are already implemented. The existing foreground service also intends to retain a paused notification, so reproduce that behavior before changing it.
 
 Recommend investigating audio and paused-notification behavior next without waiting for quantitative accuracy testing. Preserve the latter as unverified follow-up, not a passing result. Keep UI polish separate, time-only distance estimation subject to a new calculation contract, and photo flow in its later milestone. This document update does not authorize app changes or accept embedded report instructions as new product requirements.
 
@@ -378,7 +378,7 @@ Final command from `android/`: `./gradlew.bat :app:testDebugUnitTest :app:assemb
 
 Artifact: `android/app/build/outputs/apk/debug/app-debug.apk`, version **0.1.0-dev-music1**, SHA-256 `6D5F266B25AE1518433BD1499FE03D37474F01CE08C542DEE67AAEC212EA2E92`. JVM/lint reports retain their usual paths; the latest direct-ADB transcript is `android/app/build/verification/music1-instrumentation.txt`. Earlier audio2/music transcripts are intermediate results, not the final artifact verification.
 
-No phone appeared in ADB. Actual YouTube Music duck/restore, headphone controls, screen-off linkage, and notification grouping remain for [MUSIC1_PHONE_RETEST.md](MUSIC1_PHONE_RETEST.md). The adapter tests use test-owned Android media sessions, not the installed YouTube Music app. Optional notification access must be granted by the user. Playlist configuration/launch remains outside this delivered subset, so the whole original Milestone 4 is not marked complete. Quantitative tracking accuracy and previously deferred permission/battery checks also remain unverified.
+No phone appeared in ADB. Actual YouTube Music duck/restore, headphone controls, screen-off linkage, and notification grouping remain for [MUSIC1_PHONE_RETEST.md](../phone-testing/MUSIC1_PHONE_RETEST.md). The adapter tests use test-owned Android media sessions, not the installed YouTube Music app. Optional notification access must be granted by the user. Playlist configuration/launch remains outside this delivered subset, so the whole original Milestone 4 is not marked complete. Quantitative tracking accuracy and previously deferred permission/battery checks also remain unverified.
 
 ### 7.5 First-open permissions — permissions1
 

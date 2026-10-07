@@ -1,14 +1,18 @@
-# WAYiRUN — Development Worker
+# 1 WAYiRUN Worker and browser
 
-## 1 Current boundary
+## 1.1 Scope
 
-This contains the cloud foundation, Google account sessions, and resumable completed-run storage transport. Google phone sign-in is user-confirmed. Run storage now requires a verified session and provides immutable upload receipts and owner-isolated reads. Android sync1 includes archive validation, explicit import, durable uploads and discard reconciliation; download/restore remains next. See AUTH_CONTRACT.md and RUN_STORAGE_CONTRACT.md for exact behavior and limits.
+The Cloudflare Worker provides Google account sessions, owner-isolated run storage, deletion protection, encrypted per-account OpenAI-key storage, durable coaching, photos, location/weather context, publication, CSV export, private browser history and public individual-run pages.
 
-Migration 0001 stores foundation metadata, 0002 adds accounts/sessions/challenges, and 0003 adds run manifests/chunks, and 0004 adds deletion markers and a stale-upload guard. Migrations are additive and preserve existing accounts and sessions. Do not edit applied migrations. There is no sample user, hardcoded token, or development authentication bypass.
+D1 migrations `0001`–`0011` define the persisted schema. Browser assets under `web/` are bundled and served by the Worker.
 
-## 2 Local development
+## 1.2 Requirements
 
-Use Node 22 or 24 and the committed npm lockfile. From this directory:
+- Node.js 22 or 24.
+- npm and the committed `package-lock.json`.
+- Wrangler authentication only for explicitly authorized remote work.
+
+## 1.3 Local development
 
 ```powershell
 npm.cmd ci
@@ -17,46 +21,53 @@ npm.cmd run db:migrate:local
 npm.cmd run dev
 ```
 
-`npm test` compiles TypeScript and runs Node tests against Miniflare/workerd and real local D1 bindings. Each runtime is disposed after the test. It checks migration readiness, constraints, unsupported routes/methods, HEAD, closed API access, and development deployment guards. Test data is ephemeral and never uses the remote database. `db:migrate:local` uses Wrangler's separate local database. Apply migrations a second time to verify the ledger reports no pending work.
+`npm test` compiles TypeScript, creates deploy output and runs the Node/Miniflare/workerd/D1 suite against isolated local state. Local tests must not contact remote databases or use real accounts.
 
-Generated `build/`, `.wrangler/`, and `node_modules/` are ignored by the repository. Do not commit `.dev.vars` or CLI credentials. Exact development-tool versions and integrity hashes are in package-lock.json; npm audit checks these dependencies separately from application behavior.
+Generated `build/`, `.wrangler/`, `node_modules/` and `.dev.vars*` are ignored.
 
-## 3 Development deployment
+## 1.4 Environments
 
-Current September 28 deployment and photo recovery are recorded in [PHOTO_SYNC_REPAIR.md](../PHOTO_SYNC_REPAIR.md). Authorized photo rollouts also run `node scripts/verify-photo-deployment.mjs --confirm-development-write` after smoke checks. This guarded command uses disposable synthetic account/run/photo records in development, verifies authenticated uploads and privacy transitions, and removes its records. Resolve any reported cleanup failure before handoff. Ordinary local tests continue to use only local fixtures.
+| Concern | Development | Production |
+| --- | --- | --- |
+| Configuration | `wrangler.jsonc` | `wrangler.production.jsonc` |
+| Worker | `wayirun-dev` | `wayirun-prod` |
+| D1 | `wayirun-dev-db` | `wayirun-prod-db` |
+| Origin | Development workers.dev origin | `https://wayirun.slopcopy.com` |
+| Write mode | `frozen` | `normal` |
 
-Configuration binds only the new `wayirun-dev-db` to Worker `wayirun-dev` in the selected account. IDs in configuration are resource identifiers, not credentials. There is no production environment, route, custom domain, R2 bucket, or scheduled trigger.
+OAuth clients, rate-limit namespaces and D1 databases are distinct. The production configuration uses a custom domain and disables workers.dev access.
+
+## 1.5 Deployment guards
+
+Remote deployment is never an incidental build step. Development and production scripts verify the exact configured account, Worker, D1 database and environment before mutation.
 
 ```powershell
 npm.cmd run deploy:dev
+npm.cmd run deploy:prod
 ```
 
-This runs tests, checks the specific account/Worker/database target, dry-runs the bundle, applies pending remote D1 migrations, then deploys. A failed stage stops subsequent stages. The initial additive migration is safe to remain in place if a deploy fails. Later schema changes must preserve compatibility with the previously deployed Worker; migration and deployment are not a single transaction. Do not automatically reverse migrations or delete data on failure.
+Run either command only when the active task explicitly authorizes that environment. Production deployment and smoke checks must not fall back to development configuration. A failed migration or deployment must be diagnosed and repaired forward; never edit an applied migration or reset production data casually.
 
-The target guard is protection against an accidental configuration change, not a substitute for restricted Cloudflare credentials. Local Wrangler OAuth supplies access. For account changes, review both configuration and guard explicitly. `deploy:dev` accepts no extra arguments and supports only this development target.
+## 1.6 Migrations
 
-After deployment, verify `/healthz` and `/readyz` return 200, unknown paths return 404, and unauthenticated `/api/runs` and `/api/run-uploads` requests return 401. No remote test writes any user data. Runtime logs are disabled in configuration and responses expose no database IDs, credentials, request headers, or stack traces.
+Applied migrations are immutable:
 
-## 4 Git integration
+- `0001_bootstrap.sql`
+- `0002_accounts.sql`
+- `0003_run_uploads.sql`
+- `0004_run_deletions.sql`
+- `0005_openai_keys.sql`
+- `0006_coaching_jobs.sql`
+- `0007_run_photos.sql`
+- `0008_run_locations.sql`
+- `0009_public_runs.sql`
+- `0010_run_weather.sql`
+- `0011_photo_weather.sql`
 
-Remote repository: `ShootPara/RunningApp`. `development` is the deployment branch; feature work uses `codex/` branches. Existing main/history and pending Android edits are preserved. The cloud-only commit does not capture uncommitted phone changes.
+Add a new numbered forward migration for future changes. Migration export/import tooling must preserve owner relationships, content hashes, deletion state and archive/media integrity.
 
-Once the Cloudflare GitHub app has been authorized for this repository, configure Workers Builds:
+## 1.7 Secrets and data
 
-| Field | Value |
-| --- | --- |
-| Worker | `wayirun-dev` |
-| Branch | `development` |
-| Root | `worker` |
-| Build command | `npm ci && npm test` |
-| Deploy command | `npm run deploy:dev` |
+Configuration contains public origins, resource identifiers and OAuth client IDs required by the applications. Cloudflare credentials, session secrets, coaching keyring material, user API keys, private exports and backups must remain outside Git and logs.
 
-The user connected Git on September 15, 2026. Their screenshot confirms the intended settings and also enables non-production branch builds with `npx wrangler versions upload`. These upload preview versions instead of promoting the live deployment; preview URLs remain disabled in Wrangler. Push only the development branch for this deployment to avoid an unnecessary second build. Do not add a second deployment pipeline for the same branch.
-
-## 5 Next implementation
-
-Android upload/import/discard is integrated and user-confirmed on the phone. The sync2 slice adds authenticated restore and deletion reconciliation using the existing run transport plus owner-scoped deletion pages. Verify the new restore path before closing Milestone 5. Desktop history/maps is the next sequential feature; production identity/release and marker-retention policy remain separate. New phone settings stay behind the gear.
-
-## 6 References
-
-[D1 migrations](https://developers.cloudflare.com/d1/wrangler-commands/), [local D1 separation](https://developers.cloudflare.com/d1/best-practices/local-development/), [Miniflare testing](https://developers.cloudflare.com/workers/testing/miniflare/writing-tests/), [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
+See the colocated `*_CONTRACT.md` files for implementation-level API invariants. Current project status belongs in the root `CURRENT_STATE.md`; historical Worker plans and deployment diaries are under `docs/history/`.

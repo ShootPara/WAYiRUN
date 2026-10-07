@@ -1,42 +1,29 @@
-# 1 WAYiRUN historical material
+# 1 WAYiRUN historical records
 
-The documents indexed here are retained as implementation evidence. They are not current product authority and must not override `REQUIREMENTS.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `OPEN_WORK.md`, or `TEST_PLAN.md`.
+The files below preserve planning decisions, milestone evidence, phone observations and productionization records. They are historical evidence only. They do not override `REQUIREMENTS.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `OPEN_WORK.md`, `TEST_PLAN.md`, current source or later explicit user decisions.
 
-## 1.1 Historical execution records
+## 1.1 Phone testing
 
-- `TASKS.md` — cumulative milestone diary and verification history.
-- `MILESTONE_*_TEST_HANDOFF.md` — point-in-time handoff evidence.
-- `PHOTO_SYNC_REPAIR.md` — September 28 development repair and deployment record.
-- `CODE_REVIEW_TRIAGE_2026-09-16.md` — point-in-time review disposition.
-- `a temporary handover record` — conversation handover/scratch record.
+`phone-testing/` contains the September phone report, focused sign-in/synchronization checks, music retest and Android coaching/photo checklists. Each record applies only to its identified build and device conditions.
 
-## 1.2 Historical phone records
+## 1.2 Feature development
 
-- `WAYiRUN_Phone_Test_Report_2026-09-14.md`
-- `PHONE_TEST_*.md`
-- `MUSIC1_PHONE_RETEST.md`
-- `android/PHONE_TEST_COACHING.md`
-- `android/PHONE_TEST_PHOTOS.md`
+`feature-development/` contains the cumulative implementation diary, former remaining-work ledger, feature plans, setup notes and review records.
 
-These describe specific development builds. They do not establish current behavior unless current source and `TEST_PLAN.md` agree.
+`feature-development/worker/` contains completed coaching/export plans and the former Worker deployment diary. Current Worker behavior is documented by source, the colocated Worker contracts and the root authority documents.
 
-## 1.3 Historical plans and contracts
+## 1.3 Stabilization
 
-- `NEXT_AUDIO_MEDIA_PLAN.md` — superseded media-control planning.
-- `PHOTOS_PLAN.md` — historical photo contract; its keep-implies-public behavior is superseded.
-- `AUTO_PAUSE_AND_MILESTONES_PLAN.md`, `ACHIEVEMENTS_PLAN.md`, and `HEALTH_CONNECT_PLAN.md` — implemented milestone plans with useful decision evidence.
-- `ISSUES_AND_QUIBBLES_IMPLEMENTATION_PLAN.md` — accepted historical execution sequence; current results are summarized elsewhere.
-- Worker `*_CONTRACT.md` and `*_PLAN.md` files — implementation-level evidence and API invariants. Current product authority remains at the repository root.
+`stabilization/` contains the accepted issues plan, auto-pause/milestone plan, photo synchronization repair, comprehensive acceptance checklist, final issue ledger and milestone test handoffs.
 
-## 1.4 Explicitly superseded behavior
+These records explain past verification and design corrections. References to basemaps, player transport, default-public photos, acceleration-based auto-pause or earlier release shells are superseded.
 
-Historical references to the following behavior are not open work:
+## 1.4 Productionization
 
-- Leaflet/OpenStreetMap or other basemaps;
-- automatic music/player transport;
-- notification-listener access;
-- keeping a photo automatically making it public;
-- prompting for setup or permissions on every foreground return;
-- automatically claiming local runs during sign-in.
+`productionization/` contains the V1 decision record, environment/resource map and productionization/data-migration plan. They document the creation of separate production resources, migration safeguards and signed artifact work. Unfinished checklist items in those records are not automatically current product requirements.
 
-The current replacements are route-noodle rendering, playlist-opening-only music integration, private-by-default publication, startup-only permission requests, and explicit account import.
+## 1.5 Reading history safely
+
+Historical paths and links are preserved where practical, but some documents intentionally describe files at their former repository locations. Interpret commands, identities, deployment IDs, APK paths and test counts as point-in-time evidence rather than current instructions.
+
+For the curated narrative, see `../PROJECT_HISTORY.md`.
