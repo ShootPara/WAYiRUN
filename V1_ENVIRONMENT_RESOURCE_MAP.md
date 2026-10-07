@@ -276,7 +276,7 @@ Any source mutation after the freeze, count/hash mismatch, orphan, missing media
 | Android signing fingerprints | `<TO_BE_ESTABLISHED_IN_MILESTONE_6>` | 6 |
 | Production Android OAuth client ID | `933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com` | Resolved in 7 |
 | Production Web OAuth client ID | `933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com` | Resolved in 7 |
-| Production Worker deployment/version ID | `2b46e490-7aa7-4bd4-b290-1c8ce26964f3` | Resolved in 8 |
+| Production Worker deployment/version ID | `c2cc4d87-89c8-492f-9413-bba63a426530` | Updated and accepted in 11 |
 | Custom Domain DNS record/TLS certificate | `wayirun.slopcopy.com`; active Custom Domain with valid TLS | Resolved in 8 |
 
 These placeholders do not block this design milestone. Their named milestones must replace them with verified values before any dependent action.
@@ -316,3 +316,9 @@ Real packages, replay SQL and rehearsal configuration remain under ignored `priv
 ## 1.16 Milestone 10 frozen-source and production-data boundary
 
 Development is preserved but write-frozen at Worker version `e4f9b4f1-5275-4713-bf21-fed22366d98a`. The final immutable source package is `private-signing/migration/milestone10-cutover-final/` and is covered by manifest SHA-256 `6f0de322d7483a7446a6bf50f5ab10ae48aa90bd6f2d3fb95b8298544482d8f9`; it remains ignored locally and represented in the owner's Google Drive mirror. Production D1 UUID `e4624be3-14f5-4cbc-939c-90009d377102` now contains the exactly reconciled durable source graph. Production authentication state and `openai_keys` remain empty. Do not resume development writes, reimport this package, or treat development as authoritative after a later production-write boundary without the forward-reconciliation procedure.
+
+## 1.17 Milestone 11 accepted production boundary
+
+Production Worker version `c2cc4d87-89c8-492f-9413-bba63a426530` serves only `https://wayirun.slopcopy.com` with the reviewed production OAuth clients, D1 UUID and rate-limit namespaces. Authenticated owner continuity, 21-run browser history, archive/photo/coaching reads, shared/private publication enforcement and complete CSV export passed. The accepted login refreshed only the existing account's `updated_at` field and created one bounded production session; it did not create or reassign an account. Production `openai_keys` remains empty and key re-entry is deferred to Milestone 13.
+
+Development remains on version `e4f9b4f1-5275-4713-bf21-fed22366d98a`, the original development D1/OAuth clients/keyring and `WRITE_MODE=frozen`. Its general-purpose smoke script expects normal-mode behavior for unknown routes and therefore is not the freeze acceptance authority; direct health/read checks and the required 503/Retry-After mutation response remain the controlling evidence.

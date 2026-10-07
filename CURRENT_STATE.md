@@ -1,6 +1,6 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 10 complete; Milestone 11 not started
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 11 complete; Milestone 12 not started
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
@@ -188,3 +188,11 @@ The owner reported 21 synchronized phone runs and 0 pending, exactly matching de
 The final ignored package is `private-signing/migration/milestone10-cutover-final/`, exported at `2026-10-07T14:26:06Z` from development UUID `04bf8339-386b-4a03-80d7-12b4d1f99ffb`. Its manifest-covered size is 51,655,872 bytes, manifest SHA-256 is `6f0de322d7483a7446a6bf50f5ab10ae48aa90bd6f2d3fb95b8298544482d8f9`, and tool-source SHA-256 is `90bed675bf3f8b742e5f0aa385b460fd8b3aa78d515630fdbbc45c3d6e8b8deb`. Google Drive mirror metadata provides the approved second-copy evidence, including matching large-artifact hashes.
 
 Production import began `2026-10-07T14:27:09.3552566Z`. Exact reconciliation passed for 1 owner, 21 runs, 103 chunks, 13 deletion tombstones, 12 completed coaching results, 72 audio chunks, 13 photos and 13 publication states. Selected graph checks covered ordinary, photo, coaching, shared/private publication and tombstone states with no missing chunks, orphans, ownership crossover or deletion conflict; no retained location/weather snapshot existed. Authentication/transient rows and `openai_keys` are empty. Production `COACHING_KEYRING` remains provisioned, operational endpoints pass, and deployment remains `2b46e490-7aa7-4bd4-b290-1c8ce26964f3`. Milestone 10 is `COMPLETE`; Milestone 11 is `NOT STARTED`.
+
+## 1.22 V1 Milestone 11 production Worker/browser acceptance — October 7, 2026
+
+Production Worker version `c2cc4d87-89c8-492f-9413-bba63a426530` is deployed with the exact production bindings, origin and OAuth configuration. TLS, health, readiness, browser assets, security headers and production configuration pass. The full Worker suite passes 174 tests.
+
+The owner's Google browser login reused the migrated account without changing its ID, Google subject, display name, picture or creation time; only the expected account `updated_at` field and one bounded production session changed. The production browser loads all 21 runs, including the October 6 run after the complete page is loaded, and live reads verified archive-backed detail, route gaps, splits, settings, a photo, saved coaching text/audio, seven shared publications and six private publication states. Shared page/data/image reads return success only at `https://wayirun.slopcopy.com`; private equivalents remain unavailable.
+
+The first live all-run export safely aborted because its URL verifier still allowed only the development hostname. A bounded repair added only `wayirun.slopcopy.com` and regression coverage. The corrected browser verified and downloaded one CSV containing all 21 synced runs and retained details. Final durable counts remain 1 account, 21 runs, 103 chunks, 13 tombstones, 12 completed coaching results, 72 audio chunks, 13 photos and 13 publication states; production `openai_keys` remains empty. No run, publication, photo, coaching result or owner changed. Development remains readable and write-frozen with its original D1, OAuth clients, deployment and keyring. Milestone 11 is `COMPLETE`; Milestone 12 is `NOT STARTED`.

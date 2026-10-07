@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 10 complete; Milestone 11 not started
+Status: Controlling execution plan; Milestones 1 through 11 complete; Milestone 12 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -100,7 +100,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 8 | Create production Cloudflare resources and schema | COMPLETE | Empty migrated D1, isolated bindings, fresh keyring, production Worker/Custom Domain and smoke evidence |
 | 9 | Build and rehearse migration | COMPLETE | Deterministic data-only package; two successful clean disposable-D1 rebuilds and exact reconciliation |
 | 10 | Take final backup and perform controlled migration | COMPLETE | Frozen source, mirrored immutable export, exact production import and reconciliation |
-| 11 | Deploy and smoke-test production Worker/browser | NOT STARTED | Deployment ID, route, bindings, and safe smoke evidence |
+| 11 | Deploy and smoke-test production Worker/browser | COMPLETE | Production version `c2cc4d87-89c8-492f-9413-bba63a426530`; authenticated read/export/publication acceptance and unchanged durable graph |
 | 12 | Build signed WAYiRUN 1.0 artifacts | NOT STARTED | Verified APK/AAB metadata, hashes, signature, and endpoint audit |
 | 13 | Perform physical and end-to-end production acceptance | NOT STARTED | Recorded pass/fail matrix; all blockers resolved |
 | 14 | Cut over operations and document recovery | NOT STARTED | Canonical-production declaration and operator runbook |
@@ -400,6 +400,14 @@ Immediately before import, production had no durable user data. Two already-expi
 ### 1.17.2 Exit
 
 Production API/browser behavior passes with the exact production bindings; migration reconciliation remains unchanged except for documented synthetic test rows, which are removed and verified absent.
+
+### 1.17.3 Completion evidence — October 7, 2026
+
+The exact production target guard, dry run, migrations and deployment completed against only `wayirun-prod`, `wayirun-prod-db` and `https://wayirun.slopcopy.com`. Final Worker version `c2cc4d87-89c8-492f-9413-bba63a426530` passed TLS, health, readiness, browser configuration, security-header and production-OAuth checks. The full Worker suite passed 174 tests.
+
+The owner's real production Google sign-in reused the one migrated account: its internal ID, Google subject, display name, picture and creation time remained unchanged, with only the expected login-time `updated_at` refresh and one active owner session. Authenticated browser reads loaded all 21 runs, including the October 6 run, and verified representative archive chunks, GPS route gaps, splits, settings, photo, completed coaching text and replayable audio. Seven migrated shared publications remained reachable at production URLs; six private publication states, including their images, remained inaccessible publicly.
+
+Live export initially exposed a fail-closed verifier defect that accepted only the development public-link hostname. The bounded repair added only the reviewed production hostname and regression coverage; the corrected browser then produced a verified CSV for all 21 synced runs. No OpenAI call, key entry, real-data mutation, synthetic record, Android installation or development unfreeze occurred. Final durable production counts remain 1 account, 21 runs, 103 chunks, 13 tombstones, 12 completed coaching results, 72 coaching-audio chunks, 13 photos and 13 publication states; `openai_keys` remains empty. Development remains preserved and write-frozen. Milestone 11 is `COMPLETE`; Milestone 12 is `NOT STARTED`.
 
 ## 1.18 Milestone 12 — build signed WAYiRUN 1.0 artifacts
 

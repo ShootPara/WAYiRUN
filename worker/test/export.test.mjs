@@ -143,6 +143,7 @@ test("CSV photo records reconstruct exact JPEG bytes and reject corrupt payloads
  const broken=createCsvExport();await assert.rejects(()=>broken.add({...data,photo:{metadata:{...metadata,sha256:"0".repeat(64)},bytes}}));
  for(const path of ["p/"+"a".repeat(64),"r/"+"b".repeat(32)]){
   const linked=createCsvExport();await linked.add({...data,photo:{metadata:{...metadata,publicUrl:`https://wayirun-dev.unopenedparachute.workers.dev/${path}`},bytes}});
+  const production=createCsvExport();await production.add({...data,photo:{metadata:{...metadata,publicUrl:`https://wayirun.slopcopy.com/${path}`},bytes}});
  }
  for(const url of ["https://evil.test/r/"+"a".repeat(32),"https://wayirun-dev.unopenedparachute.workers.dev/r/short"]){
   await assert.rejects(()=>createCsvExport().add({...data,photo:{metadata:{...metadata,publicUrl:url},bytes}}));

@@ -80,7 +80,7 @@ export async function verifyPhoto(metadata, bytes, current=()=>true) {
   requireValid(Object.values(metadata.options).every(x=>typeof x==="boolean")&&uuid.test(metadata.revision));
   requireValid(Number.isSafeInteger(metadata.bytes)&&metadata.bytes>=4&&metadata.bytes<=1000000&&bytes instanceof Uint8Array&&bytes.length===metadata.bytes);
   requireValid(Number.isSafeInteger(metadata.updatedAt)&&metadata.updatedAt>=0);
-  requireValid(metadata.publicUrl===null||/^https:\/\/wayirun-dev\.unopenedparachute\.workers\.dev\/(?:p\/[0-9a-f]{64}|r\/[0-9a-f]{32})$/.test(metadata.publicUrl));
+  requireValid(metadata.publicUrl===null||/^https:\/\/(?:wayirun-dev\.unopenedparachute\.workers\.dev|wayirun\.slopcopy\.com)\/(?:p\/[0-9a-f]{64}|r\/[0-9a-f]{32})$/.test(metadata.publicUrl));
   requireValid(bytes[0]===255&&bytes[1]===216&&bytes.at(-2)===255&&bytes.at(-1)===217&&await fingerprint(bytes)===metadata.sha256);
   currentOrAbort(current);
 }
