@@ -2,6 +2,7 @@ package com.example.runningapp
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
@@ -14,8 +15,8 @@ class ReleaseConfigurationTest {
         assertEquals("production", BuildConfig.APP_ENVIRONMENT)
         assertEquals("https://wayirun.slopcopy.com", BuildConfig.API_ORIGIN)
         assertNotEquals("https://wayirun-dev.unopenedparachute.workers.dev", BuildConfig.API_ORIGIN)
-        assertEquals("__PRODUCTION_GOOGLE_WEB_CLIENT_ID_MILESTONE_7__", BuildConfig.GOOGLE_WEB_CLIENT_ID)
-        assertEquals("__PRODUCTION_GOOGLE_ANDROID_CLIENT_ID_MILESTONE_7__", BuildConfig.GOOGLE_ANDROID_CLIENT_ID)
-        assertFalse(BuildConfig.PRODUCTION_READY)
+        assertEquals("933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com", BuildConfig.GOOGLE_WEB_CLIENT_ID)
+        assertEquals("933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com", BuildConfig.GOOGLE_ANDROID_CLIENT_ID)
+        assertTrue(BuildConfig.PRODUCTION_READY)
     }
 }

@@ -105,3 +105,7 @@ the owner amended the distribution decision after Milestone 5: V1 targets a dire
 ## 1.11 Milestone 2 conclusion
 
 All product-owner decisions required to design the production environment are fixed. Operational durations and concrete resource identifiers remain deliberately deferred to their named planning and implementation milestones. Milestone 2 is complete; Milestone 3 has not started.
+
+## 1.12 Milestone 7 OAuth implementation note — October 7, 2026
+
+The approved same-project design is implemented with separate production Android and Web OAuth clients while the development clients remain unchanged. The Android client binds the permanent package to the Milestone 6 owner-controlled direct-APK certificate. The Web client authorizes only `https://wayirun.slopcopy.com` with no redirect URI. Google Play remains deferred; if a future Play publication uses a different Play app-signing certificate, that fingerprint and its Android OAuth binding belong to the separately authorized Play milestone and do not block V1.

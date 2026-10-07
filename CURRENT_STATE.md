@@ -1,12 +1,12 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 6 complete; Milestone 7 not started
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 7 complete; Milestone 8 not started
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
 ## 1.1 Baseline boundary
 
-WAYiRUN is substantially functional as a development system. The complete Android product is compiled only in the `debug` variant; the `release` variant intentionally remains a name-only shell. This baseline describes delivered feature behavior without claiming production readiness or comprehensive physical-device acceptance.
+WAYiRUN is substantially functional as a development system, and the complete Android product now compiles in both debug and release variants. The release variant has permanent package identity, owner-controlled signing and production OAuth configuration, but production Worker resources, migration, deployment and physical acceptance remain later milestones. This baseline does not claim comprehensive production or physical-device acceptance.
 
 The Cloudflare Worker is configured only for the development environment. Development deployment history is evidence but deployment parity is not part of this feature-baseline gate.
 
@@ -135,7 +135,7 @@ Debug assembly, lint and all 125 JVM tests pass. Thirteen bounded instrumentatio
 
 ## 1.14 V1 Milestone 4 environment-safe Worker configuration — October 6, 2026
 
-Worker runtime configuration now accepts only the reviewed development and production environment/origin pairs and centralizes OAuth identifiers, provider endpoints and write mode. The early write-freeze gate blocks every classified native/browser mutation, including cache-, session- and job-mutating GET routes, before handler execution while retaining health/readiness and verified read-only access. Development deployment remains pinned to its existing Worker, D1 and rate-limit resources. The checked-in production config is pinned to `wayirun-prod` and the `wayirun.slopcopy.com` Custom Domain but intentionally undeployable until its D1, rate-limit and OAuth placeholders are replaced with reviewed provider-generated values.
+Worker runtime configuration accepts only the reviewed development and production environment/origin pairs and centralizes OAuth identifiers, provider endpoints and write mode. The early write-freeze gate blocks every classified native/browser mutation, including cache-, session- and job-mutating GET routes, before handler execution while retaining health/readiness and verified read-only access. Development deployment remains pinned to its existing Worker, D1 and rate-limit resources. The checked-in production config is pinned to `wayirun-prod` and the `wayirun.slopcopy.com` Custom Domain; Milestone 7 resolved its OAuth identifiers, while Milestone 8 D1 and rate-limit placeholders keep it intentionally undeployable.
 
 All 165 Worker/browser tests and nine focused environment/guard/freeze tests pass. Development and synthetic-production Wrangler dry-runs pass; the real production config is proven to fail closed on placeholders. No production resource, deployment, remote migration, DNS change, Android change, data migration, commit or push occurred. Milestone 4 is complete and Milestone 5 is not started.
 
@@ -156,3 +156,11 @@ Milestone 6 therefore establishes one permanent owner-controlled release certifi
 The owner approved ignored repository-local custody because the repository folder is mirrored through the owner's Google Drive setup. `private-signing/` contains the password-protected permanent keystore, an AES-256-GCM/PBKDF2 encrypted backup and ignored local signing properties; GitHub receives none of them. Backup decryption was verified byte-for-byte during creation. Alias is `wayirun-release`; the certificate uses RSA-4096/SHA256withRSA. SHA-1 is `89:77:30:BD:C5:CA:5B:DA:0C:6E:B7:6F:EB:B7:77:A4:12:F3:9A:84`; SHA-256 is `C4:B6:54:9A:3B:A9:C1:7F:91:0F:49:65:DB:44:50:75:A3:F1:2B:52:A3:B3:A0:06:58:20:F6:27:15:AA:BA:5F`.
 
 Gradle now keeps ordinary structural release assembly available but requires complete external signing configuration for `assembleSignedRelease`, with no debug-key fallback. The resulting APK is package `com.unopenedparachute.wayirun`, version code `1`, version `1.0.0`, non-debuggable, signed by exactly the intended owner certificate, and free of development host/OAuth/package identifiers. Debug and release each passed 126 JVM tests; assembly and lint passed for both variants with zero lint errors and 21 existing warnings. The explicit production-readiness gate fails only for the two expected Milestone 7 OAuth placeholders. No physical device, Play action, OAuth creation, deployment, migration, commit or push occurred. Milestone 6 is complete; Milestone 7 is not started. The APK is `SIGNED — STRUCTURALLY VALID — NOT PRODUCTION READY`.
+
+## 1.18 V1 Milestone 7 production Google OAuth — October 7, 2026
+
+The owner-controlled Google Cloud project `wayirun-development` retains its development Android and Web clients unchanged. Dedicated production clients now bind `com.unopenedparachute.wayirun` to the Milestone 6 direct-APK SHA-1 and authorize only the browser origin `https://wayirun.slopcopy.com`; the browser client has no redirect URI. Android and Worker production configuration contain only the resulting non-secret production client IDs. No OAuth secret is required or tracked.
+
+The shared-project topology follows Google's cross-client identity model, and WAYiRUN continues to key accounts by Google's stable OIDC `sub`. Because the production Worker/origin does not yet exist, the exact same-owner Android/browser/development-account comparison is deferred as a no-write acceptance check to Milestones 11 and 13; any mismatch blocks migration and requires explicit linking. The consent configuration remains in Testing status and is sufficient for the current owner-controlled use case; public policy/support URLs and any later external publication remain later V1 gates.
+
+Android debug and release each passed 126 JVM tests; debug assembly, owner-signed release assembly, both lint tasks and the production-readiness gate passed. The signed APK uses the production identity, origin and clients, contains no development OAuth identifiers and verifies with the owner certificate. All 165 Worker tests passed. The real production Worker config remains intentionally undeployable only because Milestone 8 D1 and rate-limit resource IDs are unresolved; the synthetic guarded production dry-run passed. No Worker deployment, data migration, personal-data access, physical-device install, Play action, commit or push occurred. Milestone 7 is complete; Milestone 8 is not started.

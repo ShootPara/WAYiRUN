@@ -16,8 +16,8 @@
     "LOCATION_LOOKUP_URL": "https://nominatim.openstreetmap.org/reverse",
     "WEATHER_FORECAST_URL": "https://api.open-meteo.com/v1/forecast",
     "WEATHER_ARCHIVE_URL": "https://archive-api.open-meteo.com/v1/archive",
-    "GOOGLE_WEB_CLIENT_ID": "__PRODUCTION_GOOGLE_WEB_CLIENT_ID__",
-    "GOOGLE_ANDROID_CLIENT_ID": "__PRODUCTION_GOOGLE_ANDROID_CLIENT_ID__"
+    "GOOGLE_WEB_CLIENT_ID": "933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com",
+    "GOOGLE_ANDROID_CLIENT_ID": "933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com"
   },
   "ratelimits": [
     { "name": "RUN_RATE_LIMIT", "namespace_id": "__PRODUCTION_RUN_RATE_LIMIT_ID__", "simple": { "limit": 300, "period": 60 } },

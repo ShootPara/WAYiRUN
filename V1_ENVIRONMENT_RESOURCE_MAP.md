@@ -83,8 +83,8 @@ D1 contains accounts; authentication challenges/sessions; completed and staged r
 | Android application ID | `com.example.runningapp.debug` | `com.unopenedparachute.wayirun` |
 | Kotlin namespace | `com.example.runningapp` | Retain unless implementation proves a refactor necessary |
 | Android API/public origin | `https://wayirun-dev.unopenedparachute.workers.dev` | `https://wayirun.slopcopy.com` |
-| Google Android OAuth | Existing development client | `<TO_BE_CREATED_IN_MILESTONE_7>` |
-| Google Web OAuth | Existing development client | `<TO_BE_CREATED_IN_MILESTONE_7>` |
+| Google Android OAuth | Existing development client | `933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com` |
+| Google Web OAuth | Existing development client | `933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com` |
 | Worker | `wayirun-dev` | `wayirun-prod` |
 | Worker config | `worker/wrangler.jsonc` | `worker/wrangler.production.jsonc` |
 | Cloudflare account | `6bf560a8b86852196c9898023e3b8d6b` | Same owner-controlled account |
@@ -160,11 +160,11 @@ The installed development app must retain effective application ID `com.example.
 
 Changing the public application ID does not require a Kotlin namespace/package refactor. Preserve namespace `com.example.runningapp` for V1 unless compilation or a verified platform requirement proves a refactor necessary. Milestone 5 moves the functional product into shared/variant-safe source sets, keeps test harnesses out of release, binds development and production origins/OAuth at compile time, and introduces no runtime environment selector.
 
-Milestone 5 implemented this boundary without changing the namespace or debug sandbox identity. Shared product code, Room version 10, functional manifest entries and resources now compile into both variants. Debug is `com.example.runningapp.debug` / `1.0.0-dev` with the existing development origin and OAuth identifiers. Release is `com.unopenedparachute.wayirun` / `1.0.0` with `https://wayirun.slopcopy.com` and explicit Milestone 7 OAuth placeholders. Release sign-in fails closed locally while placeholders remain, and the separate production-readiness task rejects such an artifact. The structural unsigned release is not a distributable production artifact.
+Milestone 5 implemented this boundary without changing the namespace or debug sandbox identity. Shared product code, Room version 10, functional manifest entries and resources compile into both variants. Debug remains `com.example.runningapp.debug` / `1.0.0-dev` with the existing development origin and OAuth identifiers. Release is `com.unopenedparachute.wayirun` / `1.0.0` with `https://wayirun.slopcopy.com`; Milestone 7 replaced its OAuth placeholders with dedicated production client IDs and the production-readiness gate now passes.
 
 Because different application IDs use different Android sandboxes, the production package cannot inherit the installed debug app's Room database. Section 1.9 is therefore a release gate, not optional cleanup.
 
-## 1.7 OAuth topology and pending generated values
+## 1.7 OAuth topology and generated values
 
 Development clients remain unchanged in the same owner-controlled Google Cloud project chosen in Milestone 2.
 
@@ -173,14 +173,15 @@ Production Android OAuth:
 - package: `com.unopenedparachute.wayirun`;
 - certificate SHA-1: `89:77:30:BD:C5:CA:5B:DA:0C:6E:B7:6F:EB:B7:77:A4:12:F3:9A:84`;
 - certificate SHA-256: `C4:B6:54:9A:3B:A9:C1:7F:91:0F:49:65:DB:44:50:75:A3:F1:2B:52:A3:B3:A0:06:58:20:F6:27:15:AA:BA:5F`;
-- client ID: `<TO_BE_CREATED_IN_MILESTONE_7>`.
+- client ID: `933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com`.
 
 Production Web OAuth:
 
 - authorized JavaScript origin: `https://wayirun.slopcopy.com`;
-- client ID: `<TO_BE_CREATED_IN_MILESTONE_7>`.
+- client ID: `933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com`;
+- redirect URIs: none; the current Google Identity Services callback flow uses the exact JavaScript origin.
 
-No client secret belongs in Android or repository configuration. Before migration acceptance, Milestone 7 must prove that the production clients preserve the existing Google account-to-`sub` ownership mapping. If identity continuity fails, stop and design explicit account linking rather than orphaning or reassigning history.
+No client secret belongs in Android or repository configuration. Both production clients are in the same owner-controlled Google Cloud project as the unchanged development clients. Google's documented cross-client identity model and stable OIDC `sub` claim support the existing WAYiRUN ownership key. The live same-account Android/browser comparison against the preserved development account remains a no-write acceptance check for Milestones 11 and 13, after the production Worker exists; any mismatch stops migration and requires explicit account linking.
 
 ## 1.8 D1 schema and migration boundary
 
@@ -273,8 +274,8 @@ Any source mutation after the freeze, count/hash mismatch, orphan, missing media
 | `RUN_RATE_LIMIT` namespace ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
 | `RUN_TOTAL_LIMIT` namespace ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
 | Android signing fingerprints | `<TO_BE_ESTABLISHED_IN_MILESTONE_6>` | 6 |
-| Production Android OAuth client ID | `<TO_BE_CREATED_IN_MILESTONE_7>` | 7 |
-| Production Web OAuth client ID | `<TO_BE_CREATED_IN_MILESTONE_7>` | 7 |
+| Production Android OAuth client ID | `933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com` | Resolved in 7 |
+| Production Web OAuth client ID | `933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com` | Resolved in 7 |
 | Production Worker deployment/version ID | `<TO_BE_CREATED_IN_MILESTONE_11>` | 11 |
 | Custom Domain DNS record/TLS certificate | `<TO_BE_CREATED_BY_CLOUDFLARE_IN_MILESTONE_8>` | 8 |
 

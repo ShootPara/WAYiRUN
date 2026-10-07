@@ -57,9 +57,9 @@ android {
             if (ownerSigningConfigured) signingConfig = signingConfigs.getByName("ownerRelease")
             buildConfigField("String", "APP_ENVIRONMENT", "\"production\"")
             buildConfigField("String", "API_ORIGIN", "\"https://wayirun.slopcopy.com\"")
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"__PRODUCTION_GOOGLE_WEB_CLIENT_ID_MILESTONE_7__\"")
-            buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"__PRODUCTION_GOOGLE_ANDROID_CLIENT_ID_MILESTONE_7__\"")
-            buildConfigField("boolean", "PRODUCTION_READY", "false")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com\"")
+            buildConfigField("String", "GOOGLE_ANDROID_CLIENT_ID", "\"933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com\"")
+            buildConfigField("boolean", "PRODUCTION_READY", "true")
         }
     }
 
@@ -173,7 +173,8 @@ tasks.register("verifyProductionReadiness") {
         val problems = buildList {
             if ("__PRODUCTION_GOOGLE_WEB_CLIENT_ID_MILESTONE_7__" in entries) add("production Web OAuth placeholder remains")
             if ("__PRODUCTION_GOOGLE_ANDROID_CLIENT_ID_MILESTONE_7__" in entries) add("production Android OAuth placeholder remains")
-            if ("933230558080-" in entries) add("development Google OAuth identifier is packaged")
+            if ("933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com" in entries) add("development Web OAuth identifier is packaged")
+            if ("933230558080-8o82hopmd4ibnt2fllqpr8252lg3q44t.apps.googleusercontent.com" in entries) add("development Android OAuth identifier is packaged")
             if ("wayirun-dev.unopenedparachute.workers.dev" in entries) add("development Worker hostname is packaged")
             if ("com.example.runningapp.debug" in entries) add("debug application ID is packaged")
             if ("https://wayirun.slopcopy.com" !in entries) add("production API origin is absent")

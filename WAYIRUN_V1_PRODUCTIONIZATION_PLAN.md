@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 6 complete; Milestone 7 not started
+Status: Controlling execution plan; Milestones 1 through 7 complete; Milestone 8 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -96,7 +96,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 4 | Implement environment-safe Worker configuration | COMPLETE | Fail-closed runtime/freeze configuration, isolated guarded production config, and 165 passing Worker tests |
 | 5 | Promote the functional Android app into release | COMPLETE | Shared functional product builds in debug/release; variant and artifact gates pass with production OAuth intentionally pending |
 | 6 | Establish owner-controlled production signing | COMPLETE | Ignored two-copy custody, verified certificate fingerprints and signed APK |
-| 7 | Configure production Google OAuth | NOT STARTED | Verified production clients and real sign-in preconditions |
+| 7 | Configure production Google OAuth | COMPLETE | Dedicated production Android/Web clients, configuration and local artifact gates verified; live sign-in deferred until the production Worker exists |
 | 8 | Create production Cloudflare resources and schema | NOT STARTED | Bound empty migrated schema; no production traffic |
 | 9 | Build and rehearse migration | NOT STARTED | Repeatable data-only tool and successful disposable rehearsal |
 | 10 | Take final backup and perform controlled migration | NOT STARTED | Frozen source boundary, immutable backup, production reconciliation |
@@ -289,6 +289,14 @@ The signed artifact is package `com.unopenedparachute.wayirun`, version code `1`
 ### 1.13.2 Exit
 
 Real production sign-in can be tested with an authorized release-test account, and the ownership mapping for migrated accounts is proven. If stable identity cannot be preserved, stop and design an explicit account-link migration rather than orphaning history.
+
+### 1.13.3 Completion evidence — October 7, 2026
+
+The existing owner-controlled Google Cloud project `wayirun-development` retains its development clients unchanged and now contains dedicated production clients. The production Android client binds `com.unopenedparachute.wayirun` to the owner-controlled direct-APK certificate SHA-1 `89:77:30:BD:C5:CA:5B:DA:0C:6E:B7:6F:EB:B7:77:A4:12:F3:9A:84`. The production Web client authorizes only `https://wayirun.slopcopy.com` and has no redirect URI because the existing Google Identity Services callback flow requires only the exact JavaScript origin. Only non-secret client IDs are stored in Android and Worker production configuration; no client secret is required or tracked.
+
+Google's documented cross-client identity model treats clients in one project as components of the same application, and its OIDC `sub` claim is the stable, never-reused Google Account identifier used by WAYiRUN. This establishes the required identity architecture without reading or changing personal run data. The exact live acceptance check remains deferred until Milestones 11 and 13, when the production Worker/origin exist: sign in to Android and browser with the same authorized owner account, verify both tokens are accepted only for the production audience/presenter pair, and compare their returned account `sub` with the preserved development account before any migrated writes or cutover. Any mismatch stops migration and requires explicit account linking.
+
+Android debug and release each passed 126 JVM tests; debug assembly, owner-signed release assembly, both lint tasks and the production-readiness gate passed. The signed APK is non-debuggable, uses the production package/origin and production OAuth clients, contains neither development OAuth client, and verifies with the Milestone 6 certificate. All 165 Worker tests passed. The production guard now rejects the two exact development OAuth clients while allowing separate same-project production clients. Production configuration verification still fails closed on only the intentionally unresolved Milestone 8 D1 and rate-limit placeholders; its synthetic production dry-run passed. No deployment, data migration, physical-device installation, Play action, commit or push occurred. Milestone 7 is complete; Milestone 8 is not started.
 
 ## 1.14 Milestone 8 — create production Cloudflare resources and schema
 
