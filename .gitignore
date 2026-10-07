@@ -9,6 +9,7 @@
 Thumbs.db
 
 # Credentials and signing material
+/private-signing/
 .env
 .env.*
 !.env.example
@@ -17,6 +18,7 @@ Thumbs.db
 *.jks
 *.keystore
 keystore.properties
+signing.local.properties
 credentials*.json
 service-account*.json
 

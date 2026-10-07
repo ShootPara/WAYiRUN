@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 5 complete; Milestone 6 not started
+Status: Controlling execution plan; Milestones 1 through 6 complete; Milestone 7 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -76,7 +76,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 
 1. Permanent Android application ID. The provisional `com.example.runningapp` MUST NOT be registered for production OAuth.
 2. Public production origin: custom domain/subdomain or a deliberately accepted permanent `workers.dev` name.
-3. Distribution channel: direct APK, Google Play, or both. If Play is used, choose Play App Signing and upload-key custody before generating keys.
+3. Distribution channel: V1 uses an owner-controlled signed APK. Google Play remains a deferred future option and is not a V1 gate.
 4. Signing-key owner, secure storage locations, backup/recovery custodians, and password-handling method.
 5. Google Cloud project/account ownership and whether development and production clients share a project or use separate projects.
 6. Cloudflare account ownership, production resource naming, and billing/limits acceptance.
@@ -95,7 +95,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 3 | Design exact environment/resource map | COMPLETE | `V1_ENVIRONMENT_RESOURCE_MAP.md`; exact boundaries approved and `slopcopy.com` ownership verified read-only |
 | 4 | Implement environment-safe Worker configuration | COMPLETE | Fail-closed runtime/freeze configuration, isolated guarded production config, and 165 passing Worker tests |
 | 5 | Promote the functional Android app into release | COMPLETE | Shared functional product builds in debug/release; variant and artifact gates pass with production OAuth intentionally pending |
-| 6 | Establish production signing | NOT STARTED | Recoverable key custody and verified signing fingerprint |
+| 6 | Establish owner-controlled production signing | COMPLETE | Ignored two-copy custody, verified certificate fingerprints and signed APK |
 | 7 | Configure production Google OAuth | NOT STARTED | Verified production clients and real sign-in preconditions |
 | 8 | Create production Cloudflare resources and schema | NOT STARTED | Bound empty migrated schema; no production traffic |
 | 9 | Build and rehearse migration | NOT STARTED | Repeatable data-only tool and successful disposable rehearsal |
@@ -105,6 +105,8 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 13 | Perform physical and end-to-end production acceptance | NOT STARTED | Recorded pass/fail matrix; all blockers resolved |
 | 14 | Cut over operations and document recovery | NOT STARTED | Canonical-production declaration and operator runbook |
 | 15 | Finalize version control and V1 marker | NOT STARTED | Accepted commit, push, `v1.0.0` tag, clean status |
+
+Google Play publication is explicitly deferred outside the V1 milestone sequence. If later authorized, a dedicated milestone must handle Play App Signing, AAB upload, the Play signing certificate/OAuth addition, listing metadata, Data Safety, Health-app declarations, account-deletion/store requirements, testing tracks and then-current verification rules.
 
 ## 1.7 Milestone 1 — reconcile and checkpoint source
 
@@ -153,7 +155,7 @@ An approved decision record exists. No permanent resource is created with a gues
 
 ### 1.8.3 Completion evidence — October 6, 2026
 
-`V1_MILESTONE_2_DECISION_RECORD.md` records the owner-approved package `com.unopenedparachute.wayirun`, production origin `https://wayirun.slopcopy.com`, Google Play canonical distribution with one signing/package identity, and public identity `UnopenedParachute` / `unopenedparachute@gmail.com`. It also fixes separate production OAuth and Cloudflare resources, privacy/account-deletion/Health Connect obligations, minimal redacted telemetry, data-class retention policy, compatible `COACHING_KEYRING` continuity, and an immutable-backup/rehearsal/reconciliation cutover policy that treats existing phone and development data as irreplaceable until production acceptance passes.
+`V1_MILESTONE_2_DECISION_RECORD.md` records the owner-approved package `com.unopenedparachute.wayirun`, production origin `https://wayirun.slopcopy.com`, current owner-controlled signed-APK distribution, deferred optional Google Play publication, and public identity `UnopenedParachute` / `unopenedparachute@gmail.com`. It also fixes separate production OAuth and Cloudflare resources, privacy/account-deletion/Health Connect obligations, minimal redacted telemetry, data-class retention policy, compatible `COACHING_KEYRING` continuity, and an immutable-backup/rehearsal/reconciliation cutover policy that treats existing phone and development data as irreplaceable until production acceptance passes.
 
 No permanent identity, key, OAuth client, DNS route, Worker, D1 database, secret, deployment, migration, build, or device action occurred. Milestone 2 completed before Milestone 3 began.
 
@@ -249,19 +251,29 @@ Both debug and release JVM suites passed 126 tests with zero failures, errors or
 
 Deterministic APK inspection proved release package/version/debuggability, production FileProvider authority and functional components; all product packages and the production origin are present, while the development hostname, both development OAuth IDs, debug package/label and test harness are absent. The unsigned structural release retains only the two expected production OAuth placeholders and is `STRUCTURALLY VALID — NOT PRODUCTION READY` until Milestone 7. Debug artifact inspection reconfirmed its exact package, development configuration and functional database/tracking classes. No physical phone, personal data, signing key, OAuth client, production service, deployment, data migration, commit or push was used. Milestone 5 is complete; Milestone 6 is not started.
 
-## 1.12 Milestone 6 — establish production signing
+## 1.12 Milestone 6 — establish owner-controlled production signing
 
 ### 1.12.1 Work
 
 - Inspect for an existing permanent key without exposing it.
-- If none exists, stop for the user to create it under the approved direct-distribution or Play App Signing model. Do not silently generate a permanent key in an agent workspace.
+- If none exists, create one permanent owner-controlled release key only after its two encrypted custody locations and password-handling method are established. Do not create it inside the repository or silently substitute a debug key.
 - Keep keystore and passwords outside Git. Configure Gradle through ignored local properties or environment-backed CI secrets.
 - Record certificate SHA-256 and SHA-1 fingerprints, alias, creation/expiry metadata, custody, and recovery locations without recording passwords or private material.
-- Produce and verify a signed non-production test release artifact before using the identity in OAuth.
+- Produce and verify a signed direct-distribution release artifact before using the identity in OAuth. It remains non-production-ready until Milestone 7 replaces OAuth placeholders.
+
+Milestone 6 does not enroll in Play App Signing, create or modify a Play Console application, upload an APK/AAB, create a listing, complete store declarations, enter a testing track, or pursue Play verification. A future Play milestone may evaluate this owner-controlled key as an upload key while separately recording any Play app-signing certificate required for OAuth.
 
 ### 1.12.2 Exit
 
 The signing identity is backed up and recoverable. Losing one workstation cannot make future updates impossible.
+
+### 1.12.3 Completion evidence — October 7, 2026
+
+The permanent owner-controlled key uses alias `wayirun-release`, a 4096-bit RSA key and SHA256withRSA certificate. The password-protected keystore, AES-256-GCM/PBKDF2 encrypted backup and local signing properties live only in ignored `private-signing/`; the owner's Google Drive mirror of the repository folder provides the second copy. The backup was decrypted in memory and verified byte-for-byte during creation. The tracked recovery script documents and implements the backup format without containing credentials. Git ignores the whole directory plus common keystore and signing-property names.
+
+Gradle loads signing only from the ignored properties. Structural `assembleRelease` remains usable without credentials, while `assembleSignedRelease` fails clearly if configuration or the keystore is absent and never falls back to debug signing. The signed APK verifies with exactly one signer and APK Signature Scheme v2. Certificate SHA-1 is `89:77:30:BD:C5:CA:5B:DA:0C:6E:B7:6F:EB:B7:77:A4:12:F3:9A:84`; SHA-256 is `C4:B6:54:9A:3B:A9:C1:7F:91:0F:49:65:DB:44:50:75:A3:F1:2B:52:A3:B3:A0:06:58:20:F6:27:15:AA:BA:5F`. These fingerprints are the Milestone 7 Android OAuth inputs for directly distributed V1 APKs.
+
+The signed artifact is package `com.unopenedparachute.wayirun`, version code `1`, version `1.0.0`, non-debuggable, and contains the production FileProvider authority. Artifact scanning found no development hostname, development OAuth identifier or debug application ID. The explicit readiness gate rejected only the two expected production OAuth placeholders. Debug and release each passed 126 JVM tests; both assemblies and both lint tasks passed with zero lint errors and 21 existing warnings. No physical device, Play Console, Play App Signing, AAB upload, OAuth client, production service, deployment, data migration, commit or push was used. Milestone 6 is complete; Milestone 7 is not started. The artifact is `SIGNED — STRUCTURALLY VALID — NOT PRODUCTION READY`.
 
 ## 1.13 Milestone 7 — configure production Google OAuth
 

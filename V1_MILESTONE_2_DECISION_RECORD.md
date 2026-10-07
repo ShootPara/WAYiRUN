@@ -2,7 +2,7 @@
 
 Version: 1.0
 Status: Approved owner decisions and production policy
-Decision date: October 6, 2026
+Decision date: October 6, 2026; distribution amendment October 7, 2026
 
 ## 1.1 Authority and boundary
 
@@ -16,8 +16,8 @@ This milestone creates no Android identity, signing key, OAuth client, domain ro
 | --- | --- |
 | Permanent Android application ID | `com.unopenedparachute.wayirun` |
 | Canonical production origin | `https://wayirun.slopcopy.com` |
-| Canonical distribution | Google Play using Play App Signing |
-| Direct artifacts | Signed APKs may be retained for owner testing and archive; they use the same package and signing identity and are not a separate production identity |
+| Current V1 distribution | Owner-controlled signed APK using the permanent package and signing identity |
+| Future distribution option | Google Play remains supported but publication, Play App Signing and store compliance are deferred and do not block V1 |
 | Public developer name | `UnopenedParachute` |
 | Public support/privacy email | `unopenedparachute@gmail.com` |
 | Public privacy-policy URL | `https://wayirun.slopcopy.com/privacy` |
@@ -28,19 +28,20 @@ The domain and public URLs are approved intended values, not claims that DNS, TL
 
 ## 1.3 Identity, signing, and provider ownership
 
-- Google Play is the canonical distribution channel. Play App Signing will hold the app-signing key; an owner-controlled upload key will be used for uploads.
+- The canonical V1 signing identity is one permanent owner-controlled release key used for directly distributed signed APKs.
+- Google Play publication is optional future work. If pursued, the owner-controlled key may be evaluated as the Play upload key; Play may use a different app-signing certificate for Play-delivered installs, which must then be added to Android OAuth configuration.
 - `UnopenedParachute` is the signing and publishing owner. Permanent signing material must never be silently created by an agent or stored in Git.
-- Before key creation, the owner must designate two independently recoverable encrypted storage locations for the upload key and recovery material. Passwords belong in the owner's password manager or equivalent encrypted secret store, never in repository files, documentation, chat, build logs, or ordinary cloud-drive files.
+- The owner-approved Milestone 6 custody location is the ignored repository-local `private-signing/` directory. It contains the password-protected primary keystore, an independently AES-256-GCM-encrypted backup, and ignored local signing properties. The repository folder's owner-controlled Google Drive mirror is the second storage copy. GitHub must never receive any of these files. Passwords remain only in ignored local signing configuration and must never appear in tracked files, documentation, chat, or build logs; no separate password-manager requirement is imposed.
 - Development and production OAuth clients will remain separate but use the same owner-controlled Google Cloud project, subject to Milestone 3 read-only ownership/recovery verification.
 - Development and production will use the same owner-controlled Cloudflare account but entirely separate Workers, D1 databases, rate-limit namespaces, non-secret configuration, routes, and secret instances.
 - Production OAuth must use `com.unopenedparachute.wayirun`, the production signing certificate fingerprints, and `https://wayirun.slopcopy.com`. The provisional package must not be registered as production.
 
-## 1.4 Privacy, Play, and Health Connect policy
+## 1.4 Privacy, deferred Play publication, and Health Connect policy
 
-- The privacy policy must be publicly accessible, non-geofenced, non-PDF, linked from the Play listing, and linked or presented within the app before release.
-- The Play Data safety answers must match actual collection, transmission, retention, deletion, encryption, and sharing behavior.
+- The privacy policy, support path and deletion architecture remain V1 requirements independent of Google Play. A future Play listing must link the policy and satisfy then-current store presentation rules.
+- If Play publication is later authorized, Data Safety answers must match actual collection, transmission, retention, deletion, encryption, and sharing behavior.
 - WAYiRUN must retain its in-app account deletion path and provide the external deletion-request page at the approved URL. Deletion must cover associated user data, subject only to clearly disclosed legitimate retention.
-- The Play Health apps declaration will classify WAYiRUN as activity and fitness. Only the Health Connect exercise-session and distance permissions required by accepted functionality may be declared or requested.
+- WAYiRUN continues to request only the Health Connect exercise-session and distance permissions required by accepted functionality. A future Play publication milestone owns any then-current Health-app declaration.
 - WAYiRUN is a fitness tracker, not a medical device, and must not claim to diagnose, treat, cure, or prevent a medical condition.
 - Public disclosures must cover Google identity, precise route/location data, photos, user-supplied OpenAI keys and coaching transfer, Health Connect writes, publication, exports, deletion, and operational processing.
 
@@ -93,10 +94,14 @@ Production will preserve saved keys by securely provisioning compatible `COACHIN
 
 ## 1.9 Compliance and implementation gates
 
-Before production identity or resource creation, Milestone 3 must verify owner/recovery access to the Google Cloud project, Play Console, Cloudflare account, and `slopcopy.com` zone; inventory actual development resources; and produce the exact separate production resource map and cost/limit assumptions.
+Before production identity or resource creation, Milestone 3 must verify owner/recovery access to the Google Cloud project, Cloudflare account, and `slopcopy.com` zone; inventory actual development resources; and produce the exact separate production resource map and cost/limit assumptions. Play Console access is not a V1 gate.
 
-Before publication, the approved policy/support/deletion pages must be live, the app must link to the privacy policy and deletion path, Play declarations must match the final artifact, signing custody must be recoverable, OAuth account identity continuity must be proven, and the migration/restore evidence must pass. These are gates, not permission to begin Milestone 3 in this milestone.
+Before V1 distribution, the approved policy/support/deletion pages must be live, the app must link to the privacy policy and deletion path, signing custody must be recoverable, OAuth account identity continuity must be proven, and migration/restore evidence must pass. Play App Signing, AAB upload, store listing, Data Safety, Health-app declarations, testing tracks and Play verification are deferred to a future Google Play publication milestone if the owner authorizes it.
 
-## 1.10 Milestone 2 conclusion
+## 1.10 Distribution-policy amendment — October 7, 2026
+
+the owner amended the distribution decision after Milestone 5: V1 targets a directly distributed, owner-controlled signed APK. Google Play remains a supported future option but is removed from the V1 critical path. This amendment does not weaken the permanent package identity, privacy, deletion, Health Connect, security, signing custody, OAuth, migration or acceptance requirements. No Play Console application, Play App Signing enrollment, AAB upload, listing, declaration, testing-track work or store verification is authorized by V1 productionization.
+
+## 1.11 Milestone 2 conclusion
 
 All product-owner decisions required to design the production environment are fixed. Operational durations and concrete resource identifiers remain deliberately deferred to their named planning and implementation milestones. Milestone 2 is complete; Milestone 3 has not started.

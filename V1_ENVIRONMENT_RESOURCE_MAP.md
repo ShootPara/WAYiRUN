@@ -134,6 +134,8 @@ Checked-in configuration may contain resource names/IDs, origins, OAuth client i
 
 Secret values, signing material/passwords, Cloudflare/Google credentials, personal exports, encryption keys and private backup locations MUST remain outside Git. `COACHING_KEYRING` is configured through Cloudflare secrets. Android signing configuration uses ignored local properties or environment-backed CI secrets. Android origins and OAuth identifiers are compile-time variant values and MUST NOT be user-selectable or runtime-switchable.
 
+V1 distribution uses an owner-controlled signed APK. Its permanent release certificate is established in Milestone 6 and supplies the Android OAuth fingerprints for directly distributed installs. Google Play publication is deferred; if later authorized, the owner-controlled key may be evaluated as the Play upload key, while any distinct Play app-signing certificate must be recorded and added to OAuth separately. No Play resource or compliance task is a V1 production gate.
+
 ## 1.5 Deployment guards and commands
 
 The existing development guard remains unchanged and must continue rejecting production names, IDs, routes and environments.
@@ -169,7 +171,8 @@ Development clients remain unchanged in the same owner-controlled Google Cloud p
 Production Android OAuth:
 
 - package: `com.unopenedparachute.wayirun`;
-- certificate SHA-1/SHA-256: `<TO_BE_ESTABLISHED_IN_MILESTONE_6>`;
+- certificate SHA-1: `89:77:30:BD:C5:CA:5B:DA:0C:6E:B7:6F:EB:B7:77:A4:12:F3:9A:84`;
+- certificate SHA-256: `C4:B6:54:9A:3B:A9:C1:7F:91:0F:49:65:DB:44:50:75:A3:F1:2B:52:A3:B3:A0:06:58:20:F6:27:15:AA:BA:5F`;
 - client ID: `<TO_BE_CREATED_IN_MILESTONE_7>`.
 
 Production Web OAuth:
@@ -219,10 +222,10 @@ Keep the debug app, local Room database, development D1 and immutable exports un
 
 Two encrypted owner-controlled copies are required:
 
-1. Primary: encrypted local/offline owner-controlled archive.
-2. Secondary: encrypted cloud storage in an account/location independent of the production Cloudflare account.
+1. Primary: password-protected keystore plus separately encrypted backup in ignored repository-local `private-signing/`.
+2. Secondary: the owner's Google Drive mirror of the repository folder, independent of GitHub and the production Cloudflare account.
 
-Exact filesystem paths, provider URLs, credentials and encryption keys are operator-configured outside Git.
+The entire signing directory and its credentials remain outside Git. Exact private paths, credentials and encryption keys are not recorded in tracked documentation.
 
 | Evidence | Retention |
 | --- | --- |

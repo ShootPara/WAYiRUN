@@ -2,6 +2,15 @@ import java.time.ZonedDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.zip.ZipFile
+import java.util.Properties
+
+val ownerSigningPropertiesFile = rootProject.file("../private-signing/signing.local.properties")
+val ownerSigningProperties = Properties().apply {
+    if (ownerSigningPropertiesFile.isFile) ownerSigningPropertiesFile.inputStream().use(::load)
+}
+val ownerSigningKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val ownerSigningConfigured = ownerSigningPropertiesFile.isFile &&
+    ownerSigningKeys.all { !ownerSigningProperties.getProperty(it).isNullOrBlank() }
 
 plugins {
     id("com.android.application")
@@ -24,6 +33,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (ownerSigningConfigured) {
+            create("ownerRelease") {
+                storeFile = file(ownerSigningProperties.getProperty("storeFile"))
+                storePassword = ownerSigningProperties.getProperty("storePassword")
+                keyAlias = ownerSigningProperties.getProperty("keyAlias")
+                keyPassword = ownerSigningProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             versionNameSuffix = "-dev"
@@ -34,6 +54,7 @@ android {
             buildConfigField("boolean", "PRODUCTION_READY", "false")
         }
         release {
+            if (ownerSigningConfigured) signingConfig = signingConfigs.getByName("ownerRelease")
             buildConfigField("String", "APP_ENVIRONMENT", "\"production\"")
             buildConfigField("String", "API_ORIGIN", "\"https://wayirun.slopcopy.com\"")
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"__PRODUCTION_GOOGLE_WEB_CLIENT_ID_MILESTONE_7__\"")
@@ -58,6 +79,26 @@ android {
         abortOnError = true
         checkReleaseBuilds = true
     }
+}
+
+tasks.register("validateOwnerReleaseSigning") {
+    group = "verification"
+    description = "Fails unless the ignored owner-controlled release signing configuration is complete."
+    doLast {
+        check(ownerSigningPropertiesFile.isFile) {
+            "Missing ignored private-signing/signing.local.properties; structural assembleRelease remains available."
+        }
+        val missing = ownerSigningKeys.filter { ownerSigningProperties.getProperty(it).isNullOrBlank() }
+        check(missing.isEmpty()) { "Incomplete owner release signing configuration; missing: ${missing.joinToString()}" }
+        val configuredStore = file(ownerSigningProperties.getProperty("storeFile"))
+        check(configuredStore.isFile) { "Configured owner release keystore does not exist." }
+    }
+}
+
+tasks.register("assembleSignedRelease") {
+    group = "build"
+    description = "Builds the release APK only when owner-controlled signing is configured outside Git."
+    dependsOn("validateOwnerReleaseSigning", "assembleRelease")
 }
 
 androidComponents {
@@ -118,8 +159,12 @@ tasks.register("verifyProductionReadiness") {
     description = "Rejects a release artifact that still contains placeholders or development identity/configuration."
     dependsOn("assembleRelease")
     doLast {
-        val releaseApk = layout.buildDirectory.file("outputs/apk/release/app-release-unsigned.apk").get().asFile
-        check(releaseApk.isFile) { "Release APK not found: $releaseApk" }
+        val releaseDirectory = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+        val releaseApk = listOf(
+            releaseDirectory.resolve("app-release.apk"),
+            releaseDirectory.resolve("app-release-unsigned.apk"),
+        ).firstOrNull { it.isFile }
+        checkNotNull(releaseApk) { "Release APK not found in $releaseDirectory" }
         val entries = ZipFile(releaseApk).use { zip ->
             zip.entries().asSequence().filterNot { it.isDirectory }.joinToString("\n") { entry ->
                 zip.getInputStream(entry).use { it.readBytes().toString(Charsets.ISO_8859_1) }
