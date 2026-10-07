@@ -1,7 +1,7 @@
 # 1 WAYiRUN 1.0 productionization and data-migration plan
 
 Version: 1.0  
-Status: Controlling execution plan; Milestones 1 through 7 complete; Milestone 8 not started
+Status: Controlling execution plan; Milestones 1 through 8 complete; Milestone 9 not started
 Authority: `REQUIREMENTS.md` remains the product-behavior source of truth. Later explicit user decisions override this plan.
 
 ## 1.1 Objective
@@ -97,7 +97,7 @@ Milestone 2 must resolve and record these decisions before permanent identities 
 | 5 | Promote the functional Android app into release | COMPLETE | Shared functional product builds in debug/release; variant and artifact gates pass with production OAuth intentionally pending |
 | 6 | Establish owner-controlled production signing | COMPLETE | Ignored two-copy custody, verified certificate fingerprints and signed APK |
 | 7 | Configure production Google OAuth | COMPLETE | Dedicated production Android/Web clients, configuration and local artifact gates verified; live sign-in deferred until the production Worker exists |
-| 8 | Create production Cloudflare resources and schema | NOT STARTED | Bound empty migrated schema; no production traffic |
+| 8 | Create production Cloudflare resources and schema | COMPLETE | Empty migrated D1, isolated bindings, fresh keyring, production Worker/Custom Domain and smoke evidence |
 | 9 | Build and rehearse migration | NOT STARTED | Repeatable data-only tool and successful disposable rehearsal |
 | 10 | Take final backup and perform controlled migration | NOT STARTED | Frozen source boundary, immutable backup, production reconciliation |
 | 11 | Deploy and smoke-test production Worker/browser | NOT STARTED | Deployment ID, route, bindings, and safe smoke evidence |
@@ -155,7 +155,7 @@ An approved decision record exists. No permanent resource is created with a gues
 
 ### 1.8.3 Completion evidence — October 6, 2026
 
-`V1_MILESTONE_2_DECISION_RECORD.md` records the owner-approved package `com.unopenedparachute.wayirun`, production origin `https://wayirun.slopcopy.com`, current owner-controlled signed-APK distribution, deferred optional Google Play publication, and public identity `UnopenedParachute` / `unopenedparachute@gmail.com`. It also fixes separate production OAuth and Cloudflare resources, privacy/account-deletion/Health Connect obligations, minimal redacted telemetry, data-class retention policy, compatible `COACHING_KEYRING` continuity, and an immutable-backup/rehearsal/reconciliation cutover policy that treats existing phone and development data as irreplaceable until production acceptance passes.
+`V1_MILESTONE_2_DECISION_RECORD.md` records the owner-approved package `com.unopenedparachute.wayirun`, production origin `https://wayirun.slopcopy.com`, current owner-controlled signed-APK distribution, deferred optional Google Play publication, and public identity `UnopenedParachute` / `unopenedparachute@gmail.com`. It also fixes separate production OAuth and Cloudflare resources, privacy/account-deletion/Health Connect obligations, minimal redacted telemetry, data-class retention policy, the amended production key re-entry policy, and an immutable-backup/rehearsal/reconciliation cutover policy that treats existing phone and development data as irreplaceable until production acceptance passes.
 
 No permanent identity, key, OAuth client, DNS route, Worker, D1 database, secret, deployment, migration, build, or device action occurred. Milestone 2 completed before Milestone 3 began.
 
@@ -304,7 +304,7 @@ Android debug and release each passed 126 JVM tests; debug assembly, owner-signe
 
 - Create the reviewed production D1 database, Worker identity, route/domain, rate-limit namespaces, non-secret variables, and required secret names.
 - Configure secrets through Cloudflare secret mechanisms. Never copy or display remote secret values.
-- Resolve `COACHING_KEYRING` continuity according to Section 1.5 before importing encrypted envelopes.
+- Provision the owner-approved fresh production `COACHING_KEYRING`; exclude development encrypted key envelopes from migration and require one normal UI re-entry after cutover.
 - Apply the complete repository migration chain to the new D1 database. Never reconstruct schema manually or import development schema definitions over it.
 - Verify migrations, tables, indexes, constraints, bindings, readiness behavior, and an otherwise empty application dataset.
 - Do not deploy live production traffic or import user data yet.
@@ -313,13 +313,21 @@ Android debug and release each passed 126 JVM tests; debug assembly, owner-signe
 
 Production has a verified empty schema and exact bindings, while development remains unchanged.
 
+### 1.14.3 Completion evidence — October 7, 2026
+
+After the owner freed D1 capacity, Cloudflare created `wayirun-prod-db` as UUID `e4624be3-14f5-4cbc-939c-90009d377102` in ENAM. Immutable migrations `0001` through `0011` applied in order. All user-data tables contain zero rows; only migration/service metadata and the two singleton provider-gate rows exist. Four distinct account-local rate-limit namespaces are configured in the production Wrangler file and do not overlap development: `AUTH_RATE_LIMIT=163240785`, `AUTH_TOTAL_LIMIT=397761007`, `RUN_RATE_LIMIT=956644363`, and `RUN_TOTAL_LIMIT=510952580`.
+
+The owner explicitly chose a fresh production keyring and one-time OpenAI-key re-entry after cutover. Development encrypted key envelopes are excluded from migration and remain preserved in the untouched development D1. The production keyring uses the existing Worker format, is provisioned only as the production `COACHING_KEYRING` secret, and has an ignored recovery copy under `private-signing/production/` mirrored by the owner's existing Google Drive repository mirror.
+
+Worker `wayirun-prod` deployed as version `2b46e490-7aa7-4bd4-b290-1c8ce26964f3` with `workers_dev=false`, the exact production D1/OAuth/rate-limit bindings and Custom Domain `wayirun.slopcopy.com`. A first live health check exposed and corrected a runtime guard that still rejected the shared Google project-number prefix; it now rejects only the exact development clients. TLS, health, readiness, browser assets and production Web OAuth configuration passed after propagation. Final production D1 verification remained empty of accounts, sessions, runs, chunks, deletions, OpenAI keys, coaching, photos, user location/weather and publication rows. Development resources, secret and deployment remained unchanged. No account, run, paid OpenAI request, Android install, real-data migration, commit or push occurred. Milestone 8 is `COMPLETE`; Milestone 9 is `NOT STARTED`.
+
 ## 1.15 Milestone 9 — build and rehearse the migration
 
 ### 1.15.1 Classification
 
 Inspect every live D1 table and classify each row class, not merely each table, because some tables mix durable and operational state:
 
-- `MIGRATE`: accounts, completed immutable run manifests/chunks, durable deletion tombstones, usable encrypted key envelopes under the approved key strategy, completed coaching results/audio, retained photos, retained location/weather snapshots, effective publication state/tokens, and other durable data discovered live.
+- `MIGRATE`: accounts, completed immutable run manifests/chunks, durable deletion tombstones, completed coaching results/audio, retained photos, retained location/weather snapshots, effective publication state/tokens, and other durable data discovered live. Development encrypted OpenAI-key envelopes are explicitly excluded by owner decision.
 - `REGENERATE`: service/migration metadata created by migrations and safely derived caches when deliberately excluded.
 - `DO NOT MIGRATE`: expired login challenges, expired/revoked auth sessions, provider throttle gates, disposable canaries, and abandoned staging rows after explicit review.
 - `REVIEW`: incomplete uploads, in-progress coaching jobs, publication operations, pending weather/location attempts, and any row whose finality is ambiguous.
@@ -333,7 +341,7 @@ This list is a hypothesis from the current schema. The live data and code decide
 - Never place real exports, transformed SQL, photos, audio, tokens, or reports containing personal data in Git.
 - Rehearse against a disposable production-shaped D1 database, not the real production database.
 - Verify per-table counts, canonical ordered hashes where safe, foreign-key/orphan checks, uniqueness, archive manifest/chunk hashes, media byte counts/hashes, owner/run relationships, public/private state, and several synthetic or user-approved end-to-end records.
-- Test the keyring decision: migrated saved OpenAI-key status must remain usable without revealing or invoking the key, or be deliberately marked for user re-entry.
+- Verify development encrypted OpenAI-key envelopes are excluded, production `openai_keys` remains empty, and the owner re-entry requirement is recorded without exposing or invoking a key.
 - Destroy only the explicitly disposable rehearsal database after evidence is retained safely.
 
 ### 1.15.3 Exit

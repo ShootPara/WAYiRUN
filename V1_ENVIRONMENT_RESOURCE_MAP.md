@@ -91,10 +91,10 @@ D1 contains accounts; authentication challenges/sessions; completed and staged r
 | Environment | `APP_ENV=development` | `APP_ENV=production` |
 | Exposure | Development `workers.dev` hostname | Custom Domain `wayirun.slopcopy.com`; `workers_dev=false` |
 | D1 database | `wayirun-dev-db` | `wayirun-prod-db` |
-| D1 database ID | `04bf8339-386b-4a03-80d7-12b4d1f99ffb` | `<TO_BE_CREATED_IN_MILESTONE_8>` |
+| D1 database ID | `04bf8339-386b-4a03-80d7-12b4d1f99ffb` | `e4624be3-14f5-4cbc-939c-90009d377102` |
 | D1 binding | `DB` | `DB` |
-| Rate-limit bindings | Existing four development namespaces | Same four binding names with separate production namespace IDs |
-| Secret | Development `COACHING_KEYRING` | Separate production secret named `COACHING_KEYRING` |
+| Rate-limit bindings | Existing four development namespaces | `AUTH_RATE_LIMIT=163240785`; `AUTH_TOTAL_LIMIT=397761007`; `RUN_RATE_LIMIT=956644363`; `RUN_TOTAL_LIMIT=510952580` |
+| Secret | Development `COACHING_KEYRING` | Fresh production-only `COACHING_KEYRING`, provisioned; recovery copy under ignored `private-signing/production/` |
 | Deployment command | `npm run deploy:dev` | `npm run deploy:prod` |
 | Backups | Development source plus protected exports | Encrypted 30-day rolling backups plus separately retained cutover backup |
 
@@ -185,14 +185,14 @@ No client secret belongs in Android or repository configuration. Both production
 
 ## 1.8 D1 schema and migration boundary
 
-Production uses `wayirun-prod-db`, bound only as `DB`, with ID `<TO_BE_CREATED_IN_MILESTONE_8>`. Its schema is created in an empty database by applying repository migrations `0001` through `0011` in order. Development schema internals, DDL exports and edited historical migrations are not substitutes.
+Production uses `wayirun-prod-db`, bound only as `DB`, with ID `e4624be3-14f5-4cbc-939c-90009d377102`. Its empty schema was created by applying repository migrations `0001` through `0011` in order. Development schema internals, DDL exports and edited historical migrations were not used.
 
 Migrate:
 
 - accounts;
 - completed run manifests and chunks;
 - durable deletion tombstones;
-- encrypted OpenAI-key envelopes;
+- no development encrypted OpenAI-key envelopes; production starts with an empty `openai_keys` table and the owner re-enters the key after cutover;
 - completed coaching results and audio;
 - retained photos;
 - retained location and weather snapshots;
@@ -209,7 +209,7 @@ Do not migrate routine transient state:
 
 Individually classify incomplete uploads, in-progress coaching jobs, pending publication operations, pending enrichment attempts and any ambiguous row before final migration.
 
-The production `COACHING_KEYRING` must be compatible with migrated encrypted envelopes. Provision it without displaying or exporting its value, then prove envelope usability through a non-revealing status check without an unapproved paid provider request. Failure is a stop condition.
+Development encrypted OpenAI-key envelopes are intentionally excluded from production migration and remain preserved in the untouched development evidence. Production uses a fresh keyring and an empty `openai_keys` table. After production cutover and sign-in, the owner re-enters the OpenAI API key through the normal UI; no plaintext key appears in exports or migration tooling.
 
 ## 1.9 Phone-local and cloud-data reconciliation
 
@@ -268,11 +268,11 @@ Any source mutation after the freeze, count/hash mismatch, orphan, missing media
 
 | Value | Placeholder | Resolution milestone |
 | --- | --- | --- |
-| Production D1 database ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
-| `AUTH_RATE_LIMIT` namespace ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
-| `AUTH_TOTAL_LIMIT` namespace ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
-| `RUN_RATE_LIMIT` namespace ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
-| `RUN_TOTAL_LIMIT` namespace ID | `<TO_BE_CREATED_IN_MILESTONE_8>` | 8 |
+| Production D1 database ID | `e4624be3-14f5-4cbc-939c-90009d377102` | Resolved in 8 |
+| `AUTH_RATE_LIMIT` namespace ID | `163240785` | Resolved in 8 |
+| `AUTH_TOTAL_LIMIT` namespace ID | `397761007` | Resolved in 8 |
+| `RUN_RATE_LIMIT` namespace ID | `956644363` | Resolved in 8 |
+| `RUN_TOTAL_LIMIT` namespace ID | `510952580` | Resolved in 8 |
 | Android signing fingerprints | `<TO_BE_ESTABLISHED_IN_MILESTONE_6>` | 6 |
 | Production Android OAuth client ID | `933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com` | Resolved in 7 |
 | Production Web OAuth client ID | `933230558080-hlnp4ooq98sdv67ed6ok4fo9buhie0ll.apps.googleusercontent.com` | Resolved in 7 |

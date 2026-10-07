@@ -3,6 +3,7 @@ export type WriteMode = "normal" | "frozen";
 export type RuntimeEnvironment = Readonly<{ name: AppEnvironment; publicOrigin: string; googleWebClientId: string;
   googleAndroidClientId: string; locationLookupUrl: string; weatherForecastUrl: string; weatherArchiveUrl: string; writeMode: WriteMode }>;
 const DEV_ORIGIN="https://wayirun-dev.unopenedparachute.workers.dev",PROD_ORIGIN="https://wayirun.slopcopy.com";
+const DEV_GOOGLE_CLIENT_IDS=new Set(["933230558080-ko4r7v0kmhip4i0n7u32diaimv1in73q.apps.googleusercontent.com","933230558080-8o82hopmd4ibnt2fllqpr8252lg3q44t.apps.googleusercontent.com"]);
 const url=(value:unknown,label:string)=>{if(typeof value!=="string")throw Error(`${label}_missing`);const parsed=new URL(value);
  if(parsed.protocol!=="https:"||parsed.username||parsed.password||parsed.hash)throw Error(`${label}_invalid`);return parsed.toString().replace(/\/$/,"");};
 const required=(value:unknown,label:string)=>{if(typeof value!=="string"||!value.trim()||/^__.+__$/.test(value))throw Error(`${label}_invalid`);return value;};
@@ -14,7 +15,7 @@ export function resolveEnvironment(env:Record<string,unknown>):RuntimeEnvironmen
  const locationLookupUrl=url(env.LOCATION_LOOKUP_URL,"location_lookup_url"),weatherForecastUrl=url(env.WEATHER_FORECAST_URL,"weather_forecast_url"),weatherArchiveUrl=url(env.WEATHER_ARCHIVE_URL,"weather_archive_url");
  if(env.WRITE_MODE!=="normal"&&env.WRITE_MODE!=="frozen")throw Error("write_mode_invalid");
  const identifiers=[googleWebClientId,googleAndroidClientId,locationLookupUrl,weatherForecastUrl,weatherArchiveUrl];
- if(name==="production"&&identifiers.some(v=>v.includes("wayirun-dev")||v.includes("933230558080-")))throw Error("development_identifier_in_production");
+ if(name==="production"&&(identifiers.some(v=>v.includes("wayirun-dev"))||DEV_GOOGLE_CLIENT_IDS.has(googleWebClientId)||DEV_GOOGLE_CLIENT_IDS.has(googleAndroidClientId)))throw Error("development_identifier_in_production");
  if(name==="development"&&identifiers.some(v=>v.includes("wayirun.slopcopy.com")))throw Error("production_identifier_in_development");
  return Object.freeze({name,publicOrigin,googleWebClientId,googleAndroidClientId,locationLookupUrl,weatherForecastUrl,weatherArchiveUrl,writeMode:env.WRITE_MODE});
 }

@@ -20,10 +20,10 @@
     "GOOGLE_ANDROID_CLIENT_ID": "933230558080-l6iica70or7astsl7er2sq6h1pt5alr2.apps.googleusercontent.com"
   },
   "ratelimits": [
-    { "name": "RUN_RATE_LIMIT", "namespace_id": "__PRODUCTION_RUN_RATE_LIMIT_ID__", "simple": { "limit": 300, "period": 60 } },
-    { "name": "RUN_TOTAL_LIMIT", "namespace_id": "__PRODUCTION_RUN_TOTAL_LIMIT_ID__", "simple": { "limit": 3000, "period": 60 } },
-    { "name": "AUTH_RATE_LIMIT", "namespace_id": "__PRODUCTION_AUTH_RATE_LIMIT_ID__", "simple": { "limit": 30, "period": 60 } },
-    { "name": "AUTH_TOTAL_LIMIT", "namespace_id": "__PRODUCTION_AUTH_TOTAL_LIMIT_ID__", "simple": { "limit": 300, "period": 60 } }
+    { "name": "RUN_RATE_LIMIT", "namespace_id": "956644363", "simple": { "limit": 300, "period": 60 } },
+    { "name": "RUN_TOTAL_LIMIT", "namespace_id": "510952580", "simple": { "limit": 3000, "period": 60 } },
+    { "name": "AUTH_RATE_LIMIT", "namespace_id": "163240785", "simple": { "limit": 30, "period": 60 } },
+    { "name": "AUTH_TOTAL_LIMIT", "namespace_id": "397761007", "simple": { "limit": 300, "period": 60 } }
   ],
-  "d1_databases": [{ "binding": "DB", "database_name": "wayirun-prod-db", "database_id": "__PRODUCTION_D1_UUID__", "migrations_dir": "migrations" }]
+  "d1_databases": [{ "binding": "DB", "database_name": "wayirun-prod-db", "database_id": "e4624be3-14f5-4cbc-939c-90009d377102", "migrations_dir": "migrations" }]
 }

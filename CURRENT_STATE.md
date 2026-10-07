@@ -1,6 +1,6 @@
 # 1 WAYiRUN current state
 
-Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 7 complete; Milestone 8 not started
+Status: Accepted feature-development baseline; V1 productionization Milestones 1 through 8 complete; Milestone 9 not started
 Repository authority: current implementation plus accepted decisions in `REQUIREMENTS.md`
 Canonical lineage: `main`; accepted Settings checkpoint `1e00e8e`; history-preserving integration merge `897cac5`
 
@@ -164,3 +164,11 @@ The owner-controlled Google Cloud project `wayirun-development` retains its deve
 The shared-project topology follows Google's cross-client identity model, and WAYiRUN continues to key accounts by Google's stable OIDC `sub`. Because the production Worker/origin does not yet exist, the exact same-owner Android/browser/development-account comparison is deferred as a no-write acceptance check to Milestones 11 and 13; any mismatch blocks migration and requires explicit linking. The consent configuration remains in Testing status and is sufficient for the current owner-controlled use case; public policy/support URLs and any later external publication remain later V1 gates.
 
 Android debug and release each passed 126 JVM tests; debug assembly, owner-signed release assembly, both lint tasks and the production-readiness gate passed. The signed APK uses the production identity, origin and clients, contains no development OAuth identifiers and verifies with the owner certificate. All 165 Worker tests passed. The real production Worker config remains intentionally undeployable only because Milestone 8 D1 and rate-limit resource IDs are unresolved; the synthetic guarded production dry-run passed. No Worker deployment, data migration, personal-data access, physical-device install, Play action, commit or push occurred. Milestone 7 is complete; Milestone 8 is not started.
+
+## 1.19 V1 Milestone 8 production Cloudflare foundation — October 7, 2026
+
+After D1 capacity was freed, Cloudflare created the isolated production database `wayirun-prod-db` (`e4624be3-14f5-4cbc-939c-90009d377102`) in ENAM. Migrations `0001` through `0011` applied in order. Every user-data table is empty; only the expected migration/service metadata and singleton location/weather gate rows exist. Four distinct production rate-limit namespace IDs are fixed in the production configuration without development overlap. The real production guard and dry run pass.
+
+The owner deliberately chose a fresh production `COACHING_KEYRING` and one-time OpenAI API-key re-entry after cutover. Existing development encrypted key envelopes are not part of production migration and remain preserved in the untouched development D1. The fresh keyring is provisioned only to production and backed up under ignored `private-signing/production/`; production `openai_keys` remains empty.
+
+`wayirun-prod` version `2b46e490-7aa7-4bd4-b290-1c8ce26964f3` is deployed with `workers_dev=false`, the exact production D1/OAuth/rate-limit bindings and Custom Domain `https://wayirun.slopcopy.com`. The Custom Domain resolves through Cloudflare with valid TLS. Health, readiness, browser assets and OAuth configuration smoke checks pass. A live check exposed and corrected the remaining same-project OAuth prefix rejection so runtime validation now rejects only the exact development clients. Production remains empty of migrated user data, and development resources remain unchanged. Milestone 8 is `COMPLETE`; Milestone 9 is `NOT STARTED`.

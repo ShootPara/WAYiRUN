@@ -88,9 +88,9 @@ The approved cutover model is:
 
 No migration is successful merely because an export/import command completes. Any mismatch, source mutation after freeze, uncertain owner mapping, missing media, invalid archive, or unusable encrypted key is a stop condition.
 
-## 1.8 OpenAI key continuity
+## 1.8 OpenAI key transition
 
-Production will preserve saved keys by securely provisioning compatible `COACHING_KEYRING` material into the separate production secret store. Secret values must not be displayed, copied through chat, written to disk in the repository, or included in migration exports. Milestone 9 must prove that migrated envelopes remain decryptable through a non-revealing status check without making an unapproved paid request. If compatibility cannot be proven, stop and obtain an explicit owner decision between controlled re-encryption and user re-entry; never silently discard or expose keys.
+The owner amended the continuity decision on October 7, 2026. Existing development encrypted OpenAI-key envelopes MUST NOT be migrated to production and remain preserved only in the untouched development D1 evidence. Production uses a new independently generated `COACHING_KEYRING` and begins with no saved OpenAI API key. After production cutover and sign-in, the owner will enter the key once through the normal WAYiRUN UI, which encrypts it under the production keyring. No plaintext key belongs in migration exports, repository files, documentation or logs. This deliberate re-entry policy replaces compatible-keyring migration as a V1 blocker.
 
 ## 1.9 Compliance and implementation gates
 
