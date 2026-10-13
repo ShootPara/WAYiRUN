@@ -98,7 +98,7 @@ internal fun renderPhoto(source: Bitmap, s: RunSnapshot, route: List<RoutePoint>
             paint.style=Paint.Style.STROKE;paint.strokeCap=Paint.Cap.ROUND
             for(i in 1 until route.size) if(route[i].segmentId==route[i-1].segmentId && route[i].monotonicMs-route[i-1].monotonicMs in 1..10000) {
                 for(halo in listOf(true,false)) {
-                    paint.color=if(halo)Color.argb(200,0,0,0) else Color.rgb(200,245,100)
+                    paint.color=if(halo)Color.argb(200,0,0,0) else Color.rgb(34,197,94)
                     paint.strokeWidth=max(3f,w/250)*(if(halo)2f else 1f)
                     c.drawLine((left+(xs[i-1]-minX)*scale).toFloat(),(top+(ys[i-1]-minY)*scale).toFloat(),(left+(xs[i]-minX)*scale).toFloat(),(top+(ys[i]-minY)*scale).toFloat(),paint)
                 }

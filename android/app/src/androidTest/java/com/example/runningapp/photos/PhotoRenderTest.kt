@@ -28,7 +28,7 @@ class PhotoRenderTest {
                 var minX=w;var maxX=-1;var minY=h;var maxY=-1
                 for(y in 0 until h) for(x in 0 until w) {
                     val color=bitmap.getPixel(x,y)
-                    if(Color.green(color)>170 && Color.green(color)>Color.red(color)+20 && Color.red(color)>120 && Color.blue(color)<150) {
+                    if(Color.green(color)>150 && Color.green(color)>Color.red(color)+70 && Color.green(color)>Color.blue(color)+50) {
                         minX=minOf(minX,x);maxX=maxOf(maxX,x);minY=minOf(minY,y);maxY=maxOf(maxY,y)
                     }
                 }
