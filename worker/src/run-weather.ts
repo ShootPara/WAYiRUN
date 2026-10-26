@@ -1,4 +1,4 @@
-import { accessGuard, sessionAccount, reply, type AuthEnv } from "./auth.js";
+import { accessGuard, sessionAccount, reply, smallJson, type AuthEnv } from "./auth.js";
 import { readVerifiedRun, CoachingDataError } from "./coaching-context.js";
 import {providerDefaults} from "./environment.js";
 
@@ -25,7 +25,11 @@ export function weatherQuery(archive: Record<string, unknown>, now: number): Wea
   const snapshot = object(object(object(archive.run).checkpoint).snapshot);
   if (object(snapshot.settings).mode !== "OUTDOOR") return null;
   const point = object(Array.isArray(archive.route) ? archive.route[0] : null);
-  const latitude = point.latitude, longitude = point.longitude, started = snapshot.startedUtcMs;
+  return weatherLocationQuery(point.latitude,point.longitude,snapshot.startedUtcMs,now);
+}
+
+/** Early requests use a permission-derived coarse device location, including indoors. */
+export function weatherLocationQuery(latitude: unknown, longitude: unknown, started: unknown, now: number): WeatherQuery | null {
   if (typeof latitude !== "number" || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
       typeof longitude !== "number" || !Number.isFinite(longitude) || Math.abs(longitude) > 180 ||
       typeof started !== "number" || !Number.isSafeInteger(started) || started < 0 || started > now) return null;
@@ -123,14 +127,26 @@ export async function fetchWeather(query: WeatherQuery, fetcher: typeof fetch, n
 
 export async function handleWeather(request: Request, env: AuthEnv, fetcher: typeof fetch = fetch, now = Date.now()): Promise<Response> {
   try {
-    const url = new URL(request.url), match = /^\/api\/weather\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/.exec(url.pathname);
+    const url = new URL(request.url), match = /^\/api\/weather\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(\/start)?$/.exec(url.pathname);
     if (!match || url.search) return reply({ error: "not_found" }, 404);
     if (request.headers.has("Origin") || request.headers.has("Cookie")) return reply({ error: "origin_not_allowed" }, 403);
-    if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405, { Allow: "GET" });
+    const early = !!match[2], table = early ? "run_weather_early" : "run_weather";
+    if (request.method !== (early ? "POST" : "GET")) return reply({ error: "method_not_allowed" }, 405, { Allow: early ? "POST" : "GET" });
     const denied = await accessGuard(request, env, true); if (denied) return denied;
     const session = await sessionAccount(request, env); if (!session) return reply({ error: "unauthorized" }, 401);
     const owner = session.account.id, id = match[1]!;
-    const exists = () => env.DB.prepare(`SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL
+    let earlyQuery: WeatherQuery | null = null;
+    if (early) {
+      try {
+        const body = await smallJson(request);
+        if (Object.keys(body).sort().join(",") !== "latitude,longitude,startedUtcMs") throw Error();
+        earlyQuery = weatherLocationQuery(body.latitude,body.longitude,body.startedUtcMs,now);
+        if (!earlyQuery || typeof body.startedUtcMs !== "number" || now-body.startedUtcMs > 7*DAY ||
+            body.latitude !== earlyQuery.latitude || body.longitude !== earlyQuery.longitude) throw Error();
+      } catch { return reply({error:"invalid_request"},400); }
+    }
+    const exists = () => early ? env.DB.prepare(`SELECT 1 WHERE NOT EXISTS
+      (SELECT 1 FROM run_deletions WHERE owner_id=? AND run_id=?)`).bind(owner,id).first() : env.DB.prepare(`SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM run_deletions WHERE owner_id=? AND run_id=?)`).bind(owner, id, owner, id).first();
     if (!await exists()) return reply({ error: "not_found" }, 404);
     const deliver = async (weather: WeatherSnapshot | null, reason: string | null, retryAfter: number | null = null) => {
@@ -138,22 +154,49 @@ export async function handleWeather(request: Request, env: AuthEnv, fetcher: typ
       if (!await exists()) return reply({ error: "not_found" }, 404);
       return reply({ weather, reason, retryAfter });
     };
-    const cached = await env.DB.prepare("SELECT snapshot_json,retry_after FROM run_weather WHERE owner_id=? AND run_id=?")
+    if (early) {
+      const retained = await env.DB.prepare("SELECT snapshot_json FROM run_weather WHERE owner_id=? AND run_id=?")
+        .bind(owner,id).first<{snapshot_json:string|null}>();
+      if (retained?.snapshot_json) return await deliver(JSON.parse(retained.snapshot_json) as WeatherSnapshot,null);
+    }
+    if (!early) {
+      const retained = await env.DB.prepare("SELECT snapshot_json FROM run_weather WHERE owner_id=? AND run_id=?")
+        .bind(owner,id).first<{snapshot_json:string|null}>();
+      if (retained?.snapshot_json) return await deliver(JSON.parse(retained.snapshot_json) as WeatherSnapshot,null);
+      const prefetched = await env.DB.prepare("SELECT snapshot_json,retry_after FROM run_weather_early WHERE owner_id=? AND run_id=?")
+        .bind(owner,id).first<WeatherRow>();
+      if (prefetched && !prefetched.snapshot_json && prefetched.retry_after > now)
+        return await deliver(null,"retry_later",prefetched.retry_after);
+      if (prefetched?.snapshot_json) {
+        const archive = await readVerifiedRun(env.DB,owner,id);
+        const started = object(object(object(archive.run).checkpoint).snapshot).startedUtcMs;
+        const snapshot = JSON.parse(prefetched.snapshot_json) as WeatherSnapshot;
+        if (typeof started === "number" && Math.floor(started/HOUR)*HOUR === snapshot.observedUtcMs) {
+          await env.DB.prepare(`INSERT INTO run_weather(owner_id,run_id,snapshot_json,retry_after,attempt)
+            SELECT ?,?,?,0,? WHERE EXISTS(SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL)
+            AND NOT EXISTS(SELECT 1 FROM run_deletions WHERE owner_id=? AND run_id=?)
+            ON CONFLICT(owner_id,run_id) DO UPDATE SET snapshot_json=excluded.snapshot_json,retry_after=0
+            WHERE run_weather.snapshot_json IS NULL`)
+            .bind(owner,id,prefetched.snapshot_json,crypto.randomUUID(),owner,id,owner,id).run();
+        }
+      }
+    }
+    const cached = await env.DB.prepare(`SELECT snapshot_json,retry_after FROM ${table} WHERE owner_id=? AND run_id=?`)
       .bind(owner, id).first<WeatherRow>();
     if (cached?.snapshot_json) return await deliver(JSON.parse(cached.snapshot_json) as WeatherSnapshot, null);
     if (cached && cached.retry_after > now) return await deliver(null, "retry_later", cached.retry_after);
-    const archive = await readVerifiedRun(env.DB, owner, id), query = weatherQuery(archive, now);
+    const query = earlyQuery ?? weatherQuery(await readVerifiedRun(env.DB, owner, id), now);
     if (!query) return await deliver(null, "no_recorded_weather_location_or_time");
     const attempt = crypto.randomUUID();
     // A per-run reservation prevents late attempts from replacing a newer snapshot.
-    const reserved = await env.DB.prepare(`INSERT INTO run_weather(owner_id,run_id,snapshot_json,retry_after,attempt)
-      SELECT ?,?,NULL,?,? WHERE EXISTS(SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL)
+    const reserved = await env.DB.prepare(`INSERT INTO ${table}(owner_id,run_id,snapshot_json,retry_after,attempt)
+      SELECT ?,?,NULL,?,? WHERE (?=1 OR EXISTS(SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL))
       AND NOT EXISTS(SELECT 1 FROM run_deletions WHERE owner_id=? AND run_id=?)
       ON CONFLICT(owner_id,run_id) DO UPDATE SET retry_after=excluded.retry_after,attempt=excluded.attempt
-      WHERE run_weather.snapshot_json IS NULL AND run_weather.retry_after<=? RETURNING attempt`)
-      .bind(owner, id, now + 30000, attempt, owner, id, owner, id, now).first();
+      WHERE ${table}.snapshot_json IS NULL AND ${table}.retry_after<=? RETURNING attempt`)
+      .bind(owner, id, now + 30000, attempt, early?1:0, owner, id, owner, id, now).first();
     if (!reserved) {
-      const current = await env.DB.prepare("SELECT snapshot_json,retry_after FROM run_weather WHERE owner_id=? AND run_id=?")
+      const current = await env.DB.prepare(`SELECT snapshot_json,retry_after FROM ${table} WHERE owner_id=? AND run_id=?`)
         .bind(owner, id).first<WeatherRow>();
       return current?.snapshot_json ? await deliver(JSON.parse(current.snapshot_json) as WeatherSnapshot, null)
         : await deliver(null, "retry_later", current?.retry_after ?? now + FAILURE_COOLDOWN_MS);
@@ -167,24 +210,29 @@ export async function handleWeather(request: Request, env: AuthEnv, fetcher: typ
       const retryAfter = Math.max(now, pending.next_at);
       // Release only our reservation to the gate's actual eligibility time. A newer
       // attempt or successful snapshot must never be changed by this loser.
-      await env.DB.prepare(`UPDATE run_weather SET retry_after=? WHERE owner_id=? AND run_id=?
+      await env.DB.prepare(`UPDATE ${table} SET retry_after=? WHERE owner_id=? AND run_id=?
         AND attempt=? AND snapshot_json IS NULL`).bind(retryAfter, owner, id, attempt).run();
       return await deliver(null, "retry_later", retryAfter);
     }
     if ((await sessionAccount(request, env))?.account.id !== owner) return reply({ error: "unauthorized" }, 401);
     if (!await exists()) return reply({ error: "not_found" }, 404);
     const result = await fetchWeather(query, fetcher, now,env.WEATHER_FORECAST_URL,env.WEATHER_ARCHIVE_URL), weather = result.weather;
+    if (early) {
+      const retained = await env.DB.prepare("SELECT snapshot_json FROM run_weather WHERE owner_id=? AND run_id=?")
+        .bind(owner,id).first<{snapshot_json:string|null}>();
+      if (retained?.snapshot_json) return await deliver(JSON.parse(retained.snapshot_json) as WeatherSnapshot,null);
+    }
     if (result.reason === "provider_throttled" && result.retryAfter !== null) {
       await env.DB.prepare("UPDATE weather_lookup_gate SET next_at=MAX(next_at,?) WHERE id=1").bind(result.retryAfter).run();
     }
     // Atomic persistence checks: a revoked session or deletion wins over the provider response.
-    const stored = await env.DB.prepare(`UPDATE run_weather SET snapshot_json=?,retry_after=?
+    const stored = await env.DB.prepare(`UPDATE ${table} SET snapshot_json=?,retry_after=?
       WHERE owner_id=? AND run_id=? AND attempt=? AND snapshot_json IS NULL
       AND EXISTS(SELECT 1 FROM auth_sessions WHERE token_hash=? AND owner_id=? AND revoked_at IS NULL AND expires_at>?)
-      AND EXISTS(SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL)
+      AND (?=1 OR EXISTS(SELECT 1 FROM run_uploads WHERE owner_id=? AND run_id=? AND completed_at IS NOT NULL))
       AND NOT EXISTS(SELECT 1 FROM run_deletions WHERE owner_id=? AND run_id=?) RETURNING run_id`)
       .bind(weather ? JSON.stringify(weather) : null, result.retryAfter ?? now, owner, id, attempt, session.tokenHash, owner,
-        Math.floor(Date.now() / 1000), owner, id, owner, id).first();
+        Math.floor(Date.now() / 1000), early?1:0, owner, id, owner, id).first();
     return await deliver(stored ? weather : null, stored ? result.reason : "retry_later", stored ? result.retryAfter : now + FAILURE_COOLDOWN_MS);
   } catch (error) {
     if (error instanceof CoachingDataError && error.code === "run_unavailable") return reply({ error: "not_found" }, 404);

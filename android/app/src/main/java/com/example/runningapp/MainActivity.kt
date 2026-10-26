@@ -37,12 +37,16 @@ class MainActivity : ComponentActivity() {
         startupPending = savedInstanceState?.getBoolean("startupPending") ?: true
         requesting = savedInstanceState?.getBoolean("requesting") ?: false
         entry.externalRunId = entry.externalRunId ?: savedInstanceState?.getString("externalRunId")
+        entry.photoRunId = entry.photoRunId ?: savedInstanceState?.getString("photoRunId")
         enableEdgeToEdge()
         // Keep Android's existing launcher splash. There is no in-app setup overlay.
         setContent {
             val account by accountModel.state.collectAsState()
             val tracking by TrackingService.view.collectAsState()
-            CompositionLocalProvider(com.example.runningapp.photos.LocalExternalRunAction provides { runId -> entry.externalRunId = runId }) {
+            CompositionLocalProvider(
+                com.example.runningapp.photos.LocalExternalRunAction provides { runId -> entry.externalRunId = runId },
+                com.example.runningapp.photos.LocalPhotoRunAction provides { runId -> entry.photoRunId = runId },
+            ) {
                 WayirunApp(onPermissions = { requestPermissions() }, accountView = account,
                     onSignIn = { accountModel.signIn(this) }, onSignOut = { accountModel.signOut() },
                     onImport = { accountModel.importRuns(it) }, onRetrySync = { accountModel.retrySync() },
@@ -65,7 +69,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         com.example.runningapp.health.HealthScheduler.enqueue(this)
-        val appEntry = entry.needsEntry || entry.externalRunId != null || entry.recreationRunId != null
+        val appEntry = entry.needsEntry || entry.externalRunId != null || entry.photoRunId != null || entry.recreationRunId != null
         val returnRunId = entry.resumed()
         TrackingService.send(this, if (appEntry) TrackingService.ENTER else TrackingService.OPEN, runId = returnRunId)
     }
@@ -80,6 +84,7 @@ class MainActivity : ComponentActivity() {
         outState.putBoolean("startupPending", startupPending)
         outState.putBoolean("requesting", requesting)
         outState.putString("externalRunId", entry.externalRunId)
+        outState.putString("photoRunId", entry.photoRunId)
         super.onSaveInstanceState(outState)
     }
 

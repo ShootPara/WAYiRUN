@@ -26,6 +26,13 @@ data class StoredRun(
     val cloudOwnerId: String? = null,
 )
 
+/** Coarse run-start context, independent of indoor distance and GPS route recording. */
+@Entity(tableName = "run_weather_context", foreignKeys = [ForeignKey(
+    entity = StoredRun::class, parentColumns = ["id"], childColumns = ["runId"], onDelete = ForeignKey.CASCADE,
+)])
+data class RunWeatherContext(@PrimaryKey val runId: String, val latitude: Double, val longitude: Double,
+    val startedUtcMs: Long, val weather: String? = null)
+
 @Entity(tableName = "route_points", foreignKeys = [ForeignKey(
     entity = StoredRun::class, parentColumns = ["id"], childColumns = ["runId"], onDelete = ForeignKey.CASCADE,
 )], indices = [Index("runId")])
@@ -99,6 +106,12 @@ data class HealthExport(@PrimaryKey val runId: String, val state: String = "PEND
 
 @Dao
 abstract class RunDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE) abstract suspend fun captureWeather(context: RunWeatherContext)
+    @Query("SELECT * FROM run_weather_context WHERE runId=:id") abstract suspend fun weatherContext(id: String): RunWeatherContext?
+    @Query("UPDATE run_weather_context SET weather=:weather WHERE runId=:id AND weather IS NULL")
+    abstract suspend fun cacheWeather(id: String, weather: String)
+    @Query("SELECT w.runId FROM run_weather_context w JOIN runs r ON r.id=w.runId WHERE r.cloudOwnerId=:owner AND (w.weather IS NULL OR r.state='FINISHED')")
+    abstract suspend fun weatherForSync(owner: String): List<String>
     @Query("SELECT * FROM run_publications WHERE runId=:id")
     abstract suspend fun publication(id: String): RunPublication?
     @Query("SELECT * FROM run_publications WHERE runId=:id")
@@ -235,6 +248,8 @@ abstract class RunDao {
     @Query("SELECT * FROM runs WHERE activeSlot = 1 LIMIT 1") abstract suspend fun active(): StoredRun?
     @Query("SELECT * FROM runs WHERE id = :id") abstract suspend fun get(id: String): StoredRun?
     @Query("SELECT * FROM runs ORDER BY updatedUtcMs DESC LIMIT 1") abstract fun latest(): Flow<StoredRun?>
+    @Query("SELECT * FROM runs WHERE state='FINISHED' AND ((:owner IS NOT NULL AND cloudOwnerId=:owner) OR (:owner IS NULL AND cloudOwnerId IS NULL AND ownerId=:local))")
+    abstract fun completedForOwner(owner: String?, local: String): Flow<List<StoredRun>>
     @Query("SELECT * FROM runs WHERE cloudOwnerId IS NULL OR cloudOwnerId = :owner ORDER BY updatedUtcMs DESC LIMIT 1")
     abstract suspend fun latestVisible(owner: String?): StoredRun?
     @Query("SELECT * FROM active_intervals WHERE runId = :id ORDER BY number") abstract suspend fun intervals(id: String): List<StoredActiveInterval>
@@ -356,11 +371,16 @@ abstract class RunDao {
 
 @Database(
     entities = [StoredRun::class, RoutePoint::class, StoredMeasurement::class, StoredSplit::class,
-        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, CoachingRequest::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class, RunPublication::class], version = 10, exportSchema = true,
+        StoredActiveInterval::class, StoredSegment::class, SyncOperation::class, CoachingRequest::class, PullState::class, AchievementCache::class, RunPhoto::class, HealthExport::class, RunPublication::class, RunWeatherContext::class], version = 11, exportSchema = true,
 )
 abstract class RunDatabase : RoomDatabase() {
     abstract fun runs(): RunDao
     companion object {
+        val MIGRATION_10_11 = object : Migration(10,11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS run_weather_context (runId TEXT NOT NULL PRIMARY KEY, latitude REAL NOT NULL, longitude REAL NOT NULL, startedUtcMs INTEGER NOT NULL, weather TEXT, FOREIGN KEY(runId) REFERENCES runs(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            }
+        }
         val MIGRATION_9_10 = object : Migration(9,10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS coaching_requests (runId TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, operationId TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL, nextAttemptMs INTEGER NOT NULL, error TEXT, serverState TEXT, acknowledgedAtMs INTEGER, FOREIGN KEY(runId) REFERENCES runs(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
@@ -416,7 +436,7 @@ abstract class RunDatabase : RoomDatabase() {
         @Volatile private var instance: RunDatabase? = null
         fun get(context: Context): RunDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, RunDatabase::class.java, "wayirun-local.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { instance = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build().also { instance = it }
         }
     }
 }

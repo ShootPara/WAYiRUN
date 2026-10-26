@@ -118,7 +118,7 @@ The finish summary MUST allow camera, system image picker, cancel/skip, retake, 
 
 Selectable overlays MUST support time, distance, pace, actual recorded route, and available run-start weather. Route overlays MUST preserve gaps and MUST NOT use a basemap or dark map rectangle. Indoor/no-route/weather-unavailable cases MUST remain usable without invented content.
 
-Weather MUST use cached archive-derived start context with visible provider/license attribution. Keeping or saving a photo MUST NOT publish the run.
+Weather MUST attempt lookup near run start for indoor and outdoor runs using an available, permission-derived location, without blocking tracking. Captured start context and successful weather MUST persist for connection retries during the run and later photo use. Indoor weather MUST NOT enable GPS route tracking. Missing location or connectivity MUST remain honest. Older outdoor runs MAY use archive-derived start context. Weather MUST retain visible provider/license attribution, and its photo icon MUST have a semitransparent white circle behind it. Keeping or saving a photo MUST NOT publish the run.
 
 ## 1.14 History, route graphics, publication, export, and deletion
 

@@ -21,6 +21,62 @@ import org.junit.Rule
 import org.junit.Test
 
 class AutoPauseServiceTest {
+    @Test fun runStartCapturesWeatherForBothModesWithoutWaitingForPhotoOrRecordingIndoorRoute() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val context=instrumentation.targetContext
+        val factory=TrackingService.sensorFactory
+        var calls=0
+        var runId: String?=null
+        ActivityScenario.launch(MainActivity::class.java).use {
+            await { TrackingService.view.value.ready && !TrackingService.view.value.busy }
+            check(TrackingService.view.value.snapshot?.state !in listOf(RunState.RUNNING,RunState.PAUSED,RunState.COUNTDOWN))
+            try {
+                context.stopService(Intent(context,TrackingService::class.java))
+                await { !TrackingService.view.value.ready }
+                instrumentation.runOnMainSync {
+                    TrackingService.sensorFactory={ object : SensorAdapters(it) {
+                        override suspend fun weatherLocation(): Pair<Double,Double> { calls++;return 40.78123 to -73.96876 }
+                        override fun start(mode: RunMode,stride: Double?,onGps: (Long,GpsFix)->Unit,onSteps: (Long,Long,Long)->Unit)=false
+                        override fun startMotion(onStep: (Long,Long,Long)->Unit)=false
+                    } }
+                }
+                TrackingService.send(context,TrackingService.OPEN)
+                await { TrackingService.view.value.ready && !TrackingService.view.value.busy }
+                TrackingService.send(context,TrackingService.NEW)
+                await { TrackingService.view.value.snapshot==null && !TrackingService.view.value.busy }
+                for(mode in listOf(RunMode.INDOOR,RunMode.OUTDOOR)) {
+                    TrackingService.send(context,TrackingService.START,RunSettings(mode,RunUnits.MILES,0,RunGoal.None,null))
+                    await { TrackingService.view.value.snapshot?.state==RunState.RUNNING && !TrackingService.view.value.busy }
+                    val snapshot=TrackingService.view.value.snapshot!!
+                    runId=snapshot.runId
+                    val dao=RunDatabase.get(context).runs()
+                    await { runBlocking {dao.weatherContext(snapshot.runId)!=null} }
+                    runBlocking {
+                        val captured=dao.weatherContext(snapshot.runId)!!
+                        assertEquals(snapshot.startedUtcMs,captured.startedUtcMs)
+                        assertEquals(40.8,captured.latitude,0.0);assertEquals(-74.0,captured.longitude,0.0)
+                        assertTrue(dao.route(snapshot.runId).isEmpty())
+                    }
+                    TrackingService.send(context,TrackingService.FINISH_WITHOUT_COACHING)
+                    await { TrackingService.view.value.snapshot?.state==RunState.FINISHED && !TrackingService.view.value.busy }
+                    TrackingService.send(context,TrackingService.DISCARD,runId=snapshot.runId)
+                    await { TrackingService.view.value.snapshot==null && !TrackingService.view.value.busy }
+                    runId=null
+                }
+                assertEquals(2,calls)
+            } finally {
+                runId?.let { id ->
+                    TrackingService.send(context,TrackingService.FINISH_WITHOUT_COACHING,runId=id)
+                    await { TrackingService.view.value.snapshot?.state==RunState.FINISHED && !TrackingService.view.value.busy }
+                    TrackingService.send(context,TrackingService.DISCARD,runId=id)
+                    await { TrackingService.view.value.snapshot==null && !TrackingService.view.value.busy }
+                }
+                context.stopService(Intent(context,TrackingService::class.java))
+                instrumentation.runOnMainSync { TrackingService.sensorFactory=factory }
+            }
+        }
+    }
+
     @get:Rule val permissions: GrantPermissionRule = GrantPermissionRule.grant(
         Manifest.permission.ACTIVITY_RECOGNITION, Manifest.permission.POST_NOTIFICATIONS,
         Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)

@@ -2,10 +2,11 @@ package com.example.runningapp.tracking
 
 import androidx.lifecycle.ViewModel
 
-/** Activity recreation retains this state; only an outstanding external return survives process death. */
+/** Activity recreation retains this state; saved external/photo workflow IDs permit exact-run returns. */
 class RunEntryState : ViewModel() {
     var needsEntry = true
     var externalRunId: String? = null
+    var photoRunId: String? = null
     var recreationRunId: String? = null
 
     fun stopped(changingConfigurations: Boolean, finishedRunId: String?) {
@@ -13,7 +14,7 @@ class RunEntryState : ViewModel() {
     }
 
     fun resumed(): String? {
-        val restore = externalRunId ?: recreationRunId
+        val restore = photoRunId ?: externalRunId ?: recreationRunId
         externalRunId = null
         recreationRunId = null
         needsEntry = false

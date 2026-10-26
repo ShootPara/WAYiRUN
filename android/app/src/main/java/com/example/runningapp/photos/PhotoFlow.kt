@@ -36,6 +36,7 @@ import java.util.UUID
 import kotlin.math.*
 
 val LocalExternalRunAction = staticCompositionLocalOf<(String?) -> Unit> { {} }
+val LocalPhotoRunAction = staticCompositionLocalOf<(String?) -> Unit> { {} }
 internal data class PreparedPhoto(val source: Bitmap, val editorId: String, val recipe: PhotoRecipe, val jpeg: ByteArray)
 
 /** Decode at a bounded size; ImageDecoder applies EXIF orientation. Re-encoding omits source metadata. */
@@ -73,7 +74,15 @@ internal fun renderPhoto(source: Bitmap, s: RunSnapshot, route: List<RoutePoint>
         paint.typeface=Typeface.DEFAULT;paint.textAlign=Paint.Align.RIGHT
         paint.setShadowLayer(max(2f,w/400),0f,1f,Color.BLACK)
         paint.textSize=textSize*1.15f
+        val iconWidth = paint.measureText(value.emoji)
+        val iconCenterX = w*.94f - iconWidth/2
+        val iconBaseline = h*.05f + paint.textSize
+        val iconCenterY = iconBaseline + (paint.ascent()+paint.descent())/2
+        paint.clearShadowLayer();paint.color=Color.argb(180,255,255,255)
+        c.drawCircle(iconCenterX,iconCenterY,max(iconWidth,paint.descent()-paint.ascent())*.62f,paint)
+        paint.color=Color.WHITE
         c.drawText(value.emoji,w*.94f,h*.05f+paint.textSize,paint)
+        paint.setShadowLayer(max(2f,w/400),0f,1f,Color.BLACK)
         paint.textSize=textSize*.62f
         c.drawText(String.format(Locale.US,"%.1f °F",value.temperatureF),w*.94f,h*.05f+textSize*2.1f,paint)
         c.drawText(String.format(Locale.US,"%.1f °C",value.temperatureC),w*.94f,h*.05f+textSize*2.9f,paint)
@@ -96,10 +105,11 @@ internal fun renderPhoto(source: Bitmap, s: RunSnapshot, route: List<RoutePoint>
         if(size>0 && max(dx,dy)>0) {
             val scale=size/max(dx,dy);val left=w-size-w*.07f+(size-dx*scale).toFloat()/2;val top=h-panel+(panel-creditHeight-(dy*scale).toFloat())/2
             paint.style=Paint.Style.STROKE;paint.strokeCap=Paint.Cap.ROUND
-            for(i in 1 until route.size) if(route[i].segmentId==route[i-1].segmentId && route[i].monotonicMs-route[i-1].monotonicMs in 1..10000) {
-                for(halo in listOf(true,false)) {
-                    paint.color=if(halo)Color.argb(200,0,0,0) else Color.rgb(34,197,94)
-                    paint.strokeWidth=max(3f,w/250)*(if(halo)2f else 1f)
+            // Complete the outline pass before any green strokes, including retraced GPS sections.
+            for(halo in listOf(true,false)) {
+                paint.color=if(halo)Color.argb(200,0,0,0) else Color.rgb(34,197,94)
+                paint.strokeWidth=max(3f,w/250)*(if(halo)2f else 1f)
+                for(i in 1 until route.size) if(route[i].segmentId==route[i-1].segmentId && route[i].monotonicMs-route[i-1].monotonicMs in 1..10000) {
                     c.drawLine((left+(xs[i-1]-minX)*scale).toFloat(),(top+(ys[i-1]-minY)*scale).toFloat(),(left+(xs[i]-minX)*scale).toFloat(),(top+(ys[i]-minY)*scale).toFloat(),paint)
                 }
             }
@@ -130,6 +140,11 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
     val api=weatherApi ?: remember { com.example.runningapp.sync.CloudSyncApi() }
     val identity=rememberSaveable(s.runId) { photoSessionIdentity(readSession()) }
     val externalRunAction = LocalExternalRunAction.current
+    val photoRunAction = LocalPhotoRunAction.current
+    DisposableEffect(s.runId) {
+        photoRunAction(s.runId)
+        onDispose { photoRunAction(null) }
+    }
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     var source by remember { mutableStateOf<Bitmap?>(null) };var preview by remember { mutableStateOf<Bitmap?>(null) }
     var prepared by remember { mutableStateOf<PreparedPhoto?>(null) };var kept by remember { mutableStateOf<RunPhoto?>(null) }
@@ -156,7 +171,7 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
     var error by remember { mutableStateOf<String?>(null) }
     var cameraPath by rememberSaveable { mutableStateOf<String?>(null) }
     val draft=remember(s.runId) { File(File(context.cacheDir,"photos").apply {mkdirs()},"draft-${s.runId}.jpg") }
-    fun done() { acceptingWeather=false;editorId=UUID.randomUUID().toString();draft.delete();cameraPath?.let {File(it).delete()};close() }
+    fun done() { photoRunAction(null);acceptingWeather=false;editorId=UUID.randomUUID().toString();draft.delete();cameraPath?.let {File(it).delete()};close() }
     fun load(uri: Uri) {
         editorId=UUID.randomUUID().toString();acceptingWeather=true;weatherJson=null;prepared=null;sourceLoading=true
         priorRevision=kept?.revision
@@ -200,7 +215,7 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
         }
     }
     LaunchedEffect(source!=null,editorId,weatherRetry,acceptingWeather,route.isNotEmpty()) {
-        if(source==null || !acceptingWeather || weather!=null || s.settings.mode!=com.example.runningapp.domain.RunMode.OUTDOOR || route.isEmpty()) return@LaunchedEffect
+        if(source==null || !acceptingWeather || weather!=null) return@LaunchedEffect
         if(System.currentTimeMillis()<weatherRetryAfter) return@LaunchedEffect
         val requestEditor=editorId
         try {
@@ -261,7 +276,7 @@ internal fun PhotoDialog(s: RunSnapshot, close:()->Unit, daoOverride: RunDao? = 
                 }
                 if(weather==null) {
                     Text(if(weatherLoading) "Getting weather…" else weatherFailure.message(weatherNow),style=MaterialTheme.typography.bodySmall)
-                    if(s.settings.mode==com.example.runningapp.domain.RunMode.OUTDOOR && route.isNotEmpty())
+                    if(weatherFailure.reason !in listOf("no_recorded_weather_location_or_time","sign_in_required","run_unavailable"))
                         TextButton(enabled=!weatherLoading && !controlsBusy && weatherFailure.canRetry(weatherNow),onClick={
                             if(weatherFailure.canRetry(System.currentTimeMillis())) weatherRetry++
                         }) {Text("Retry weather")}

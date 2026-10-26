@@ -25,6 +25,22 @@ import java.io.File
 import java.util.UUID
 
 class PhotoEditorTest {
+    @Test fun indoorEditorUsesRunStartWeatherOfflineBeforeArchiveSync() {
+        snapshot=snapshot.copy(settings=snapshot.settings.copy(mode=RunMode.INDOOR))
+        runBlocking {
+            dao.putOperation(dao.operation(snapshot.runId)!!.copy(status="PENDING"))
+            dao.captureWeather(coarseWeatherContext(snapshot.runId,40.8,-74.0,0))
+            dao.cacheWeather(snapshot.runId,weatherFixture())
+        }
+        val api=WeatherFakeApi().apply {respond={throw AssertionError("Cached weather must not need a connection")}}
+        show(api)
+        compose.waitUntil(15000) {compose.onAllNodesWithTag("photo-overlay-Weather").fetchSemanticsNodes().any {!it.config.contains(SemanticsProperties.Disabled)}}
+        ready()
+        compose.onNodeWithTag("photo-overlay-Weather").performScrollTo().assertIsOn()
+        compose.onNodeWithText("Keep Photo").performScrollTo().performClick()
+        assertNotNull(saved().weather);assertEquals(0,api.calls)
+    }
+
     @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
     private lateinit var db: RunDatabase
     private lateinit var draft: File

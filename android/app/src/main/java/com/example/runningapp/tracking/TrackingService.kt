@@ -66,6 +66,7 @@ class TrackingService : Service() {
     private var foregroundStarted = false
     private var notificationChannel = "run-tracking"
     private var permissionSignature = ""
+    private var weatherCaptureRunId: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -266,6 +267,36 @@ class TrackingService : Service() {
                         monotonicMs = it.monotonicMs, latitude = it.latitude, longitude = it.longitude, accuracyMeters = it.accuracyMeters)
                 }
                 repository.save(checkpoint, owner, zone, offset, interrupted, point, measurement, cloudOwner)
+                if (weatherCaptureRunId != s.runId && s.startedUtcMs != null) {
+                    weatherCaptureRunId = s.runId
+                    val started = s.startedUtcMs
+                    val runId = s.runId
+                    // Independent of the serial tracking consumer: weather must never delay accounting.
+                    if (System.currentTimeMillis() - started in 0..120_000) scope.launch {
+                        try {
+                            val dao = RunDatabase.get(this@TrackingService).runs()
+                            if (dao.weatherContext(runId) == null) {
+                                val location = sensors.weatherLocation()
+                                if (location != null && dao.get(runId) != null)
+                                    dao.captureWeather(com.example.runningapp.photos.coarseWeatherContext(runId,
+                                        location.first, location.second, started))
+                            }
+                            if (dao.weatherContext(runId) != null)
+                                com.example.runningapp.photos.RunWeatherScheduler.enqueue(this@TrackingService, runId)
+                        } catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) { /* Optional weather never changes the saved run. */ }
+                    }
+                }
+                if (point != null && s.startedUtcMs != null && System.currentTimeMillis() - s.startedUtcMs in 0..120_000) {
+                    runCatching {
+                        val dao = RunDatabase.get(this).runs()
+                        if (dao.weatherContext(s.runId) == null) {
+                            dao.captureWeather(com.example.runningapp.photos.coarseWeatherContext(s.runId,
+                                point.latitude, point.longitude, s.startedUtcMs))
+                            com.example.runningapp.photos.RunWeatherScheduler.enqueue(this, s.runId)
+                        }
+                    }
+                }
                 if (s.state == RunState.FINISHED) com.example.runningapp.health.HealthScheduler.enqueue(this)
                 if (s.state == RunState.FINISHED && cloudOwner != null) SyncScheduler.enqueue(this)
                 lastSaved = checkpoint

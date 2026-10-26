@@ -7,6 +7,26 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class SyncMigrationTest {
+    @Test fun earlyWeatherMigrationPreservesRunPhotoAndCoachingAndCascadesOnDeletion() {
+        val name="early-weather-migration-test"
+        helper.createDatabase(name,10).apply {
+            execSQL("INSERT INTO runs VALUES ('run','local','FINISHED',NULL,'checkpoint','UTC',0,1000,0,'alice')")
+            execSQL("INSERT INTO run_photos VALUES ('run','revision',X'FFD8FFD9','{}',0,1,NULL,'weather',NULL,0)")
+            execSQL("INSERT INTO coaching_requests VALUES ('run','alice','op','PENDING',0,0,NULL,NULL,NULL)")
+            close()
+        }
+        helper.runMigrationsAndValidate(name,11,true,RunDatabase.MIGRATION_10_11).apply {
+            query("SELECT checkpoint FROM runs").use {it.moveToFirst();assertEquals("checkpoint",it.getString(0))}
+            query("SELECT revision,weather FROM run_photos").use {it.moveToFirst();assertEquals("revision",it.getString(0));assertEquals("weather",it.getString(1))}
+            query("SELECT status FROM coaching_requests").use {it.moveToFirst();assertEquals("PENDING",it.getString(0))}
+            execSQL("INSERT INTO run_weather_context VALUES ('run',40.8,-74,1000,'snapshot')")
+            execSQL("PRAGMA foreign_keys=ON")
+            execSQL("DELETE FROM runs WHERE id='run'")
+            query("SELECT COUNT(*) FROM run_weather_context").use {it.moveToFirst();assertEquals(0,it.getInt(0))}
+            close()
+        }
+    }
+
     @Test fun coachingMigrationPreservesEveryVersionNineRecordAndPreferences() {
         val name="coaching-migration-test"
         val context=InstrumentationRegistry.getInstrumentation().targetContext

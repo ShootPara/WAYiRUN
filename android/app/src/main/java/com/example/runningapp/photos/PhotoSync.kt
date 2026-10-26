@@ -48,6 +48,8 @@ internal fun interface PhotoUploader {
 /** Small transport boundary: the queue can be tested with real Room and synthetic HTTP outcomes. */
 internal class CloudPhotoUploader : PhotoUploader {
     override suspend fun upload(session: AccountSession, photo: RunPhoto): JSONObject = withContext(Dispatchers.IO) {
+            // Promote an early, owner-scoped snapshot after the archive is synchronized.
+            if (photo.weather != null) com.example.runningapp.sync.CloudSyncApi().request(session, "/api/weather/${photo.runId}")
             val connection=URL("${BuildConfig.API_ORIGIN}/api/photos/${photo.runId}").openConnection() as HttpsURLConnection
             try {
                 connection.requestMethod="PUT";connection.connectTimeout=15000;connection.readTimeout=30000

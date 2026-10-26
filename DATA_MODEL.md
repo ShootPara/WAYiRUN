@@ -13,9 +13,9 @@ Pre-account runs have no cloud owner. Signing in does not claim them; explicit i
 
 Database: `wayirun-local.db`
 
-Schema version: 10
+Schema version: 11
 
-Checked-in schemas: 1–10 under `android/app/schemas/com.example.runningapp.storage.RunDatabase/`
+Checked-in schemas: 1–11 under `android/app/schemas/com.example.runningapp.storage.RunDatabase/`
 
 Current entity groups include:
 
@@ -29,7 +29,7 @@ Current entity groups include:
 - Health Connect export state.
 - Publication intent, known server state and revision data.
 
-Room migrations are additive from 1→10. Schema 10 adds durable coaching-request state. Applied migration implementations and exported historical schemas must not be edited; future changes require a new schema and migration.
+Room migrations are additive from 1→11. Schema 10 adds durable coaching-request state; schema 11 adds `run_weather_context`, keyed to the run with cascading deletion, coarse latitude/longitude, captured start time and nullable validated weather JSON. Applied migration implementations and exported historical schemas must not be edited; future changes require a new schema and migration.
 
 ## 1.3 Run record
 
@@ -58,8 +58,11 @@ Applied migrations are:
 9. `0009_public_runs.sql`
 10. `0010_run_weather.sql`
 11. `0011_photo_weather.sql`
+12. `0012_early_weather.sql`
 
 These cover accounts/sessions, resumable run storage, deletion protection, encrypted OpenAI-key envelopes, coaching jobs/results/audio, photos, coarse location, publication and weather state. Applied SQL files are immutable; future schema changes use a new numbered migration.
+
+Migration `0012_early_weather.sql`, applied in production on October 21, 2026, adds `run_weather_early`, keyed by account and run before archive upload, with snapshot, retry and reservation fields. Account deletion cascades; run tombstones trigger cleanup. Completed-run weather reuses the same early snapshot after verifying the uploaded run's start hour. Existing applied migration files and retained run/photo records were not rewritten.
 
 ## 1.6 Synchronization and deletion
 

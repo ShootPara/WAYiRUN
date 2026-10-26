@@ -66,11 +66,21 @@ class RunEntryTest {
                     compose.onAllNodesWithText("Your run photo").fetchSemanticsNodes().size == 1
                 }
                 compose.onNodeWithText("Your run photo").assertExists()
+                // A second interruption after the camera/picker result must retain the editor's run.
+                activity.moveToState(Lifecycle.State.CREATED)
+                activity.moveToState(Lifecycle.State.RESUMED)
+                await { TrackingService.view.value.snapshot?.runId == id && !TrackingService.view.value.busy }
+                compose.onNodeWithText("Your run photo").assertExists()
                 compose.onNodeWithText("Skip").performScrollTo().performClick()
                 activity.moveToState(Lifecycle.State.CREATED)
                 activity.moveToState(Lifecycle.State.RESUMED)
                 await { TrackingService.view.value.snapshot == null && !TrackingService.view.value.busy }
                 runBlocking { assertNotNull(RunDatabase.get(context).runs().get(id)) }
+
+                compose.onNodeWithText("View previous run").performScrollTo().performClick()
+                await { TrackingService.view.value.snapshot?.runId == id && !TrackingService.view.value.busy }
+                TrackingService.send(context, TrackingService.NEW)
+                await { TrackingService.view.value.snapshot == null && !TrackingService.view.value.busy }
 
                 context.stopService(Intent(context, TrackingService::class.java))
                 await { !TrackingService.view.value.ready }

@@ -4,7 +4,7 @@
 
 The Cloudflare Worker provides Google account sessions, owner-isolated run storage, deletion protection, encrypted per-account OpenAI-key storage, durable coaching, photos, location/weather context, publication, CSV export, private browser history and public individual-run pages.
 
-D1 migrations `0001`–`0011` define the persisted schema. Browser assets under `web/` are bundled and served by the Worker.
+D1 migrations `0001`–`0012` define the persisted schema. Production is applied through 0012; development remains preserved and write-frozen. Browser assets under `web/` are bundled and served by the Worker.
 
 ## 1.2 Requirements
 
@@ -63,6 +63,7 @@ Applied migrations are immutable:
 - `0009_public_runs.sql`
 - `0010_run_weather.sql`
 - `0011_photo_weather.sql`
+- `0012_early_weather.sql`
 
 Add a new numbered forward migration for future changes. Migration export/import tooling must preserve owner relationships, content hashes, deletion state and archive/media integrity.
 

@@ -11,6 +11,9 @@ import android.os.Looper
 import com.example.runningapp.domain.GpsFix
 import com.example.runningapp.domain.RunMode
 import android.os.SystemClock
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 fun Context.granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 fun Context.activityAllowed() = Build.VERSION.SDK_INT < 29 || granted(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -26,6 +29,41 @@ open class SensorAdapters(private val context: Context) {
     private var detectorListener: SensorEventListener? = null
     var generation = 0L
         private set
+
+    /** One network fix for weather; never registers indoor GPS tracking or requests permission. */
+    open suspend fun weatherLocation(): Pair<Double,Double>? {
+        if ((!context.granted(Manifest.permission.ACCESS_COARSE_LOCATION) &&
+            !context.granted(Manifest.permission.ACCESS_FINE_LOCATION)) || !locations.isLocationEnabled) return null
+        fun usable(location: Location): Boolean {
+            val age = SystemClock.elapsedRealtime() - location.elapsedRealtimeNanos / 1_000_000
+            return age in 0..120_000 && location.hasAccuracy() && location.accuracy.isFinite() &&
+                location.accuracy in 0f..10_000f && location.latitude.isFinite() && location.longitude.isFinite()
+        }
+        return try {
+            val cached = locations.allProviders.mapNotNull { locations.getLastKnownLocation(it) }
+                .filter(::usable).maxByOrNull { it.elapsedRealtimeNanos }
+            if (cached != null) return cached.latitude to cached.longitude
+            withTimeoutOrNull(10_000) {
+                suspendCancellableCoroutine { continuation ->
+                    val listener = object : LocationListener {
+                        override fun onLocationChanged(location: Location) {
+                            locations.removeUpdates(this)
+                            if (continuation.isActive) continuation.resume(if (usable(location)) location.latitude to location.longitude else null)
+                        }
+                        override fun onProviderEnabled(provider: String) = Unit
+                        override fun onProviderDisabled(provider: String) {
+                            locations.removeUpdates(this)
+                            if (continuation.isActive) continuation.resume(null)
+                        }
+                        @Deprecated("Legacy callback") override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+                    }
+                    continuation.invokeOnCancellation { locations.removeUpdates(listener) }
+                    @Suppress("DEPRECATION")
+                    locations.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, listener, Looper.getMainLooper())
+                }
+            }
+        } catch (_: SecurityException) { null } catch (_: IllegalArgumentException) { null }
+    }
 
     open fun start(mode: RunMode, stride: Double?, onGps: (Long, GpsFix) -> Unit, onSteps: (Long, Long, Long) -> Unit): Boolean {
         stop()

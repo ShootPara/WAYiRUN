@@ -93,11 +93,12 @@ internal fun parsePhotoWeatherResponse(response: JSONObject, now: Long = System.
 internal suspend fun lookupPhotoWeather(id: String, dao: RunDao, readSession: () -> AccountSession?,
     api: SyncApi = CloudSyncApi()): PhotoWeatherResult {
     return try {
-        val session = readSession() ?: return PhotoWeatherResult(reason = "sign_in_required")
         val run = dao.get(id) ?: return PhotoWeatherResult(reason = "run_unavailable")
+        val session = readSession() ?: return PhotoWeatherResult(reason = "sign_in_required")
         if (run.cloudOwnerId != session.ownerId || run.state != "FINISHED") return PhotoWeatherResult(reason = "run_unavailable")
         val op = dao.operation(id)
         if (op?.action == "DELETE") return PhotoWeatherResult()
+        PhotoWeather.parse(dao.weatherContext(id)?.weather)?.let { return PhotoWeatherResult(it) }
         if (op?.status != "SYNCED") return PhotoWeatherResult(waitingForSync = true)
         val revision = dao.photo(id)?.revision
         val response = api.request(session, "/api/weather/$id")

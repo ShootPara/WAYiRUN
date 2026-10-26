@@ -6,12 +6,26 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.runningapp.domain.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RunDatabaseTest {
+    @Test fun previousRunSelectionIsCompletedAndOwnerScoped() = runBlocking {
+        val local = run("local"); local.finish(); save(local)
+        val owned = run("owned"); owned.finish()
+        repo.save(owned.checkpoint(), "account-one", "UTC", 0, false, cloudOwnerId = "account-one")
+        val foreign = run("foreign"); foreign.finish()
+        repo.save(foreign.checkpoint(), "account-two", "UTC", 0, false, cloudOwnerId = "account-two")
+        val unfinished = run("unfinished")
+        repo.save(unfinished.checkpoint(), "account-one", "UTC", 0, false, cloudOwnerId = "account-one")
+        assertEquals(listOf("owned"), db.runs().completedForOwner("account-one", "test-owner").first().map { it.id })
+        assertEquals(listOf("local"), db.runs().completedForOwner(null, "test-owner").first().map { it.id })
+        assertTrue(db.runs().completedForOwner(null, "other-local-owner").first().isEmpty())
+    }
+
     @Test fun legacyAndDualSelectionsSurviveArchiveWithoutCheckpointRewrites() = runBlocking {
         val selections = listOf(null, AnnouncementSelection(),
             AnnouncementSelection(timeEnabled = false, distanceEnabled = true),

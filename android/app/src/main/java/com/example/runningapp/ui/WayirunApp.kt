@@ -67,6 +67,7 @@ import com.example.runningapp.BuildConfig
 import com.example.runningapp.account.AccountView
 
 import com.example.runningapp.tracking.*
+import com.example.runningapp.storage.decode
 
 import java.time.Instant
 
@@ -201,6 +202,7 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
                             AccountPanel(accountView, !view.busy, onSignIn, onSignOut, showActions = false)
 
                             Setup(view.busy, preferences, dark, onStart, online = online)
+                            PreviousRunButton(accountView, view.busy)
 
                         }
 
@@ -239,6 +241,23 @@ fun WayirunApp(viewOverride: TrackingView? = null, onCommand: ((String, RunSetti
 }
 
 
+
+@Composable
+private fun PreviousRunButton(account: AccountView, busy: Boolean) {
+    val context = LocalContext.current
+    val owner = account.session?.ownerId
+    val local = remember {
+        context.getSharedPreferences("local-settings", Context.MODE_PRIVATE).getString("local-owner", "").orEmpty()
+    }
+    val dao = remember { com.example.runningapp.storage.RunDatabase.get(context).runs() }
+    val runs by remember(owner, local) { dao.completedForOwner(owner, local) }.collectAsState(initial = emptyList())
+    val previous = remember(runs) { runs.maxByOrNull { it.decode().snapshot.startedUtcMs ?: 0L } }
+    previous?.let { run ->
+        OutlinedButton(enabled = !busy && !account.busy, onClick = {
+            TrackingService.send(context, TrackingService.ENTER, runId = run.id)
+        }, modifier = Modifier.fillMaxWidth().testTag("previous-run")) { Text("View previous run") }
+    }
+}
 
 @Composable
 

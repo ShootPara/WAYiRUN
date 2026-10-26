@@ -24,6 +24,35 @@ internal class WeatherFakeApi : SyncApi {
 }
 
 class PhotoWeatherTest {
+    @Test fun cachedIndoorWeatherIsAvailableBeforeSyncWithoutNetworkAndIsOwnerScoped() = runBlocking {
+        val id=UUID.randomUUID().toString()
+        val controller=RunController(id,RunSettings(RunMode.INDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
+        controller.start();controller.finish()
+        RunRepository(dao).save(controller.checkpoint(),"local","UTC",0,false,cloudOwnerId="alice")
+        val context=coarseWeatherContext(id,40.78123,-73.96876,0)
+        assertEquals(40.8,context.latitude,0.0);assertEquals(-74.0,context.longitude,0.0)
+        dao.captureWeather(context);dao.cacheWeather(id,weatherFixture())
+        val api=WeatherFakeApi().apply { respond={throw AssertionError("Cached weather must work offline")} }
+        assertNotNull(lookupPhotoWeather(id,dao,{account},api).weather);assertEquals(0,api.calls)
+        account=account!!.copy(ownerId="bob")
+        assertNull(lookupPhotoWeather(id,dao,{account},api).weather)
+        assertTrue(dao.discard(id,"local"));assertNull(dao.weatherContext(id))
+    }
+
+    @Test fun earlyWeatherRequestUsesCapturedStartAndCoarseLocation() = runBlocking {
+        val context=coarseWeatherContext("run",40.78123,-73.96876,1234)
+        val api=object : SyncApi {
+            override suspend fun request(session: AccountSession,path: String,method: String,body: ByteArray?,contentType: String,match: String?): JSONObject {
+                assertEquals("/api/weather/run/start",path);assertEquals("POST",method)
+                val json=JSONObject(requireNotNull(body).decodeToString())
+                assertEquals(40.8,json.getDouble("latitude"),0.0);assertEquals(-74.0,json.getDouble("longitude"),0.0)
+                assertEquals(1234L,json.getLong("startedUtcMs"))
+                return JSONObject().put("weather",JSONObject(weatherFixture()))
+            }
+        }
+        assertNotNull(requestEarlyWeather(context,account!!,api).weather)
+    }
+
     private lateinit var db: RunDatabase
     private val dao get()=db.runs()
     private var account: AccountSession?=AccountSession("alice",null,null,"alice-token",Long.MAX_VALUE)

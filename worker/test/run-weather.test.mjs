@@ -15,7 +15,7 @@ const payload=(at=hour,temperature=20,code=2)=>({utc_offset_seconds:0,hourly_uni
 async function runtime(t){
  const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:"export default {fetch(){return new Response('test')}}",compatibilityDate:"2026-02-17",d1Databases:["DB"]}));
  t.after(()=>mf.dispose());const DB=await mf.getD1Database("DB");
- for(const name of ["0001_bootstrap.sql","0002_accounts.sql","0003_run_uploads.sql","0004_run_deletions.sql","0007_run_photos.sql","0008_run_locations.sql","0009_public_runs.sql","0010_run_weather.sql"]){
+ for(const name of ["0001_bootstrap.sql","0002_accounts.sql","0003_run_uploads.sql","0004_run_deletions.sql","0007_run_photos.sql","0008_run_locations.sql","0009_public_runs.sql","0010_run_weather.sql","0012_early_weather.sql"]){
   const sql=readFileSync(new URL(`../migrations/${name}`,import.meta.url),"utf8").replace(/^--.*$/gm,"");
   const split=sql.indexOf("CREATE TRIGGER"),head=split<0?sql:sql.slice(0,split);
   await DB.batch(head.split(";").map(x=>x.trim()).filter(Boolean).map(x=>DB.prepare(x)));
@@ -29,8 +29,8 @@ async function runtime(t){
   await DB.prepare("INSERT INTO auth_sessions(token_hash,owner_id,created_at,expires_at) VALUES (?,?,1,?)")
    .bind(sha(tokens[owner]),owner,Math.floor(Date.now()/1000)+3600).run();
  }
- async function add({owner="alice",mode="OUTDOOR",startedUtcMs=start,gps=true}={}){
-  const id=randomUUID(),op=randomUUID(),summary={state:"FINISHED",startedUtcMs,endedUtcMs:startedUtcMs+500,activeDurationMs:500,distanceMeters:0,mode,units:"MILES"};
+ async function add({owner="alice",mode="OUTDOOR",startedUtcMs=start,gps=true,id=randomUUID()}={}){
+  const op=randomUUID(),summary={state:"FINISHED",startedUtcMs,endedUtcMs:startedUtcMs+500,activeDurationMs:500,distanceMeters:0,mode,units:"MILES"};
   const segments=mode==="OUTDOOR"&&gps?[{id:1,source:"GPS",startedMonotonicMs:0,endedMonotonicMs:500}]:[];
   const archive={version:1,run:{id,cloudOwnerId:owner,state:"FINISHED",activeSlot:null,checkpoint:JSON.stringify({snapshot:{...summary,runId:id,settings:{mode,units:"MILES"},segments,activeIntervals:[]}})},
    route:segments.length?[{runId:id,id:1,segmentId:1,monotonicMs:1,latitude:40.78123,longitude:-73.96876,accuracyMeters:5}]:[],
@@ -39,10 +39,49 @@ async function runtime(t){
   await DB.prepare("INSERT INTO run_uploads VALUES (?,?,?,?,?,1,1,10000,2)").bind(owner,id,op,manifest,sha(manifest)).run();
   await DB.prepare("INSERT INTO run_chunks VALUES (?,?,0,?,?)").bind(owner,id,sha(bytes),Array.from(bytes)).run();return id;
  }
- const call=(id,{owner="alice",method="GET",headers={},query="",fetcher=async()=>Response.json(payload()),time=now}={})=>
-  handleWeather(new Request(`https://test/api/weather/${id}${query}`,{method,headers:{...(owner?{Authorization:`Bearer ${tokens[owner]}`} :{}),...headers}}),env,fetcher,time);
+ const call=(id,{owner="alice",method="GET",headers={},query="",body,fetcher=async()=>Response.json(payload()),time=now}={})=>
+  handleWeather(new Request(`https://test/api/weather/${id}${query}`,{method,body:body===undefined?undefined:JSON.stringify(body),headers:{...(owner?{Authorization:`Bearer ${tokens[owner]}`} :{}),...(body===undefined?{}:{"Content-Type":"application/json"}),...headers}}),env,fetcher,time);
  return {DB,env,tokens,add,call};
 }
+
+test("run-start lookup precedes upload and is reused by indoor and outdoor completed runs",async t=>{
+ const r=await runtime(t);
+ for(const [index,mode] of ["INDOOR","OUTDOOR"].entries()) {
+  const id=randomUUID();let calls=0;
+  const body={latitude:40.8,longitude:-74,startedUtcMs:start};
+  const fetcher=async()=>{calls++;return Response.json(payload());};
+  const options={method:"POST",body,fetcher,time:now+index*10000};
+  const first=await r.call(`${id}/start`,options);assert.equal(first.status,200);
+  const result=await first.json();assert.equal(result.weather.temperatureF,68);
+  assert.equal((await r.call(id)).status,404,"unsynced run stays private/unavailable as an archive");
+  assert.deepEqual(await(await r.call(`${id}/start`,options)).json(),result);assert.equal(calls,1);
+  await r.add({id,mode,gps:false});
+  assert.deepEqual(await(await r.call(id,{fetcher})).json(),result);assert.equal(calls,1);
+  assert.ok((await r.DB.prepare("SELECT snapshot_json FROM run_weather WHERE owner_id='alice' AND run_id=?").bind(id).first()).snapshot_json);
+ }
+});
+
+test("early weather validates coarse coordinates/time and respects account, deletion and session guards",async t=>{
+ const r=await runtime(t),id=randomUUID();let calls=0;
+ const body={latitude:40.8,longitude:-74,startedUtcMs:start};
+ const fetcher=async()=>{calls++;return Response.json(payload());};
+ for(const invalid of [{...body,latitude:40.8123},{...body,longitude:181},{...body,startedUtcMs:now+1},
+  {...body,startedUtcMs:now-8*86400000},{...body,provider:"https://wrong.test"}])
+  assert.equal((await r.call(`${id}/start`,{method:"POST",body:invalid,fetcher})).status,400);
+ assert.equal((await r.call(`${id}/start`,{method:"POST",body,owner:null,fetcher})).status,401);
+ assert.equal(calls,0);
+ await r.call(`${id}/start`,{method:"POST",body,fetcher});
+ assert.equal((await r.DB.prepare("SELECT COUNT(*) n FROM run_weather_early WHERE owner_id='bob'").first()).n,0);
+ await r.DB.prepare("INSERT INTO run_deletions VALUES ('alice',?,1)").bind(id).run();
+ assert.equal((await r.DB.prepare("SELECT COUNT(*) n FROM run_weather_early").first()).n,0);
+ assert.equal((await r.call(`${id}/start`,{method:"POST",body,fetcher})).status,404);
+ const second=randomUUID();
+ const revoked=await r.call(`${second}/start`,{method:"POST",body,time:now+10000,fetcher:async()=>{
+  await r.DB.prepare("UPDATE auth_sessions SET revoked_at=1 WHERE owner_id='alice'").run();return Response.json(payload());
+ }});
+ assert.equal(revoked.status,401);
+ assert.equal((await r.DB.prepare("SELECT COUNT(*) n FROM run_weather_early WHERE snapshot_json IS NOT NULL").first()).n,0);
+});
 
 test("weather query rounds coordinates, floors the run hour and selects recent/archive endpoints",()=>{
  const query=weatherQuery(archiveInput(),now);
@@ -190,7 +229,7 @@ test("native Workers fetch accepts the request and never follows provider redire
   {type:"ESModule",path:"weather-runtime/run-weather.js",contents:readFileSync(new URL("../build/run-weather.js",import.meta.url),"utf8")},
   {type:"ESModule",path:"weather-runtime/environment.js",contents:readFileSync(new URL("../build/environment.js",import.meta.url),"utf8")},
   // This helper-level harness does not invoke the handler's auth/archive dependencies.
-  {type:"ESModule",path:"weather-runtime/auth.js",contents:"const unused=()=>{throw Error('not used')}; export {unused as accessGuard,unused as sessionAccount,unused as reply};"},
+  {type:"ESModule",path:"weather-runtime/auth.js",contents:"const unused=()=>{throw Error('not used')}; export {unused as accessGuard,unused as sessionAccount,unused as reply,unused as smallJson};"},
   {type:"ESModule",path:"weather-runtime/coaching-context.js",contents:"export const readVerifiedRun=()=>{throw Error('not used')}; export class CoachingDataError extends Error {}"},
  ],outboundService:async request=>{
   calls++;assert.equal(new URL(request.url).host,"api.open-meteo.com");

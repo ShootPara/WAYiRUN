@@ -13,6 +13,48 @@ import org.junit.Assert.*
 import java.io.File
 
 class PhotoRenderTest {
+    @Test fun denseRetracedRouteKeepsGreenCenterAboveEveryBlackOutline() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val run=RunController("dense-route",RunSettings(RunMode.OUTDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
+        run.start();run.finish()
+        val route=(0..2000).map { i ->
+            val progress=if(i<=1000)i/1000.0 else (2000-i)/1000.0
+            RoutePoint(i.toLong()+1,"dense-route",1,i*1000L,40.0+progress*.01,-74.0,5f)
+        }
+        val source=Bitmap.createBitmap(1000,1000,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.WHITE)}
+        val bytes=renderPhoto(source,run.snapshot(),route,listOf(true,true,true,true,true),PhotoWeather.parse(weatherFixture()))
+        val bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+        var greenRows=0
+        for(y in 0 until bitmap.height) {
+            if((600..960).any { x ->
+                val color=bitmap.getPixel(x,y)
+                Color.green(color)>140 && Color.green(color)>Color.red(color)+60 && Color.green(color)>Color.blue(color)+40
+            }) greenRows++
+        }
+        assertTrue("Dense/retraced route stays green along its length",greenRows>250)
+        File(context.getExternalFilesDir(null),"dense-route-fixed.jpg").writeBytes(bytes)
+        bitmap.recycle();source.recycle()
+    }
+
+    @Test fun weatherIconHasTranslucentWhiteCircleOnDarkIndoorPhoto() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val run=RunController("indoor-weather",RunSettings(RunMode.INDOOR,RunUnits.MILES,0,RunGoal.None,null),RunClock {RunTime(0,0)})
+        run.start();run.finish()
+        val source=Bitmap.createBitmap(1000,1000,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.BLACK)}
+        val bytes=renderPhoto(source,run.snapshot(),emptyList(),listOf(true,true,true,false,true),PhotoWeather.parse(weatherFixture()))
+        val bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+        var translucentPixels=0
+        for(y in 40..160) for(x in 820..990) {
+            val color=bitmap.getPixel(x,y)
+            if(Color.red(color) in 150..210 && kotlin.math.abs(Color.red(color)-Color.green(color))<10 &&
+                kotlin.math.abs(Color.red(color)-Color.blue(color))<10) translucentPixels++
+        }
+        assertTrue("White circle is visibly translucent on black",translucentPixels>500)
+        assertTrue(Color.red(bitmap.getPixel(800,70))<10)
+        File(context.getExternalFilesDir(null),"indoor-weather-circle.jpg").writeBytes(bytes)
+        bitmap.recycle();source.recycle()
+    }
+
     @Test fun wideRouteMovesIntoStatsPanelWithoutChangingHorizontalPositionOrScale() {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val directory=File(context.getExternalFilesDir(null),"route-position").apply {mkdirs()}

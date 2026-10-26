@@ -8,6 +8,27 @@ import java.io.File
 
 class SessionStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    @Test fun interruptedAtomicWriteRestoresBackupWithoutSigningOut() {
+        val store = SessionStore(context, "session-backup-test")
+        val session = AccountSession("owner", "Runner", null, "token", 1000)
+        val file = File(context.noBackupFilesDir, "session-backup-test.bin")
+        try {
+            store.write(session)
+            assertTrue(file.renameTo(File(file.path + ".bak")))
+            assertEquals(session, store.read())
+        } finally { store.clear() }
+    }
+
+    @Test fun unavailableStorageDoesNotDeleteSavedSession() {
+        val store = SessionStore(context, "session-io-test")
+        val file = File(context.noBackupFilesDir, "session-io-test.bin")
+        try {
+            assertTrue(file.mkdir())
+            assertNull(store.read())
+            assertTrue(file.isDirectory)
+        } finally { file.delete() }
+    }
+
     @Test fun encryptedRoundTripRetainsExpiredIdentityAndClearLeavesOtherPreferencesAlone() {
         val store = SessionStore(context, "session-test")
         val session = AccountSession("test-owner", "Runner", null, "secret-session-token", 1)

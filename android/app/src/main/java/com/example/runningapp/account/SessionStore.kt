@@ -26,14 +26,17 @@ class SessionStore(context: Context, name: String = "google-session") {
         }.generateKey()
     }
     fun read(): AccountSession? = synchronized(lock) {
-        if (!file.baseFile.exists()) return@synchronized null
         try {
             val bytes = file.readFully()
             require(bytes.size in 29..32768)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
             Json.decodeFromString<AccountSession>(cipher.doFinal(bytes.copyOfRange(12, bytes.size)).decodeToString())
-        } catch (_: Exception) { file.delete(); null }
+        } catch (_: javax.crypto.AEADBadTagException) { file.delete(); null }
+        catch (_: kotlinx.serialization.SerializationException) { file.delete(); null }
+        catch (_: IllegalArgumentException) { file.delete(); null }
+        // Storage/keystore availability can be transient. A failed read is not sign-out.
+        catch (_: Exception) { null }
     }
     fun write(session: AccountSession) = synchronized(lock) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }

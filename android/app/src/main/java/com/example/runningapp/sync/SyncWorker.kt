@@ -18,6 +18,9 @@ class SyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWork
                 val dao = RunDatabase.get(applicationContext).runs()
                 val api = CloudSyncApi()
                 val more = SyncEngine(dao, api, { store.read() }).runOnce()
+                store.read()?.ownerId?.let { owner ->
+                    dao.weatherForSync(owner).forEach { com.example.runningapp.photos.RunWeatherScheduler.enqueue(applicationContext, it) }
+                }
                 val pullMore = RestoreEngine(dao, api, DownloadCache(java.io.File(applicationContext.noBackupFilesDir, "run-downloads")), { store.read() }).runOnce()
                 com.example.runningapp.health.HealthScheduler.enqueue(applicationContext)
                 val publicationMore = com.example.runningapp.sharing.PublicationSync(dao, api, { store.read() }).runOnce()

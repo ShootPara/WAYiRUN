@@ -2,7 +2,7 @@
 
 ## 1.1 Milestone and status
 
-This contract includes the October 5 weather-reliability repair, verified locally and deployed to the development Worker as version `5b3b8fc8-f10a-47b0-8cd7-ae0a38c03dd7`. Historical Milestones 5.0/5.1 used synthetic provider responses and did not establish live retrieval. The repaired guarded canary completed a real Open-Meteo lookup, returned the identical cached snapshot on a second request, and removed all disposable records. Migrations 0010 and 0011 were applied during the September 28 photo repair; this repair adds no migration. The weather lookup endpoint never mutates publication or photos.
+The current source supports early, authenticated run-start weather for indoor and outdoor runs, plus the existing completed-archive fallback. Production migration 0012 and Worker version `0c8c3e4d-cf9e-43ef-b7a8-350b559efb0d` were deployed October 21, 2026. Live health/readiness and early-endpoint authentication/method/origin checks passed. Authenticated provider-fetch behavior has local synthetic coverage; historical provider checks do not establish new physical-phone behavior. Weather lookups never mutate publication or photos.
 
 ## 1.2 Provider decision
 
@@ -18,6 +18,10 @@ No new key, paid account or dependency. This is modeled weather near the run sta
 ## 1.3 Private API
 
 `GET /api/weather/{run UUID}` uses the existing native bearer session and run rate limits. Reject Origin/Cookie, extra query parameters and other methods. Caller cannot supply coordinates, provider URL, time or owner. Require a completed, owned, non-deleted synced archive; verify its manifest/chunk hashes before first lookup.
+
+`POST /api/weather/{run UUID}/start` uses the same bearer authentication, header restrictions and request limits before an archive exists. The exact JSON fields are `latitude`, `longitude`, and `startedUtcMs`; accept only finite valid coordinates already rounded to 0.1 degrees and a nonfuture start no more than seven days old. Neither provider URL nor owner can be supplied. The Android caller captures a recent permission-derived location near run start for either run mode. Run tombstones and session revocation prevent late writes and delivery. Successful snapshots are frozen per owner/run; an already retained completed snapshot wins over a delayed early request.
+
+Completed-run GET promotes a successful early snapshot only after verifying the archive and matching its start hour. No additional provider request is made for that snapshot, including indoors. An outstanding early reservation returns retry eligibility rather than launching a competing completed-run lookup.
 
 Success or ordinary provider unavailability is HTTP 200:
 
@@ -40,7 +44,7 @@ Snapshot fields:
 | retrievedUtcMs | Lookup request time in UTC epoch milliseconds |
 | attribution | Fixed label, provider URL, CC BY license URL and transformation notice |
 
-Use the first recorded route point of an OUTDOOR archive, not the viewer's location or a later convenient point. Indoor/no GPS/invalid/future start returns unavailable. Round before sending anything to the provider. Floor UTC time rather than interpreting the device timezone or substituting a nearby available hour. Accept only exact UNIX timestamp, Celsius units, known weather code and finite bounded temperature. Provider-returned coordinates, extra fields and strings never enter the snapshot.
+For legacy fallback, use the first recorded route point of an OUTDOOR archive, not the viewer's location or a later convenient point. Indoor and no-route runs require captured start context; missing location/time returns unavailable. Round before sending anything to the provider. Floor UTC time rather than interpreting the device timezone or substituting a nearby available hour. Accept only exact UNIX timestamp, Celsius units, known weather code and finite bounded temperature. Provider-returned coordinates, extra fields and strings never enter the snapshot.
 
 ## 1.4 Bounds, cache and lifecycle
 
@@ -66,7 +70,9 @@ The provider's current display guidance does not clearly permit settings-only cr
 
 Milestone 5.1 adds nullable weather JSON to Android Room v8 and Worker migration 0011. Existing records keep null weather and unchanged JPEG/revision/sync flags. New photo options contain time, distance, pace, route and weather booleans. Legacy four-boolean uploads remain valid. Weather defaults on when available in a new editor; the user can switch it off independently.
 
-When weather is selected, X-Photo-Weather carries base64-encoded UTF-8 snapshot JSON (maximum 4096 ASCII header characters). The Worker compares every field with the authenticated owner's stored run_weather snapshot, independent of JSON key order, then stores the server copy with the photo revision. Missing, altered, extra or unsolicited weather is rejected. When weather is off/unavailable, the header and snapshot are omitted. Photo sync never fetches weather or rerenders a JPEG; acknowledgement checks the image hash/size, options, revision and snapshot. Publication remains independent.
+When weather is selected, X-Photo-Weather carries base64-encoded UTF-8 snapshot JSON (maximum 4096 ASCII header characters). The Worker compares every field with the authenticated owner's stored run_weather snapshot, independent of JSON key order, then stores the server copy with the photo revision. Missing, altered, extra or unsolicited weather is rejected. When weather is off/unavailable, the header and snapshot are omitted. Photo sync first calls the completed weather endpoint to promote an early snapshot if needed; it never rerenders the saved JPEG. Acknowledgement checks the image hash/size, options, revision and snapshot. Publication remains independent.
+
+Android Room 11 retains coarse start context and cached weather separately from photo revisions. Capture and background lookup begin without opening the photo editor, use bounded network retries and never block tracking. The editor can use cached weather before archive synchronization, for either run mode. The weather checkbox controls only inclusion in a new rendered image. A semitransparent white circle sits behind the condition icon.
 
 Private photo metadata and CSV photo records include the complete selected snapshot under weather. For legacy/weather-off photos, this field is absent. Public /data includes weather only when that photo is visible, with latitude/longitude omitted. Public viewers reuse the photo snapshot; they never call the weather provider. The image has small credit/license/transform text in the stats band, Android settings link provider/license, and public pages add out-of-the-way linked credit.
 
